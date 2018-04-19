@@ -2,17 +2,22 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"github.com/amimof/multikube"
+	"github.com/gorilla/mux"
 )
 
 func main() {
 
-	router := multikube.NewRouter()
-	router.HandleFunc("/clusters", multikube.GetClustersHandler)
-	router.HandleFunc("/clusters/1", multikube.GetClusterHandler)
+	r := mux.NewRouter()
+	r.HandleFunc("/clusters", multikube.GetClustersHandler).Methods("GET")
+	r.HandleFunc("/clusters", multikube.CreateClusterHandler).Methods("POST")
+	r.HandleFunc("/clusters/{id}", multikube.DeleteClusterHandler).Methods("DELETE")
+	r.HandleFunc("/clusters/{id}", multikube.GetClusterHandler).Methods("GET")
+	r.HandleFunc("/clusters/{id}", multikube.UpdateClusterHandler).Methods("PUT")
 	
-	router.HandleFunc("/credentials", multikube.GetCredentials)
+	r.HandleFunc("/credentials", multikube.GetCredentials).Methods("GET")
 	
 	log.Printf("Listening on http://localhost:8081/\n")
-	router.Listen(":8081")
+	http.ListenAndServe(":8081", r)
 }
