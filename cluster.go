@@ -16,40 +16,27 @@ type Cluster struct {
 	Credential *Credential `json:"credential,omitempty"`
 }
 
-var clusters []*Cluster = []*Cluster{
-	&Cluster{
-		ID: 1,
-		Name: "cluster01",
-		UUID: "f4098feb-3e84-49c1-a862-7864b15049a4",
-	},
-	&Cluster{
-		ID: 2,
-		Name: "cluster02",
-		UUID: "f906d9d1-0090-4c24-abdd-d5bb3b5ee2ad",
-	},
-}
-
-func GetClustersHandler(w http.ResponseWriter, req *http.Request) {
+func (m *Multikube) GetClustersHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	clusters, err := GetClusters()
+	clusters, err := m.GetClusters()
 	if err != nil {
-		handleResponse(w, err)
+		handleErr(w, err)
 		return
 	}
 	data, err := json.Marshal(&clusters)
 	if err != nil {
-		handleResponse(w, err)
+		handleErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
 }
 
-func GetClusterHandler(w http.ResponseWriter, req *http.Request) {
+func (m *Multikube) GetClusterHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	id, err := strconv.Atoi(strings.TrimPrefix(req.URL.Path, "/clusters/"))
 
-	cluster, err := GetCluster(id)
+	cluster, err := m.GetCluster(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -63,27 +50,27 @@ func GetClusterHandler(w http.ResponseWriter, req *http.Request) {
 	w.Write(data)
 }
 
-func GetClusters() ([]*Cluster, error) {
-	return clusters, nil
+func (m *Multikube) CreateClusterHandler(res http.ResponseWriter, req *http.Request) {
+	log.Println("Create one cluster")
 }
 
-func GetCluster(id int) (*Cluster, error) {
-	for _, cluster := range clusters {
+func (m *Multikube) UpdateClusterHandler(res http.ResponseWriter, req *http.Request) {
+	log.Println("Update one cluster")
+}
+
+func (m *Multikube) DeleteClusterHandler(res http.ResponseWriter, req *http.Request) {
+	log.Println("Delete one cluster")
+}
+
+func (m *Multikube) GetClusters() ([]*Cluster, error) {
+	return m.Config.Clusters, nil
+}
+
+func (m *Multikube) GetCluster(id int) (*Cluster, error) {
+	for _, cluster := range m.Config.Clusters {
 		if cluster.ID == id {
 			return cluster, nil
 		}
 	}
 	return nil, APIErrorResponse{500, newErrf("Cluster with id %d does not exist", id)}
-}
-
-func CreateClusterHandler(res http.ResponseWriter, req *http.Request) {
-	log.Println("Create one cluster")
-}
-
-func UpdateClusterHandler(res http.ResponseWriter, req *http.Request) {
-	log.Println("Update one cluster")
-}
-
-func DeleteClusterHandler(res http.ResponseWriter, req *http.Request) {
-	log.Println("Delete one cluster")
 }

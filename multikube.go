@@ -8,6 +8,11 @@ import (
 	"fmt"
 )
 
+type Multikube struct {
+	Config *Config
+	Cache *Cache
+}
+
 type APIErrorResponse struct {
 	Code int
 	Err error
@@ -21,7 +26,7 @@ func (a APIErrorResponse) Status() int {
 	return a.Code
 }
 
-func handleResponse(w http.ResponseWriter, err error) {
+func handleErr(w http.ResponseWriter, err error) {
 	if err != nil {
 		switch e := err.(type) {
 		case APIErrorResponse:
@@ -146,4 +151,11 @@ func delete(url string) ([]byte, error) {
 
 	return result, nil
 
+}
+
+func New() *Multikube {
+	return &Multikube{
+		Config: SetupConfig(),
+		Cache: &Cache{},
+	}
 }
