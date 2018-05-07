@@ -12,21 +12,29 @@ func main() {
 	m := multikube.New()
 	log.Printf("Synchronising cache from %d clusters", len(m.Config.Clusters))
 	for _, cluster := range m.Config.Clusters {
-		err := m.Cache.Sync("default", cluster)
+		err := cluster.Cache().SyncHTTP(cluster)
 		if err != nil {
 			log.Printf("Error synchronising cluster %s. %s", cluster.Name, err)
 		}
 	}
+	log.Printf("Synchronisation complete")
 
 	r := mux.NewRouter()
+
+	// Cluster
 	r.HandleFunc("/clusters", m.GetClustersHandler).Methods("GET")
 	r.HandleFunc("/clusters", m.CreateClusterHandler).Methods("POST")
-	r.HandleFunc("/clusters/{id}", m.GetClusterHandler).Methods("GET")
-	r.HandleFunc("/clusters/{id}", m.DeleteClusterHandler).Methods("DELETE")
-	r.HandleFunc("/clusters/{id}", m.UpdateClusterHandler).Methods("PUT")
+	r.HandleFunc("/clusters/{name}", m.GetClusterHandler).Methods("GET")
+	r.HandleFunc("/clusters/{name}", m.DeleteClusterHandler).Methods("DELETE")
+	r.HandleFunc("/clusters/{name}", m.UpdateClusterHandler).Methods("PUT")
 	
-	r.HandleFunc("/credentials", multikube.GetCredentials).Methods("GET")
+	// Namespace
+	r.HandleFunc("/clusters/{name}/namespaces", m.GetClusterNamespacesHandler).Methods("GET")
+	r.HandleFunc("/clusters/{name}/namespaces/{ns}", m.GetClusterNamespaceHandler).Methods("GET")
 	
+	// Resource
+	r.HandleFunc("/clusters/{name}/namespaces/{ns}/{resource}", m.GetClusterResource).Methods("GET")
+
 	log.Printf("Listening on http://localhost:8081/\n")
 	http.ListenAndServe(":8081", r)
 

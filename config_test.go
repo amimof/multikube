@@ -15,5 +15,8 @@ func TestGetConfig(t *testing.T) {
 		t.Logf("UUID: %s", cluster.UUID)
 		t.Logf("Hostname: %s", cluster.Hostname)
 		t.Logf("Credential: %+v", cluster.Credential)
+		t.Logf("CA %s", cluster.CA)
+		t.Logf("Cert %s", cluster.Cert)
+		t.Logf("Key %s", cluster.Key)
 	}
 }

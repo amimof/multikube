@@ -4,13 +4,16 @@ import (
 	"strings"
 	"io/ioutil"
 	"net/http"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Multikube struct {
+	Version string
 	Config *Config
-	Cache *Cache
 }
 
 type APIErrorResponse struct {
@@ -39,12 +42,66 @@ func handleErr(w http.ResponseWriter, err error) {
 	}
 }
 
+func handleResponse(m *v1.Status) error {
+	if m.Kind == "Status" && m.Status == "Failure" {
+		return newErr(m.Message)
+	}
+	return nil
+}
+
 func newErrf(s string, f ...interface{}) error {
 	return errors.New(fmt.Sprintf(s, f...))
 }
 
 func newErr(s string) error {
 	return errors.New(s)
+}
+
+func getSSL(url string, cl *Cluster) ([]byte, error) {
+
+	// Load client certificate
+	cert, err := tls.LoadX509KeyPair(cl.Cert, cl.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load CA certificate
+	caCert, err := ioutil.ReadFile(cl.CA)
+	if err != nil {
+		return nil, err
+	}
+
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs: caCertPool,
+	}
+
+	tlsConfig.BuildNameToCertificate()
+	tr := &http.Transport{ TLSClientConfig: tlsConfig }
+	client := &http.Client{ Transport: tr }
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return body, nil
 }
 
 func get(url string) ([]byte, error) {
@@ -54,7 +111,12 @@ func get(url string) ([]byte, error) {
 		return nil, err
 	}
 
-	client := http.Client{}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := http.Client{
+		Transport: tr,
+	}
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -155,7 +217,7 @@ func delete(url string) ([]byte, error) {
 
 func New() *Multikube {
 	return &Multikube{
+		Version: "1.0.0",
 		Config: SetupConfig(),
-		Cache: &Cache{},
 	}
 }
