@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/gorilla/mux"
 )
 
 type Multikube struct {
 	Version string
 	Config *Config
+	router *mux.Router 
 }
 
 type APIErrorResponse struct {
@@ -215,9 +217,34 @@ func delete(url string) ([]byte, error) {
 
 }
 
+func (m *Multikube) SetupRoutes() *Multikube {
+
+	// Cluster
+	m.router.HandleFunc("/clusters", m.GetClustersHandler).Methods("GET")
+	m.router.HandleFunc("/clusters", m.CreateClusterHandler).Methods("POST")
+	m.router.HandleFunc("/clusters/{name}", m.GetClusterHandler).Methods("GET")
+	m.router.HandleFunc("/clusters/{name}", m.DeleteClusterHandler).Methods("DELETE")
+	m.router.HandleFunc("/clusters/{name}", m.UpdateClusterHandler).Methods("PUT")
+	
+	// Namespace
+	m.router.HandleFunc("/clusters/{name}/namespaces", m.GetClusterNamespacesHandler).Methods("GET")
+	m.router.HandleFunc("/clusters/{name}/namespaces/{ns}", m.GetClusterNamespaceHandler).Methods("GET")
+	
+	// Pods
+	m.router.HandleFunc("/clusters/{name}/namespaces/{ns}/pods", m.GetClusterPodsHandler).Methods("GET")
+	m.router.HandleFunc("/clusters/{name}/namespaces/{ns}/pods/{pod}", m.GetClusterPodHandler).Methods("GET")
+
+	return m
+}
+
+func (m *Multikube) ListenAndServe(addr string) {
+	http.ListenAndServe(":8081", m.router)
+}
+
 func New() *Multikube {
 	return &Multikube{
 		Version: "1.0.0",
 		Config: SetupConfig(),
+		router: mux.NewRouter(),
 	}
 }

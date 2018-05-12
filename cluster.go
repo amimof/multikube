@@ -24,8 +24,7 @@ func (c *Cluster) Cache() *Cache {
 	if c.cache == nil {
 		c.cache = &Cache{
 			NamespaceList: &v1.NamespaceList{},
-			PodList: &v1.PodList{},
-			ServiceList: &v1.ServiceList{},
+			NamespaceResources: make(map[string]NamespaceResource),
 		}
 	}
 	return c.cache
@@ -93,7 +92,8 @@ func (m *Multikube) GetClusterNamespaceHandler(w http.ResponseWriter, req *http.
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	data, err := json.Marshal(&cluster.Cache().NamespaceList)
+	ns := cluster.Cache().Namespace(vars["ns"])
+	data, err := json.Marshal(ns)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -110,7 +110,26 @@ func (m *Multikube) GetClusterPodsHandler(w http.ResponseWriter, req *http.Reque
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	data, err := json.Marshal(&cluster.Cache().NamespaceList)
+	pods := cluster.Cache().Pods(vars["ns"])
+	data, err := json.Marshal(&pods)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(data)
+}
+
+func (m *Multikube) GetClusterPodHandler(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(req)
+	cluster, err := m.GetCluster(vars["name"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	pod := cluster.Cache().Pod(vars["pod"], vars["ns"])
+	data, err := json.Marshal(&pod)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -127,11 +146,15 @@ func (m *Multikube) GetClusterResource(w http.ResponseWriter, req *http.Request)
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	data, err := json.Marshal(&cluster)
+
+	ns := cluster.Cache().Namespace("default")
+
+	data, err := json.Marshal(&ns)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write(data)
 }

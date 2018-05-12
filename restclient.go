@@ -9,6 +9,8 @@ import (
 	"crypto/x509"
 	"path"
 	"strings"
+	"encoding/json"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Request struct {
@@ -22,21 +24,27 @@ type Request struct {
 	params *url.Values
 	body *io.Reader
 	data []byte
+	interf interface{}
+	err error
 }
 
 
-func NewRequest(cl *Cluster) (*Request, error) {
+func NewRequest(cl *Cluster) *Request {
+
+	r := &Request{}
 
 	// Load client certificate
 	cert, err := tls.LoadX509KeyPair(cl.Cert, cl.Key)
 	if err != nil {
-		return nil, err
+		r.err = newErr(err.Error())
+		return r
 	}
 
 	// Load CA certificate
 	caCert, err := ioutil.ReadFile(cl.CA)
 	if err != nil {
-		return nil, err
+		r.err = newErr(err.Error())
+		return r
 	}
 
 	caCertPool := x509.NewCertPool()
@@ -49,17 +57,16 @@ func NewRequest(cl *Cluster) (*Request, error) {
 
 	tlsConfig.BuildNameToCertificate()
 	tr := &http.Transport{ TLSClientConfig: tlsConfig }
-	client := &http.Client{ Transport: tr }
+	r.client = &http.Client{ Transport: tr }
 
 	base, err := url.Parse(cl.Hostname)
 	if err != nil {
-		return nil, err
+		r.err = newErr(err.Error())
+		return r
 	}
+	r.baseURL = base
 
-	return &Request{
-		client: client,
-		baseURL: base,
-	}, nil
+	return r
 
 }
 
@@ -95,7 +102,9 @@ func (r *Request) SetHeader(key string, values ...string) *Request {
 }
 
 func (r *Request) Do() (*Request, error) {
+
 	url := r.URL().String()
+
 	req, err := http.NewRequest(r.verb, url, nil)
 	if err != nil {
 		return nil, err
@@ -112,11 +121,36 @@ func (r *Request) Do() (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	r.data = body
+
+	// Lets try to see if response is a failure
+	status := &v1.Status{}
+	err = json.Unmarshal(r.Data(), status)
+	if err != nil {
+		return nil, err
+	}
+	err = handleResponse(status)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(r.Data(), r.interf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return any error if any has been generated along the way
+	if r.err != nil {
+		return nil, r.err
+	}
 
 	return r, nil
 
+}
+
+func (r *Request) Into(obj interface{}) *Request {
+	r.interf = obj
+	return r
 }
 
 func (r *Request) Data() []byte {
@@ -126,6 +160,9 @@ func (r *Request) Data() []byte {
 // URL returns the current working URL.
 func (r *Request) URL() *url.URL {
 	
+	if r.baseURL.Path != "" {
+		r.baseURL.Path = ""
+	}
 	p := "/api/v1/"
 	
 	// Is this resource namespaced?
