@@ -12,19 +12,15 @@ import (
 
 type Config struct {
 	LogPath string `yaml:"logPath"`
-	Clusters []*Cluster `yaml:"clusters"`
-  //PosPath string `yaml:"posPath"`
-  //MaxWorkers int `yaml:"waxWorkers"`
-  //KubernetesApi string `yaml:"kubernetesApi"`
-  //CertFile string `yaml:certFile`
-  //CaFile string `yaml:caFile`
-  //KeyFile string `yaml:keyFile`
-  //RequireMeta bool `yaml:requireMetadata`
-  //SkipVerifySsl bool `yaml:skipVerifySsl`
-  //DbHostSuffix string `yaml:dbHostSuffix`
-  //DbHostPrefix string `yaml:dbHostPrefix`
-  //MetadataMaxTries int `yaml:metadataMaxTries`
-  //NumRecordsPerChunk int `yaml:numRecordsPerChunk`
+	Clusters []ClusterConfig `yaml:"clusters"`
+}
+
+type ClusterConfig struct {
+	Name string `json:"name,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	CA string `json:"ca,omitempty"`
+	Cert string `json:"cert,omitempty"`
+	Key string `json:"key,omitempty"`
 }
 
 // Returns true if path exists
@@ -57,19 +53,7 @@ func SetupConfig() *Config {
 
   c := &Config{
 		LogPath: "/var/log/containers",
-		Clusters: []*Cluster{},
-    //PosPath: "/tmp/kubelogs.log.pos",
-    //MaxWorkers: 5,
-    //KubernetesApi: "https://localhost",
-    //RequireMeta: true,
-    //SkipVerifySsl: false,
-    //CertFile: "/etc/kubelogs/cert.crt",
-    //CaFile: "/etc/kubelogs/ca.crt",
-    //KeyFile: "/etc/kubelogs/cert.key",
-    //DbHostPrefix: "logsdb.",
-    //DbHostSuffix: ".svc.cluster.local",
-    //MetadataMaxTries: 5,
-    //NumRecordsPerChunk: 20,
+		Clusters: []ClusterConfig{},
   }
 
   err = yaml.Unmarshal(b, &c)

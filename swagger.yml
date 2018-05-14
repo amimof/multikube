@@ -37,6 +37,7 @@ paths:
     get:
       tags:
         - clusters
+      operationId: findMany
       parameters:
         - name: limit
           in: query
@@ -54,3 +55,65 @@ paths:
           description: Genering error response
           schema:
             $ref: "#/definitions/error"
+  /:
+    post:
+      tags:
+        - clusters
+      operationId: addOne
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/cluster"
+      responses:
+        201:
+          description: Created
+          schema:
+            $ref: "#/definitions/cluster"
+        default:
+          description: error
+          schema:
+            $ref: "#/definitions/error"
+  /{id}:
+    parameters:
+      - type: integer
+        format: int64
+        name: id
+        in: path
+        required: true
+    put:
+      tags: 
+        - clusters
+      operationId: updateOne
+      parameters:
+        - name: body
+          in: body
+          schema:
+            $ref: "#/definitions/cluster"
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "#/definitions/cluster"
+        default:
+          description: error
+          schema:
+            $ref: "#/definitions/error"
+    delete:
+      tags:
+        - clusters
+      operationId: deleteOne
+      parameters:
+        - type: integer
+          format: int64
+          name: id
+          in: path
+          required: true
+      responses:
+        204:
+          description: Deleted
+        default:
+          description: error
+          schema:
+            $ref: "#/definitions/error"
+

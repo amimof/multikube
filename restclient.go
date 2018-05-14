@@ -29,19 +29,19 @@ type Request struct {
 }
 
 
-func NewRequest(cl *Cluster) *Request {
+func NewRequest(config *ClusterConfig) *Request {
 
 	r := &Request{}
 
 	// Load client certificate
-	cert, err := tls.LoadX509KeyPair(cl.Cert, cl.Key)
+	cert, err := tls.LoadX509KeyPair(config.Cert, config.Key)
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r
 	}
 
 	// Load CA certificate
-	caCert, err := ioutil.ReadFile(cl.CA)
+	caCert, err := ioutil.ReadFile(config.CA)
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r
@@ -59,7 +59,7 @@ func NewRequest(cl *Cluster) *Request {
 	tr := &http.Transport{ TLSClientConfig: tlsConfig }
 	r.client = &http.Client{ Transport: tr }
 
-	base, err := url.Parse(cl.Hostname)
+	base, err := url.Parse(config.Hostname)
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r

@@ -9,13 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"github.com/gorilla/mux"
 )
 
 type Multikube struct {
 	Version string
 	Config *Config
-	router *mux.Router 
+	Clusters []Cluster
 }
 
 type APIErrorResponse struct {
@@ -59,16 +58,16 @@ func newErr(s string) error {
 	return errors.New(s)
 }
 
-func getSSL(url string, cl *Cluster) ([]byte, error) {
+func getSSL(url string, config *ClusterConfig) ([]byte, error) {
 
 	// Load client certificate
-	cert, err := tls.LoadX509KeyPair(cl.Cert, cl.Key)
+	cert, err := tls.LoadX509KeyPair(config.Cert, config.Key)
 	if err != nil {
 		return nil, err
 	}
 
 	// Load CA certificate
-	caCert, err := ioutil.ReadFile(cl.CA)
+	caCert, err := ioutil.ReadFile(config.CA)
 	if err != nil {
 		return nil, err
 	}
@@ -217,34 +216,40 @@ func delete(url string) ([]byte, error) {
 
 }
 
-func (m *Multikube) SetupRoutes() *Multikube {
-
-	// Cluster
-	m.router.HandleFunc("/clusters", m.GetClustersHandler).Methods("GET")
-	m.router.HandleFunc("/clusters", m.CreateClusterHandler).Methods("POST")
-	m.router.HandleFunc("/clusters/{name}", m.GetClusterHandler).Methods("GET")
-	m.router.HandleFunc("/clusters/{name}", m.DeleteClusterHandler).Methods("DELETE")
-	m.router.HandleFunc("/clusters/{name}", m.UpdateClusterHandler).Methods("PUT")
-	
-	// Namespace
-	m.router.HandleFunc("/clusters/{name}/namespaces", m.GetClusterNamespacesHandler).Methods("GET")
-	m.router.HandleFunc("/clusters/{name}/namespaces/{ns}", m.GetClusterNamespaceHandler).Methods("GET")
-	
-	// Pods
-	m.router.HandleFunc("/clusters/{name}/namespaces/{ns}/pods", m.GetClusterPodsHandler).Methods("GET")
-	m.router.HandleFunc("/clusters/{name}/namespaces/{ns}/pods/{pod}", m.GetClusterPodHandler).Methods("GET")
-
-	return m
+func (m *Multikube) GetClusters() ([]Cluster, error) {
+	return m.Clusters, nil
 }
 
-func (m *Multikube) ListenAndServe(addr string) {
-	http.ListenAndServe(":8081", m.router)
+func (m *Multikube) GetCluster(name string) (*Cluster, error) {
+	for _, cluster := range m.Clusters {
+		if cluster.Config.Name == name {
+			return &cluster, nil
+		}
+	}
+	return nil, newErrf("Cluster %s does not exist", name)
 }
 
 func New() *Multikube {
+	c := SetupConfig()
+	clusters := make([]Cluster, len(c.Clusters))
+	for _, config := range c.Clusters {
+		clusters[0].Config = &config
+	}
 	return &Multikube{
 		Version: "1.0.0",
-		Config: SetupConfig(),
-		router: mux.NewRouter(),
+		Config: c,
+		Clusters: clusters,
+	}
+}
+
+func NewForConfig(c *Config) *Multikube {
+	clusters := make([]Cluster, len(c.Clusters))
+	for _, config := range c.Clusters {
+		clusters[0].Config = &config
+	}
+	return &Multikube{
+		Version: "1.0.0",
+		Config: c,
+		Clusters: clusters,
 	}
 }
