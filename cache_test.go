@@ -12,10 +12,26 @@ func TestGetCaches(t *testing.T) {
 	}
 }
 
-func TestSyncHTTP(t *testing.T) {
+func TestGetItem(t *testing.T) {
 	m := multikube.New()
-	for _, cluster := range m.Clusters {
-		cluster.Cache().SyncHTTP(&cluster)
-		t.Logf("Cluster %s syncronised", cluster.Name())
-	}
+	cluster := m.Clusters[0]
+	item := cluster.Cache().Get("namespaces")
+	t.Logf("Item: %+v", item)
+}
+
+func TestSetItem(t *testing.T) {
+	m := multikube.New()
+	cluster := m.Clusters[0]
+	item := cluster.Cache().Set("namespaces", "Hello World")
+	t.Logf("Item: %+v", item)
+}
+
+func TestDeleteItem(t *testing.T) {
+	m := multikube.New()
+	cluster := m.Clusters[0]
+	item := cluster.Cache().Set("namespaces", "hello world")
+	t.Logf("Item: %+v", item)
+	cluster.Cache().Delete(item.Key)
+	item = cluster.Cache().Get("namespaces")
+	t.Logf("Item: %+v", item)
 }

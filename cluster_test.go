@@ -13,3 +13,11 @@ func TestGetClusters(t *testing.T) {
 		t.Logf("  Config: %+v", cluster.Config)
 	}
 }
+
+func TestSyncHTTP(t *testing.T) {
+	m := multikube.New()
+	for _, cluster := range m.Clusters {
+		cluster.SyncHTTP()
+		t.Logf("Cluster %s syncronised", cluster.Name())
+	}
+}

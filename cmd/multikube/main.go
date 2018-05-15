@@ -11,7 +11,7 @@ func main() {
 	log.Printf("Synchronising cache from %d clusters", len(m.Clusters))
 	
 	for _, cluster := range m.Clusters {
-		err := cluster.Cache().SyncHTTP(&cluster)
+		err := cluster.SyncHTTP()
 		if err != nil {
 			log.Printf("Error synchronising cluster %s. %s", cluster.Name(), err)
 		}
