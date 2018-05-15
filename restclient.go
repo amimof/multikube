@@ -16,6 +16,7 @@ import (
 type Request struct {
 	client *http.Client
 	baseURL *url.URL
+	path string
 	verb string
 	resourceType string
 	resourceName string
@@ -157,13 +158,21 @@ func (r *Request) Data() []byte {
 	return r.data
 }
 
+func (r *Request) Path(p string) *Request {
+	r.path = p
+	return r
+}
 // URL returns the current working URL.
 func (r *Request) URL() *url.URL {
 	
 	if r.baseURL.Path != "" {
 		r.baseURL.Path = ""
 	}
+
 	p := "/api/v1/"
+	if r.path != "" {
+		p = r.path
+	} 
 	
 	// Is this resource namespaced?
 	if len(r.namespace) > 0 {

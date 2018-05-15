@@ -11,6 +11,23 @@ type Cluster struct {
 	Config *ClusterConfig `json:"config,omitempty"`
 }
 
+type ClusterVersion struct {
+	BuildDate string `json:"buildDate,omitempty"`
+	Compiler string `json:"compiler,omitempty"`
+	GitCommit string `json:"gitCommit,omitempty"`
+	GitTreeState string `json:"gitTreeState,omitempty"`
+	GitVersion string `json:"gitVersion,omitempty"`
+	GoVersion string `json:"goVersion,omitempty"`
+	Major string `json:"major,omitempty"`
+	Minor string `json:"minor,omitempty"`
+	Platform string `json:"platform,omitempty"`
+}
+
+func (c *Cluster) Version() ClusterVersion {
+	version := ClusterVersion{}
+	NewRequest(c.Config).Get().Path("/version").Into(&version).Do()
+	return version
+}
 
 func (c *Cluster) SyncHTTP() *Cache {
 	namespaces := &v1.NamespaceList{}
