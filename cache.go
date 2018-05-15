@@ -18,6 +18,14 @@ type Item struct {
 	Created time.Time
 }
 
+func (c *Cache) ListKeys() []string {
+	keys := make([]string, 0)
+	for key, _ := range c.Store {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func (c *Cache) Get(key string) *Item {
 	var item Item
 	if c.Exists(key) {

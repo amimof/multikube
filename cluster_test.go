@@ -14,6 +14,15 @@ func TestGetClusters(t *testing.T) {
 	}
 }
 
+func TestGetClusterCaches(t *testing.T) {
+	m := multikube.New()
+	for i, cluster := range m.Clusters {
+		t.Logf("Cluster: %d", i)
+		t.Logf("  Name: %+v", cluster.Config.Name)
+		t.Logf("    Cache ID: %s", cluster.Cache().ID)
+	}
+}
+
 func TestGetClusterConfig(t *testing.T) {
 	m := multikube.New()
 	for i, cluster := range m.Clusters {
@@ -41,6 +50,15 @@ func TestGetClusterVersion(t *testing.T) {
 	m := multikube.New()
 	for _, cluster := range m.Clusters {
 		t.Logf("Cluster: %s", cluster.Config.Name)
-		t.Logf("  Version: %+v", cluster.Version())
+		t.Logf("  Version:")
+		t.Logf("    BuildDate: %s", cluster.Version().BuildDate)
+		t.Logf("    Compiler: %s", cluster.Version().Compiler)
+		t.Logf("    GitCommit: %s", cluster.Version().GitCommit)
+		t.Logf("    GitTreeState: %s", cluster.Version().GitTreeState)
+		t.Logf("    GitVersion: %s", cluster.Version().GitVersion)
+		t.Logf("    GoVersion: %s", cluster.Version().GoVersion)
+		t.Logf("    Major: %s", cluster.Version().Major)
+		t.Logf("    Minor: %s", cluster.Version().Minor)
+		t.Logf("    Platform: %s", cluster.Version().Platform)
 	}
 }

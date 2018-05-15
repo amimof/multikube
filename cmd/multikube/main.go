@@ -8,15 +8,12 @@ import (
 func main() {
 
 	m := multikube.New()
-	log.Printf("Synchronising cache from %d clusters", len(m.Clusters))
 	
+	log.Printf("%+v", m.Clusters)	
+
 	for _, cluster := range m.Clusters {
-		err := cluster.SyncHTTP()
-		if err != nil {
-			log.Printf("Error synchronising cluster %s. %s", cluster.Name(), err)
-		}
+		log.Printf("%+v", cluster.Config)
 	}
-	
-	log.Printf("Synchronisation complete")
+
 
 }

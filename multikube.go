@@ -230,11 +230,13 @@ func (m *Multikube) GetCluster(name string) (*Cluster, error) {
 }
 
 func New() *Multikube {
+	var clusters []Cluster
 	c := SetupConfig()
-	clusters := make([]Cluster, len(c.Clusters))
+	
 	for _, config := range c.Clusters {
-		clusters[0].Config = &config
+		clusters = append(clusters, Cluster{Config: &config})
 	}
+
 	return &Multikube{
 		Version: "1.0.0",
 		Config: c,
@@ -244,8 +246,8 @@ func New() *Multikube {
 
 func NewForConfig(c *Config) *Multikube {
 	clusters := make([]Cluster, len(c.Clusters))
-	for _, config := range c.Clusters {
-		clusters[0].Config = &config
+	for i, config := range c.Clusters {
+		clusters[i].Config = &config
 	}
 	return &Multikube{
 		Version: "1.0.0",
