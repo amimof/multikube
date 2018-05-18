@@ -3,17 +3,21 @@ package main
 import (
 	"log"
 	"github.com/amimof/multikube"
+	"time"
 )
 
 func main() {
 
 	m := multikube.New()
-	
-	log.Printf("%+v", m.Clusters)	
-
+	log.Printf("Performing initial sync")
 	for _, cluster := range m.Clusters {
-		log.Printf("%+v", cluster.Config)
+		cluster.SyncHTTP()
+		log.Printf("%s is synced", cluster.Config.Name)
 	}
 
+	for {
+		time.Sleep(time.Second * 5)
+		log.Printf("%s", time.Now())
+	}
 
 }

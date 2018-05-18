@@ -17,6 +17,7 @@ type Request struct {
 	client *http.Client
 	baseURL *url.URL
 	path string
+	apiVersion string
 	verb string
 	resourceType string
 	resourceName string
@@ -88,6 +89,11 @@ func (r *Request) Name(n string) *Request {
 
 func (r *Request) Namespace(ns string) *Request {
 	r.namespace = ns
+	return r
+}
+
+func (r *Request) ApiVer(v string) *Request {
+	r.apiVersion = v
 	return r
 }
 
@@ -172,7 +178,12 @@ func (r *Request) URL() *url.URL {
 	p := "/api/v1/"
 	if r.path != "" {
 		p = r.path
-	} 
+	}
+
+	// Set Api version only if not v1
+	if len(r.apiVersion) > 0 && r.apiVersion != "v1" {
+		p = path.Join("/apis", r.apiVersion)
+	}
 	
 	// Is this resource namespaced?
 	if len(r.namespace) > 0 {

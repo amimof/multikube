@@ -38,11 +38,19 @@ func TestGetClusterConfig(t *testing.T) {
 func TestSyncHTTP(t *testing.T) {
 	m := multikube.New()
 	for _, cluster := range m.Clusters {
-		cluster.SyncHTTP()
+		cache, err := cluster.SyncHTTP()
+		if err != nil {
+			t.Fatal(err)
+		}
 		t.Logf("Cluster: %s", cluster.Config.Name)
 		t.Logf("Cache:")
-		t.Logf("  ID: %s", cluster.Cache().ID)
-		t.Logf("  Store Length: %d", len(cluster.Cache().Store))
+		t.Logf("  ID: %s", cache.ID)
+		t.Logf("  Store Length: %d", len(cache.Store))
+		t.Logf("  Store Size: %d", cache.Size())
+		t.Logf("  Keys:")
+		for _, key := range cache.ListKeys() {
+			t.Logf("    %s: %d bytes", key, cache.Get(key).Bytes())
+		}
 	}
 }
 

@@ -53,3 +53,15 @@ func (c *Cache) Exists(key string) bool {
 	}
 	return false
 }
+
+func (c *Cache) Size() int {
+	l := 0
+	for _, val := range c.Store {
+		l += val.Bytes()
+	}
+	return l
+}
+
+func (i *Item) Bytes() int {
+	return len(i.Value.([]byte))
+}

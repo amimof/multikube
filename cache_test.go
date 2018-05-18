@@ -39,3 +39,13 @@ func TestListKeys(t *testing.T) {
 		t.Logf("%s", key)
 	}
 }
+
+func TestCacheBytes(t *testing.T) {
+	m := multikube.New()
+	cluster := m.Clusters[0]
+	cache, err := cluster.SyncHTTP()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Cache size is %d bytes", cache.Size())
+}

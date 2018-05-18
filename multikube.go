@@ -1,7 +1,7 @@
 package multikube
 
 import (
-	"net/http"
+	//"net/http"
 	// "strings"
 	// "io/ioutil"
 	// "crypto/tls"
@@ -15,32 +15,6 @@ type Multikube struct {
 	Version string
 	Config *Config
 	Clusters []Cluster
-}
-
-type APIErrorResponse struct {
-	Code int
-	Err error
-}
-
-func (a APIErrorResponse) Error() string {
-	return a.Err.Error()
-}
-
-func (a APIErrorResponse) Status() int {
-	return a.Code
-}
-
-func handleErr(w http.ResponseWriter, err error) {
-	if err != nil {
-		switch e := err.(type) {
-		case APIErrorResponse:
-			http.Error(w, e.Error(), e.Status())
-			return
-		default:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
 }
 
 func handleResponse(m *v1.Status) error {
