@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"github.com/amimof/multikube"
+	"gitlab.com/amimof/multikube"
 	"time"
 )
 

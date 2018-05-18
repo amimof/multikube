@@ -2,7 +2,7 @@ package multikube_test
 
 import (
 	"testing"
-	"github.com/amimof/multikube"
+	"gitlab.com/amimof/multikube"
 )
 
 func TestGetItem(t *testing.T) {
