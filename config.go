@@ -1,14 +1,8 @@
 package multikube
 
 import (
-  "gopkg.in/yaml.v2"
   "os"
-  "log"
-  "io/ioutil"
-  //"path"
-  //"net/url"
 )
-
 
 type Config struct {
 	LogPath string `yaml:"logPath"`
@@ -34,45 +28,3 @@ func exists(path string) bool {
 	}
 	return true
 }
-
-func SetupConfig() *Config {
-
-  var configPath string = "/etc/multikube/multikube.yaml"
-  if !exists(configPath) {
-      file, err := os.Create(configPath)
-      if err != nil {
-        log.Fatal(err)
-      }
-      defer file.Close()
-  }
-
-  b, err := ioutil.ReadFile(configPath)
-  if err != nil {
-    log.Fatal(err)
-  }
-
-  c := &Config{
-		LogPath: "/var/log/containers",
-		Clusters: []ClusterConfig{},
-  }
-
-  err = yaml.Unmarshal(b, &c)
-  if err != nil {
-    log.Fatal(err)
-  }
-
-  return c
-
-}
-
-// func (c *Config) GetApiUrl(str ...string) string {
-// 	u, err := url.Parse(c.KubernetesApi)
-// 	if err != nil {
-// 		return ""
-// 	}
-// 	u.Path = path.Join(u.Path, "/api/v1/")
-// 	for _, p := range str {
-// 		u.Path = path.Join(u.Path, p)
-// 	}
-// 	return u.String()
-// }

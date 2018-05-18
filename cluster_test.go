@@ -5,6 +5,20 @@ import (
 	"gitlab.com/amimof/multikube"
 )
 
+func TestNewCluster(t *testing.T) {
+	m := multikube.New().NewCluster(&multikube.ClusterConfig{
+		Name: "kubernetes-dev",
+		Hostname: "https://192.168.99.100:8443/",
+    Cert: "/Users/amir/.minikube/client.crt",
+    Key: "/Users/amir/.minikube/client.key",
+    CA: "/Users/amir/.minikube/ca.crt",
+	},)
+	for i, cluster := range m.Clusters {
+		t.Logf("Cluster: %d", i)
+		t.Logf("  Name: %s", cluster.Config.Name)
+	}
+}
+
 func TestGetClusters(t *testing.T) {
 	m := multikube.New()
 	for i, cluster := range m.Clusters {
@@ -36,8 +50,11 @@ func TestGetClusterConfig(t *testing.T) {
 }
 
 func TestSyncHTTP(t *testing.T) {
-	m := multikube.New()
-	for _, cluster := range m.Clusters {
+	g, err := multikube.NewGroup("dev").AddClustersForConfig("/etc/multikube/multikube.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cluster := range g.Clusters() {
 		cache, err := cluster.SyncHTTP()
 		if err != nil {
 			t.Fatal(err)
