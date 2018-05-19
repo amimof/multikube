@@ -8,14 +8,14 @@ import (
 
 func main() {
 
-	cluster1 := &multikube.ClusterConfig{
+	cluster1 := &multikube.Config{
 		Name: "minikube",
     Hostname: "https://192.168.99.100:8443",
     Cert: "/Users/amir/.minikube/client.crt",
     Key: "/Users/amir/.minikube/client.key",
     CA: "/Users/amir/.minikube/ca.crt",
 	}
-	cluster2 := &multikube.ClusterConfig{
+	cluster2 := &multikube.Config{
 		Name: "prod-cluster-1",
     Hostname: "https://192.168.99.100:8443",
     Cert: "/Users/amir/.minikube/client.crt",

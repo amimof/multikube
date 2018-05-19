@@ -31,7 +31,7 @@ type Request struct {
 }
 
 
-func NewRequest(config *ClusterConfig) *Request {
+func NewRequest(config *Config) *Request {
 
 	r := &Request{}
 

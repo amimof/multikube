@@ -4,8 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-  "gopkg.in/yaml.v2"
-	"io/ioutil"
+	"os"
 )
 
 func handleResponse(m *v1.Status) error {
@@ -23,25 +22,16 @@ func newErr(s string) error {
 	return errors.New(s)
 }
 
-func SetupConfig(path string) (*Config, error) {
-
-  b, err := ioutil.ReadFile(path)
-  if err != nil {
-    return nil, err
-  }
-
-  c := &Config{
-		LogPath: "/var/log/containers",
-		Clusters: []ClusterConfig{},
-  }
-
-  err = yaml.Unmarshal(b, &c)
-  if err != nil {
-    return nil, err
-  }
-
-  return c, nil
-
+// Returns true if path exists
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return true
 }
 
 func NewGroup(name string) *Group {

@@ -5,7 +5,7 @@ type Group struct {
 	clusters map[string]Cluster
 }
 
-func (g *Group) AddCluster(conf ...*ClusterConfig) *Group {
+func (g *Group) AddCluster(conf ...*Config) *Group {
 	for _, c := range conf {
 		g.clusters[c.Name] = Cluster{ Config: c }
 	}

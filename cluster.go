@@ -8,7 +8,7 @@ import (
 
 type Cluster struct {
 	cache *Cache `json:"-"`
-	Config *ClusterConfig `json:"config,omitempty"`
+	Config *Config `json:"config,omitempty"`
 }
 
 type ClusterVersion struct {

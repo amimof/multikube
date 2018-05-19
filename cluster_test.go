@@ -2,35 +2,25 @@ package multikube_test
 
 import (
 	"testing"
-	"gitlab.com/amimof/multikube"
 )
 
 func TestNewCluster(t *testing.T) {
-	m := multikube.New().NewCluster(&multikube.ClusterConfig{
-		Name: "kubernetes-dev",
-		Hostname: "https://192.168.99.100:8443/",
-    Cert: "/Users/amir/.minikube/client.crt",
-    Key: "/Users/amir/.minikube/client.key",
-    CA: "/Users/amir/.minikube/ca.crt",
-	},)
-	for i, cluster := range m.Clusters {
-		t.Logf("Cluster: %d", i)
-		t.Logf("  Name: %s", cluster.Config.Name)
+	newcluster := group.Clusters()[0]
+	newcluster.Config.Name = "minikube_new"
+	group = group.AddCluster(newcluster.Config)
+	for i, cluster := range group.Clusters() {
+		t.Logf("Cluster %d: %s", i, cluster.Config.Name)
 	}
 }
 
 func TestGetClusters(t *testing.T) {
-	m := multikube.New()
-	for i, cluster := range m.Clusters {
-		t.Logf("Cluster: %d", i)
-		t.Logf("  Cache: %+v", cluster.Cache())
-		t.Logf("  Config: %+v", cluster.Config)
+	for i, cluster := range group.Clusters() {
+		t.Logf("Cluster %d: %s", i, cluster.Config.Name)
 	}
 }
 
 func TestGetClusterCaches(t *testing.T) {
-	m := multikube.New()
-	for i, cluster := range m.Clusters {
+	for i, cluster := range group.Clusters() {
 		t.Logf("Cluster: %d", i)
 		t.Logf("  Name: %+v", cluster.Config.Name)
 		t.Logf("    Cache ID: %s", cluster.Cache().ID)
@@ -38,8 +28,7 @@ func TestGetClusterCaches(t *testing.T) {
 }
 
 func TestGetClusterConfig(t *testing.T) {
-	m := multikube.New()
-	for i, cluster := range m.Clusters {
+	for i, cluster := range group.Clusters() {
 		t.Logf("Cluster: %d", i)
 		t.Logf("  Name: %s", cluster.Config.Name)
 		t.Logf("  Hostname: %s", cluster.Config.Hostname)
@@ -50,11 +39,7 @@ func TestGetClusterConfig(t *testing.T) {
 }
 
 func TestSyncHTTP(t *testing.T) {
-	g, err := multikube.NewGroup("dev").AddClustersForConfig("/etc/multikube/multikube.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, cluster := range g.Clusters() {
+	for _, cluster := range group.Clusters() {
 		cache, err := cluster.SyncHTTP()
 		if err != nil {
 			t.Fatal(err)
@@ -72,8 +57,7 @@ func TestSyncHTTP(t *testing.T) {
 }
 
 func TestGetClusterVersion(t *testing.T) {
-	m := multikube.New()
-	for _, cluster := range m.Clusters {
+	for _, cluster := range group.Clusters() {
 		t.Logf("Cluster: %s", cluster.Config.Name)
 		t.Logf("  Version:")
 		t.Logf("    BuildDate: %s", cluster.Version().BuildDate)
