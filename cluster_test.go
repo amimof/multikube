@@ -71,3 +71,30 @@ func TestGetClusterVersion(t *testing.T) {
 		t.Logf("    Platform: %s", cluster.Version().Platform)
 	}
 }
+
+func TestGetClusterNamespaces(t *testing.T) {
+	for _, cluster := range group.Clusters() {
+		_, err := cluster.SyncHTTP()
+		if err != nil {
+			t.Fatal(err)
+		}
+		nslist := cluster.Namespaces()
+		t.Logf("Namespaces: %d", len(nslist.Items))
+		for _, ns := range nslist.Items {
+			t.Logf("  Namespace: %s", ns.ObjectMeta.Name)
+		}
+	}
+}
+
+func TestGetClusterNamespace(t *testing.T) {
+	for _, cluster := range group.Clusters() {
+		_, err := cluster.SyncHTTP()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ns := range cluster.Namespaces().Items {
+			n := cluster.Namespace(ns.ObjectMeta.Name)
+			t.Logf("Namespace: %s", n.ObjectMeta.Name)
+		}
+	}	
+}

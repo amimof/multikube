@@ -131,19 +131,21 @@ func (r *Request) Do() (*Request, error) {
 	r.data = body
 
 	// Lets try to see if response is a failure
-	status := &v1.Status{}
-	err = json.Unmarshal(r.Data(), status)
-	if err != nil {
-		return nil, err
-	}
-	err = handleResponse(status)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(r.Data(), r.interf)
-	if err != nil {
-		return nil, err
+	if r.interf != nil {
+		status := &v1.Status{}
+		err = json.Unmarshal(r.Data(), status)
+		if err != nil {
+			return nil, err
+		}
+		err = handleResponse(status)
+		if err != nil {
+			return nil, err
+		}
+	
+		err = json.Unmarshal(r.Data(), r.interf)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Return any error if any has been generated along the way
