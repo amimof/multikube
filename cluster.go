@@ -4,6 +4,9 @@ import (
 	"k8s.io/api/core/v1"
 	//"k8s.io/api/apps/v1beta1"
 	"github.com/google/uuid"
+	
+	apimachineryversion "k8s.io/apimachinery/pkg/version"
+	
 	"path"
 	"encoding/json"
 )
@@ -11,18 +14,6 @@ import (
 type Cluster struct {
 	cache *Cache `json:"-"`
 	Config *Config `json:"config,omitempty"`
-}
-
-type ClusterVersion struct {
-	BuildDate string `json:"buildDate,omitempty"`
-	Compiler string `json:"compiler,omitempty"`
-	GitCommit string `json:"gitCommit,omitempty"`
-	GitTreeState string `json:"gitTreeState,omitempty"`
-	GitVersion string `json:"gitVersion,omitempty"`
-	GoVersion string `json:"goVersion,omitempty"`
-	Major string `json:"major,omitempty"`
-	Minor string `json:"minor,omitempty"`
-	Platform string `json:"platform,omitempty"`
 }
 
 type ResourceSpec struct {
@@ -35,8 +26,8 @@ type ResourceSpec struct {
 
 // Version returns the version of the connected backend. 
 // This does a call to /version on the Kubernetes API.
-func (c *Cluster) Version() ClusterVersion {
-	version := ClusterVersion{}
+func (c *Cluster) Version() apimachineryversion.Info {
+	version := apimachineryversion.Info{}
 	NewRequest(c.Config).Get().Path("/version").Into(&version).Do()
 	return version
 }

@@ -8,31 +8,26 @@ import (
 
 func main() {
 
-	cluster1 := &multikube.Config{
+	group := multikube.NewGroup("dev").AddCluster(&multikube.Config{
 		Name: "minikube",
-    Hostname: "https://192.168.99.100:8443",
-    Cert: "/Users/amir/.minikube/client.crt",
-    Key: "/Users/amir/.minikube/client.key",
-    CA: "/Users/amir/.minikube/ca.crt",
-	}
-	cluster2 := &multikube.Config{
+		Hostname: "https://192.168.99.100:8443",
+		Cert: "/Users/amir/.minikube/client.crt",
+		Key: "/Users/amir/.minikube/client.key",
+		CA: "/Users/amir/.minikube/ca.crt",
+	}, &multikube.Config{
 		Name: "prod-cluster-1",
-    Hostname: "https://192.168.99.100:8443",
-    Cert: "/Users/amir/.minikube/client.crt",
-    Key: "/Users/amir/.minikube/client.key",
-    CA: "/Users/amir/.minikube/ca.crt",
-	}
-
-	g := multikube.NewGroup("dev").AddCluster(cluster1, cluster2)
+		Hostname: "https://192.168.99.100:8443",
+		Cert: "/Users/amir/.minikube/client.crt",
+		Key: "/Users/amir/.minikube/client.key",
+		CA: "/Users/amir/.minikube/ca.crt",
+	})
 	log.Printf("Performing initial sync")
 	
-	for _, cluster := range g.Clusters() {
-		cache, err := cluster.SyncHTTP()
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Printf("%s is synced. Current cache size: %d bytes", cluster.Config.Name, cache.Size())
+	err := group.SyncAll()
+	if err != nil {
+		panic(err)
 	}
+	log.Printf("Cache synced and ready")
 
 	for {
 		time.Sleep(time.Second * 5)

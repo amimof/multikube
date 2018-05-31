@@ -1,15 +1,31 @@
 swagger: "2.0"
+info:
+  description: Manages multiple Kubernetes clusters and provides a single API to clients
+  title: Kubernetes multi-cluster manager
+  version: 1.0.0
 consumes:
 - application/io.multikube.v1+json
 produces:
 - application/io.multikube.v1+json
 schemes:
 - http
-info:
-  description: Multi Kubernetes cluster management
-  title: Multi Kubernetes cluster manager
-  version: 1.0.0
+- https
 definitions:
+  config:
+    type: object
+    properties:
+      hostname:
+        type: string
+        minLength: 1
+      ca:
+        type: string
+        minLength: 1
+      cert:
+        type: string
+        minLength: 1
+      key:
+        type: string
+        minLength: 1
   cluster:
     type: object
     required:
@@ -20,8 +36,11 @@ definitions:
         format: int64
         readOnly: true
       name:
-        type: string
+        type: string 
         minLength: 1
+      config:
+        type: object
+        $ref: "#/definitions/config"
   error:
     type: object
     required:
@@ -33,29 +52,30 @@ definitions:
       message:
         type: string
 paths:
-  /:
+  /clusters:
     get:
       tags:
         - clusters
-      operationId: findMany
       parameters:
+        - name: since
+          in: query
+          type: integer
+          format: int64
         - name: limit
           in: query
           type: integer
           format: int32
-          default: 20
       responses:
         200:
-          description: Get clusters
+          description: List the todo operations
           schema:
             type: array
             items:
               $ref: "#/definitions/cluster"
         default:
-          description: Genering error response
+          description: Generic error response
           schema:
             $ref: "#/definitions/error"
-  /:
     post:
       tags:
         - clusters
@@ -67,22 +87,34 @@ paths:
             $ref: "#/definitions/cluster"
       responses:
         201:
-          description: Created
+          description: Cluster created
           schema:
             $ref: "#/definitions/cluster"
         default:
           description: error
           schema:
             $ref: "#/definitions/error"
-  /{id}:
+  /clusters/{id}:
     parameters:
-      - type: integer
-        format: int64
-        name: id
+      - name: id
+        type: string
         in: path
         required: true
+    get:
+      tags:
+        - clusters
+      operationId: getOne
+      responses:
+        200:
+          description: Got cluster
+          schema:
+            $ref: "#/definitions/cluster"
+        default:
+          description: error
+          schema:
+            $ref: "#/definitions/error"
     put:
-      tags: 
+      tags:
         - clusters
       operationId: updateOne
       parameters:
@@ -92,7 +124,7 @@ paths:
             $ref: "#/definitions/cluster"
       responses:
         200:
-          description: OK
+          description: Updated cluster
           schema:
             $ref: "#/definitions/cluster"
         default:
@@ -102,18 +134,11 @@ paths:
     delete:
       tags:
         - clusters
-      operationId: deleteOne
-      parameters:
-        - type: integer
-          format: int64
-          name: id
-          in: path
-          required: true
+      operationId: destroyOne
       responses:
         204:
-          description: Deleted
+          description: Cluster deleted
         default:
           description: error
           schema:
             $ref: "#/definitions/error"
-

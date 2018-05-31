@@ -4,8 +4,6 @@ import (
 	"testing"
 )
 
-
-
 func TestGetItem(t *testing.T) {
 	for _, cluster := range group.Clusters() {
 		item := cluster.Cache().Get("namespaces")

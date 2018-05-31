@@ -24,3 +24,13 @@ func (g *Group) Clusters() []Cluster {
 	}
 	return clusters
 }
+
+func (g *Group) SyncAll() error {
+	for _, c := range g.Clusters() {
+		_, err := c.SyncHTTP()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
