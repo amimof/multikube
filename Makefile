@@ -29,7 +29,7 @@ fmt:
 generate-api: 
 	cd ${BUILD_DIR}
 	swagger validate api/v1/swagger.yml
-	swagger generate server -A ${BINARY} -s server -a restapi -t api/v1/ -f api/v1/swagger.yml
+	swagger generate server -A ${BINARY} -s server -a restapi -t api/v1/ -f api/v1/swagger.yml --flag-strategy=pflag
 
 # clean:
 # 	-rm -f ${BINARY}-*

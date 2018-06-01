@@ -1,4 +1,4 @@
-package multikube
+package cache
 
 import (
 	"github.com/google/uuid"
@@ -8,7 +8,6 @@ import (
 // Root cache object
 type Cache struct {
 	ID uuid.UUID
-	client *Request
 	Store map[string]Item
 }
 

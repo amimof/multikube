@@ -4,16 +4,18 @@ import (
 	"k8s.io/api/core/v1"
 	//"k8s.io/api/apps/v1beta1"
 	"github.com/google/uuid"
-	
+
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
+	"gitlab.com/amimof/multikube/api/v1/models"
+	"gitlab.com/amimof/multikube/pkg/cache"
 	
 	"path"
 	"encoding/json"
 )
 
 type Cluster struct {
-	cache *Cache `json:"-"`
-	Config *Config `json:"config,omitempty"`
+	cache *cache.Cache `json:"-"`
+	Config *models.Config `json:"config,omitempty"`
 }
 
 type ResourceSpec struct {
@@ -35,7 +37,7 @@ func (c *Cluster) Version() apimachineryversion.Info {
 // SyncHTTP performs a full syncronisation of the cluster and it's configured endpoint. 
 // A cache is instantiated if none is available. Any items that are stored in the clusters cache
 // will be overwritten.
-func (c *Cluster) SyncHTTP() (*Cache, error) {
+func (c *Cluster) SyncHTTP() (*cache.Cache, error) {
 	
 	// Sync namespaces
 	nslist := v1.NamespaceList{}
@@ -116,11 +118,11 @@ func (c *Cluster) Namespace(name string) v1.Namespace {
 }
 
 // Cache returns the current cache instance of the cluster
-func (c *Cluster) Cache() *Cache {
+func (c *Cluster) Cache() *cache.Cache {
 	if c.cache == nil {
-		c.cache = &Cache{
+		c.cache = &cache.Cache{
 			ID: uuid.New(),
-			Store: make(map[string]Item),
+			Store: make(map[string]cache.Item),
 		}
 	}
 	return c.cache

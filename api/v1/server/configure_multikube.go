@@ -5,6 +5,9 @@ package server
 import (
 	"crypto/tls"
 	"net/http"
+	//"log"
+	"os"
+	//"io/ioutil"
 
 	errors "github.com/go-openapi/errors"
 	runtime "github.com/go-openapi/runtime"
@@ -13,12 +16,13 @@ import (
 
 	"gitlab.com/amimof/multikube/api/v1/server/restapi"
 	"gitlab.com/amimof/multikube/api/v1/server/restapi/clusters"
+	
+	//"github.com/go-openapi/swag"
 )
 
 //go:generate swagger generate server --target ../api/v1 --name multikube --spec ../api/v1/swagger.yml --api-package restapi --server-package server
 
 func configureFlags(api *restapi.MultikubeAPI) {
-	// api.CommandLineOptionsGroups = []swag.CommandLineOptionsGroup{ ... }
 }
 
 func configureAPI(api *restapi.MultikubeAPI) http.Handler {
@@ -66,6 +70,7 @@ func configureTLS(tlsConfig *tls.Config) {
 // This function can be called multiple times, depending on the number of serving schemes.
 // scheme value will be set accordingly: "http", "https" or "unix"
 func configureServer(s *graceful.Server, scheme, addr string) {
+	setupConfig()
 }
 
 // The middleware configuration is for the handler executors. These do not apply to the swagger.json document.
@@ -79,3 +84,42 @@ func setupMiddlewares(handler http.Handler) http.Handler {
 func setupGlobalMiddleware(handler http.Handler) http.Handler {
 	return handler
 }
+ 
+func setupConfig() {
+	
+	// if configOpts.Config == "" {
+	// 	configOpts.Config = "/etc/multikube/multikube.yaml" 
+	// }
+  // if !exists(configOpts.Config) { 
+	// 	log.Fatalf("Does not exist %s", configOpts.Config)
+  // } 
+ 
+  // b, err := ioutil.ReadFile(configPath) 
+  // if err != nil { 
+  //   log.Fatal(err) 
+  // } 
+ 
+  // c := &Config{ 
+  //   LogPath: "/var/log/containers", 
+  //   Clusters: []*Cluster{}, 
+  // } 
+ 
+  // err = yaml.Unmarshal(b, &c) 
+  // if err != nil { 
+  //   log.Fatal(err) 
+  // } 
+ 
+  // return c 
+ 
+} 
+
+func exists(path string) bool { 
+  _, err := os.Stat(path) 
+  if err != nil { 
+    return false 
+  } 
+  if os.IsNotExist(err) { 
+    return false 
+  } 
+  return true 
+} 

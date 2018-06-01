@@ -11,6 +11,7 @@ import (
 	"strings"
 	"encoding/json"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"gitlab.com/amimof/multikube/api/v1/models"
 )
 
 type Request struct {
@@ -31,7 +32,7 @@ type Request struct {
 }
 
 
-func NewRequest(config *Config) *Request {
+func NewRequest(config *models.Config) *Request {
 
 	r := &Request{}
 
