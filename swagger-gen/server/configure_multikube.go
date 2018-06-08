@@ -21,7 +21,6 @@ import (
 )
 
 //go:generate swagger generate server --target ../api/v1 --name multikube --spec ../api/v1/swagger.yml --api-package restapi --server-package server
-
 func configureFlags(api *restapi.MultikubeAPI) {
 }
 
@@ -84,42 +83,4 @@ func setupMiddlewares(handler http.Handler) http.Handler {
 func setupGlobalMiddleware(handler http.Handler) http.Handler {
 	return handler
 }
- 
-func setupConfig() {
-	
-	// if configOpts.Config == "" {
-	// 	configOpts.Config = "/etc/multikube/multikube.yaml" 
-	// }
-  // if !exists(configOpts.Config) { 
-	// 	log.Fatalf("Does not exist %s", configOpts.Config)
-  // } 
- 
-  // b, err := ioutil.ReadFile(configPath) 
-  // if err != nil { 
-  //   log.Fatal(err) 
-  // } 
- 
-  // c := &Config{ 
-  //   LogPath: "/var/log/containers", 
-  //   Clusters: []*Cluster{}, 
-  // } 
- 
-  // err = yaml.Unmarshal(b, &c) 
-  // if err != nil { 
-  //   log.Fatal(err) 
-  // } 
- 
-  // return c 
- 
-} 
 
-func exists(path string) bool { 
-  _, err := os.Stat(path) 
-  if err != nil { 
-    return false 
-  } 
-  if os.IsNotExist(err) { 
-    return false 
-  } 
-  return true 
-} 

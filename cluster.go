@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
-	"gitlab.com/amimof/multikube/api/v1/models"
 	"gitlab.com/amimof/multikube/pkg/cache"
 	
 	"path"
@@ -15,7 +14,7 @@ import (
 
 type Cluster struct {
 	cache *cache.Cache `json:"-"`
-	Config *models.Config `json:"config,omitempty"`
+	Options *Options `json:"config,omitempty"`
 }
 
 type ResourceSpec struct {
@@ -30,7 +29,7 @@ type ResourceSpec struct {
 // This does a call to /version on the Kubernetes API.
 func (c *Cluster) Version() apimachineryversion.Info {
 	version := apimachineryversion.Info{}
-	NewRequest(c.Config).Get().Path("/version").Into(&version).Do()
+	NewRequest(c.Options).Get().Path("/version").Into(&version).Do()
 	return version
 }
 
@@ -41,7 +40,7 @@ func (c *Cluster) SyncHTTP() (*cache.Cache, error) {
 	
 	// Sync namespaces
 	nslist := v1.NamespaceList{}
-	r, err := NewRequest(c.Config).Get().Namespace("/").Into(&nslist).Do()
+	r, err := NewRequest(c.Options).Get().Namespace("/").Into(&nslist).Do()
 	if err != nil {
 		return c.Cache(), err
 	}
@@ -49,7 +48,7 @@ func (c *Cluster) SyncHTTP() (*cache.Cache, error) {
 
 	// Sync Nodes
 	//nodelist := v1.NodeList{}
-	r, err = NewRequest(c.Config).Get().Resource("Nodes").Do()
+	r, err = NewRequest(c.Options).Get().Resource("Nodes").Do()
 	if err != nil {
 		return c.Cache(), err
 	}
@@ -57,7 +56,7 @@ func (c *Cluster) SyncHTTP() (*cache.Cache, error) {
 	
 	// Sync PersistentVolumes
 	//pvlist := v1.PersistentVolumeList{}
-	r, err = NewRequest(c.Config).Get().Resource("PersistentVolumes").Do()
+	r, err = NewRequest(c.Options).Get().Resource("PersistentVolumes").Do()
 	if err != nil {
 		return c.Cache(), err
 	}
@@ -82,14 +81,14 @@ func (c *Cluster) SyncHTTP() (*cache.Cache, error) {
 	// Sync namespace and its resources
 	for _, ns := range nslist.Items {
 		
-		r, err := NewRequest(c.Config).Get().Namespace(ns.ObjectMeta.Name).Do()
+		r, err := NewRequest(c.Options).Get().Namespace(ns.ObjectMeta.Name).Do()
 		if err != nil {
 			return c.Cache(), nil
 		} 
 		c.Cache().Set(path.Join("/namespaces/", ns.ObjectMeta.Name), r.Data())
 
 		for _, resource := range resources {
-			r, err := NewRequest(c.Config).Get().Resource(resource.Name).Namespace(ns.ObjectMeta.Name).ApiVer(resource.ApiVersion).Do()
+			r, err := NewRequest(c.Options).Get().Resource(resource.Name).Namespace(ns.ObjectMeta.Name).ApiVer(resource.ApiVersion).Do()
 			if err != nil {
 				return c.Cache(), nil
 			}

@@ -37,6 +37,6 @@ func exists(path string) bool {
 func NewGroup(name string) *Group {
 	return &Group{ 
 		Name: name,
-		clusters: make(map[string]Cluster), 
+		clusters: []Cluster{}, 
 	}
 }

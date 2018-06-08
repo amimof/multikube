@@ -9,19 +9,11 @@ type Group struct {
 	clusters []Cluster
 }
 
-func (g *Group) AddCluster(conf ...*Config) *Group {
+func (g *Group) AddCluster(conf ...*Options) *Group {
 	for _, c := range conf {
-		g.clusters[c.Name] = Cluster{ Config: c }
+		g.clusters = append(g.clusters, Cluster{Options: c})
 	}
 	return g
-}
-
-func (g *Group) Cluster(name string) *Cluster {
-	for _, c := range g.clusters {
-		if c.Name == name {
-			return &c
-		}
-	}
 }
 
 func (g *Group) Clusters() []Cluster {

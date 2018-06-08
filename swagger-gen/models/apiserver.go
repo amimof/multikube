@@ -13,9 +13,9 @@ import (
 	"github.com/go-openapi/validate"
 )
 
-// Config config
-// swagger:model config
-type Config struct {
+// Apiserver apiserver
+// swagger:model apiserver
+type Apiserver struct {
 
 	// ca
 	// Min Length: 1
@@ -24,6 +24,10 @@ type Config struct {
 	// cert
 	// Min Length: 1
 	Cert string `json:"cert,omitempty"`
+
+	// description
+	// Min Length: 1
+	Description string `json:"description,omitempty"`
 
 	// hostname
 	// Min Length: 1
@@ -34,8 +38,8 @@ type Config struct {
 	Key string `json:"key,omitempty"`
 }
 
-// Validate validates this config
-func (m *Config) Validate(formats strfmt.Registry) error {
+// Validate validates this apiserver
+func (m *Apiserver) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateCa(formats); err != nil {
@@ -43,6 +47,10 @@ func (m *Config) Validate(formats strfmt.Registry) error {
 	}
 
 	if err := m.validateCert(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateDescription(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -60,7 +68,7 @@ func (m *Config) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *Config) validateCa(formats strfmt.Registry) error {
+func (m *Apiserver) validateCa(formats strfmt.Registry) error {
 
 	if swag.IsZero(m.Ca) { // not required
 		return nil
@@ -73,7 +81,7 @@ func (m *Config) validateCa(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *Config) validateCert(formats strfmt.Registry) error {
+func (m *Apiserver) validateCert(formats strfmt.Registry) error {
 
 	if swag.IsZero(m.Cert) { // not required
 		return nil
@@ -86,7 +94,20 @@ func (m *Config) validateCert(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *Config) validateHostname(formats strfmt.Registry) error {
+func (m *Apiserver) validateDescription(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.Description) { // not required
+		return nil
+	}
+
+	if err := validate.MinLength("description", "body", string(m.Description), 1); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Apiserver) validateHostname(formats strfmt.Registry) error {
 
 	if swag.IsZero(m.Hostname) { // not required
 		return nil
@@ -99,7 +120,7 @@ func (m *Config) validateHostname(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *Config) validateKey(formats strfmt.Registry) error {
+func (m *Apiserver) validateKey(formats strfmt.Registry) error {
 
 	if swag.IsZero(m.Key) { // not required
 		return nil
@@ -113,7 +134,7 @@ func (m *Config) validateKey(formats strfmt.Registry) error {
 }
 
 // MarshalBinary interface implementation
-func (m *Config) MarshalBinary() ([]byte, error) {
+func (m *Apiserver) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -121,8 +142,8 @@ func (m *Config) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *Config) UnmarshalBinary(b []byte) error {
-	var res Config
+func (m *Apiserver) UnmarshalBinary(b []byte) error {
+	var res Apiserver
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

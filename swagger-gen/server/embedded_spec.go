@@ -180,28 +180,7 @@ func init() {
     }
   },
   "definitions": {
-    "cluster": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "config": {
-          "type": "object",
-          "$ref": "#/definitions/config"
-        },
-        "id": {
-          "type": "integer",
-          "format": "int64",
-          "readOnly": true
-        },
-        "name": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "config": {
+    "apiserver": {
       "type": "object",
       "properties": {
         "ca": {
@@ -212,11 +191,36 @@ func init() {
           "type": "string",
           "minLength": 1
         },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
         "hostname": {
           "type": "string",
           "minLength": 1
         },
         "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "apiServer": {
+          "type": "object",
+          "$ref": "#/definitions/apiserver"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64",
+          "readOnly": true
+        },
+        "name": {
           "type": "string",
           "minLength": 1
         }
@@ -402,28 +406,7 @@ func init() {
     }
   },
   "definitions": {
-    "cluster": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "config": {
-          "type": "object",
-          "$ref": "#/definitions/config"
-        },
-        "id": {
-          "type": "integer",
-          "format": "int64",
-          "readOnly": true
-        },
-        "name": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "config": {
+    "apiserver": {
       "type": "object",
       "properties": {
         "ca": {
@@ -434,11 +417,36 @@ func init() {
           "type": "string",
           "minLength": 1
         },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
         "hostname": {
           "type": "string",
           "minLength": 1
         },
         "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "cluster": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "apiServer": {
+          "type": "object",
+          "$ref": "#/definitions/apiserver"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64",
+          "readOnly": true
+        },
+        "name": {
           "type": "string",
           "minLength": 1
         }

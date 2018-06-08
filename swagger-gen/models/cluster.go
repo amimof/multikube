@@ -17,8 +17,8 @@ import (
 // swagger:model cluster
 type Cluster struct {
 
-	// config
-	Config *Config `json:"config,omitempty"`
+	// api server
+	APIServer *Apiserver `json:"apiServer,omitempty"`
 
 	// id
 	// Read Only: true
@@ -34,7 +34,7 @@ type Cluster struct {
 func (m *Cluster) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateConfig(formats); err != nil {
+	if err := m.validateAPIServer(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -48,16 +48,16 @@ func (m *Cluster) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *Cluster) validateConfig(formats strfmt.Registry) error {
+func (m *Cluster) validateAPIServer(formats strfmt.Registry) error {
 
-	if swag.IsZero(m.Config) { // not required
+	if swag.IsZero(m.APIServer) { // not required
 		return nil
 	}
 
-	if m.Config != nil {
-		if err := m.Config.Validate(formats); err != nil {
+	if m.APIServer != nil {
+		if err := m.APIServer.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("config")
+				return ve.ValidateName("apiServer")
 			}
 			return err
 		}

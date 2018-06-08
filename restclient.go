@@ -11,7 +11,6 @@ import (
 	"strings"
 	"encoding/json"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"gitlab.com/amimof/multikube/api/v1/models"
 )
 
 type Request struct {
@@ -31,20 +30,27 @@ type Request struct {
 	err error
 }
 
+type Options struct {
+	Name string
+	Hostname string
+	CA string
+	Cert string
+	Key string
+}
 
-func NewRequest(config *models.Config) *Request {
+func NewRequest(options *Options) *Request {
 
 	r := &Request{}
 
 	// Load client certificate
-	cert, err := tls.LoadX509KeyPair(config.Cert, config.Key)
+	cert, err := tls.LoadX509KeyPair(options.Cert, options.Key)
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r
 	}
 
 	// Load CA certificate
-	caCert, err := ioutil.ReadFile(config.CA)
+	caCert, err := ioutil.ReadFile(options.CA)
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r
@@ -62,7 +68,7 @@ func NewRequest(config *models.Config) *Request {
 	tr := &http.Transport{ TLSClientConfig: tlsConfig }
 	r.client = &http.Client{ Transport: tr }
 
-	base, err := url.Parse(config.Hostname)
+	base, err := url.Parse(options.Hostname)
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r
