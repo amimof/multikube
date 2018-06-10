@@ -75,7 +75,7 @@ type Server struct {
 	TLSWriteTimeout   time.Duration
 	httpsServerL      net.Listener
 
-	handler      http.Handler
+	handler			 http.Handler
 	hasListeners bool
 	shutdown     chan struct{}
 	shuttingDown int32
@@ -116,6 +116,7 @@ func (s *Server) hasScheme(scheme string) bool {
 }
 
 // NewServer creates a new api multikube server but does not configure it
+// func NewServer(h http.Handler) *Server {
 func NewServer(h http.Handler) *Server {
 	s := new(Server)
 

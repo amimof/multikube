@@ -1,4 +1,4 @@
-package cache
+package multikube
 
 import (
 	"github.com/google/uuid"

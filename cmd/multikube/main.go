@@ -32,7 +32,7 @@ func main() {
 	a := v1.NewAPI()
 
 	// Create the server
-	s := multikube.NewServer(a)
+	s := multikube.NewServer(a.Router)
 
 	err := s.Serve() 
 	if err != nil {

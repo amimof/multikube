@@ -1,4 +1,4 @@
-package cache_test
+package multikube_test
 
 import (
 	"testing"
