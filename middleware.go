@@ -2,18 +2,21 @@ package multikube
 
 import (
 	"net/http"
-	"time"
 	"log"
 )
 
-type Middleware interface {
-	Handle(http.Handler, string) http.Handler
+type MiddlewareFunc func(next http.HandlerFunc) http.HandlerFunc
+
+func WithLogging(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Context: %s", r.Header.Get("X-Multikube-Context"))
+		next.ServeHTTP(w, r)
+	}
 }
 
-func Logger(inner http.Handler, name string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		inner.ServeHTTP(w, r)
-		log.Printf("%s\t%s\t%s\t%s", r.Method, r.RequestURI, name, time.Since(start))
-	})
+func WithContext(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Add("X-Multikube-Context", "test")
+		next.ServeHTTP(w, r)
+	}
 }

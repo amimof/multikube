@@ -116,10 +116,15 @@ func (r *Request) SetHeader(key string, values ...string) *Request {
 }
 
 func (r *Request) Do() (*Request, error) {
+	
+	// Return any error if any has been generated along the way before continuing
+	if r.err != nil {
+		return nil, r.err
+	}
 
-	url := r.URL().String()
+	u := r.URL().String()
 
-	req, err := http.NewRequest(r.verb, url, nil)
+	req, err := http.NewRequest(r.verb, u, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +160,6 @@ func (r *Request) Do() (*Request, error) {
 		}
 	}
 
-	// Return any error if any has been generated along the way
-	if r.err != nil {
-		return nil, r.err
-	}
-
 	return r, nil
 
 }
@@ -177,9 +177,14 @@ func (r *Request) Path(p string) *Request {
 	r.path = p
 	return r
 }
+
 // URL returns the current working URL.
 func (r *Request) URL() *url.URL {
-	
+
+	if r.baseURL == nil {
+		r.baseURL = &url.URL{}
+	}
+
 	if r.baseURL.Path != "" {
 		r.baseURL.Path = ""
 	}
