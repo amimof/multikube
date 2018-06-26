@@ -10,7 +10,7 @@ import (
 	"path"
 	"strings"
 	"encoding/json"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	//"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Request struct {
@@ -24,7 +24,7 @@ type Request struct {
 	namespace string
 	headers *http.Header
 	params *url.Values
-	body *io.Reader
+	body io.Reader
 	data []byte
 	interf interface{}
 	err error
@@ -80,7 +80,32 @@ func NewRequest(options *Options) *Request {
 }
 
 func (r *Request) Get() *Request {
-	r.verb = "GET"
+	r.Method("GET")
+	return r
+}
+
+func (r *Request) Post() *Request {
+	r.Method("POST")
+	return r
+}
+
+func (r *Request) Put() *Request {
+	r.Method("PUT")
+	return r
+}
+
+func (r *Request) Delete() *Request {
+	r.Method("DELETE")
+	return r
+}
+
+func (r *Request) Options() *Request {
+	r.Method("OPTIONS")
+	return r
+}
+
+func (r *Request) Method(m string) *Request {
+	r.verb = m
 	return r
 }
 
@@ -104,6 +129,25 @@ func (r *Request) ApiVer(v string) *Request {
 	return r
 }
 
+func (r *Request) Into(obj interface{}) *Request {
+	r.interf = obj
+	return r
+}
+
+func (r *Request) Path(p string) *Request {
+	r.path = p
+	return r
+}
+
+func (r *Request) Body(b io.Reader) *Request {
+	r.body = b
+	return r
+}
+
+func (r *Request) Data() []byte {
+	return r.data
+}
+
 func (r *Request) SetHeader(key string, values ...string) *Request {
 	if r.headers == nil {
 		r.headers = &http.Header{}
@@ -112,69 +156,6 @@ func (r *Request) SetHeader(key string, values ...string) *Request {
 	for _, value := range values {
 		r.headers.Add(key, value)
 	}
-	return r
-}
-
-func (r *Request) Do() (*Request, error) {
-	
-	// Return any error if any has been generated along the way before continuing
-	if r.err != nil {
-		return nil, r.err
-	}
-
-	u := r.URL().String()
-
-	req, err := http.NewRequest(r.verb, u, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := r.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
-	}
-	r.data = body
-
-	// Lets try to see if response is a failure
-	if r.interf != nil {
-		status := &v1.Status{}
-		err = json.Unmarshal(r.Data(), status)
-		if err != nil {
-			return nil, err
-		}
-		err = handleResponse(status)
-		if err != nil {
-			return nil, err
-		}
-	
-		err = json.Unmarshal(r.Data(), r.interf)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return r, nil
-
-}
-
-func (r *Request) Into(obj interface{}) *Request {
-	r.interf = obj
-	return r
-}
-
-func (r *Request) Data() []byte {
-	return r.data
-}
-
-func (r *Request) Path(p string) *Request {
-	r.path = p
 	return r
 }
 
@@ -225,4 +206,53 @@ func (r *Request) URL() *url.URL {
 	// }
 
 	return r.baseURL
+}
+
+
+func (r *Request) Do() (*Request, error) {
+	
+	// Return any error if any has been generated along the way before continuing
+	if r.err != nil {
+		return nil, r.err
+	}
+
+	u := r.URL().String()
+
+	req, err := http.NewRequest(r.verb, u, r.body)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	r.data = body
+
+	// Lets try to see if response is a failure
+	if r.interf != nil {
+		// status := &v1.Status{}
+		// _ = json.Unmarshal(r.Data(), status)
+		// // if err != nil {
+		// // 	return nil, err
+		// // }
+		// err = handleResponse(status)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		err = json.Unmarshal(r.Data(), r.interf)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return r, nil
+
 }

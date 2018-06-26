@@ -14,7 +14,23 @@ BUILD_DIR=${GOPATH}/src/gitlab.com/${GITHUB_USERNAME}/${BINARY}
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH}"
 
 # Build the project
-all: test fmt 
+all: test clean fmt linux darwin windows
+
+linux: 
+	go get ./... ; \
+	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-linux-${GOARCH} .
+
+rpi: 
+	go get ./... ; \
+	GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ${BINARY}-linux-arm .
+
+darwin:
+	go get ./... ; \
+	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-darwin-${GOARCH} .
+
+windows:
+	go get ./... ; \
+	GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-windows-${GOARCH}.exe .
 
 test:
 	cd ${BUILD_DIR}; \
@@ -26,12 +42,12 @@ fmt:
 	go fmt $$(go list ./... | grep -v /vendor/) ; \
 	cd - >/dev/null
 
-generate-api: 
-	cd ${BUILD_DIR}
-	swagger validate api/v1/swagger.yml
-	swagger generate server -A ${BINARY} -s server -a restapi -t api/v1/ -f api/v1/swagger.yml --flag-strategy=pflag
+# generate-api: 
+# 	cd ${BUILD_DIR}
+# 	swagger validate api/v1/swagger.yml
+# 	swagger generate server -A ${BINARY} -s server -a restapi -t api/v1/ -f api/v1/swagger.yml --flag-strategy=pflag
 
-# clean:
-# 	-rm -f ${BINARY}-*
+clean:
+	-rm -f ${BINARY}-*
 
 .PHONY: linux darwin windows test fmt clean
