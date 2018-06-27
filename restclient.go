@@ -1,41 +1,41 @@
 package multikube
 
 import (
-	"net/http"
-	"net/url"
-	"io"
-	"io/ioutil"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"path"
 	"strings"
-	"encoding/json"
 	//"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Request struct {
-	client *http.Client
-	baseURL *url.URL
-	path string
-	apiVersion string
-	verb string
+	client       *http.Client
+	baseURL      *url.URL
+	path         string
+	apiVersion   string
+	verb         string
 	resourceType string
 	resourceName string
-	namespace string
-	headers *http.Header
-	params *url.Values
-	body io.Reader
-	data []byte
-	interf interface{}
-	err error
+	namespace    string
+	headers      *http.Header
+	params       *url.Values
+	body         io.Reader
+	data         []byte
+	interf       interface{}
+	err          error
 }
 
 type Options struct {
-	Name string
+	Name     string
 	Hostname string
-	CA string
-	Cert string
-	Key string
+	CA       string
+	Cert     string
+	Key      string
 }
 
 func NewRequest(options *Options) *Request {
@@ -61,12 +61,12 @@ func NewRequest(options *Options) *Request {
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
-		RootCAs: caCertPool,
+		RootCAs:      caCertPool,
 	}
 
 	tlsConfig.BuildNameToCertificate()
-	tr := &http.Transport{ TLSClientConfig: tlsConfig }
-	r.client = &http.Client{ Transport: tr }
+	tr := &http.Transport{TLSClientConfig: tlsConfig}
+	r.client = &http.Client{Transport: tr}
 
 	base, err := url.Parse(options.Hostname)
 	if err != nil {
@@ -179,7 +179,7 @@ func (r *Request) URL() *url.URL {
 	if len(r.apiVersion) > 0 && r.apiVersion != "v1" {
 		p = path.Join("/apis", r.apiVersion)
 	}
-	
+
 	// Is this resource namespaced?
 	if len(r.namespace) > 0 {
 		p = path.Join(p, "namespaces", r.namespace)
@@ -208,9 +208,8 @@ func (r *Request) URL() *url.URL {
 	return r.baseURL
 }
 
-
 func (r *Request) Do() (*Request, error) {
-	
+
 	// Return any error if any has been generated along the way before continuing
 	if r.err != nil {
 		return nil, r.err

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"log"
 	"fmt"
+	"log"
 	"os"
 	//"time"
 	"github.com/spf13/pflag"
@@ -27,14 +27,14 @@ func main() {
 
 	// parse the CLI flags
 	pflag.Parse()
-	
+
 	// Create the api
 	a := v1.NewAPI()
 
 	// Create the server
 	s := multikube.NewServer(a.Router)
 
-	err := s.Serve() 
+	err := s.Serve()
 	if err != nil {
 		log.Fatal(err)
 	}

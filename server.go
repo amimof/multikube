@@ -3,17 +3,17 @@ package multikube
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
-	"time"
-	"net"
-	"net/http"
-	"sync"
-	"sync/atomic"
-	"log"
-	"strconv"
+	"github.com/go-openapi/swag"
 	"github.com/spf13/pflag"
 	"github.com/tylerb/graceful"
-	"github.com/go-openapi/swag"
+	"io/ioutil"
+	"log"
+	"net"
+	"net/http"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const (
@@ -75,7 +75,7 @@ type Server struct {
 	TLSWriteTimeout   time.Duration
 	httpsServerL      net.Listener
 
-	handler			 http.Handler
+	handler      http.Handler
 	hasListeners bool
 	shutdown     chan struct{}
 	shuttingDown int32

@@ -7,14 +7,15 @@ import (
 
 // Root cache object
 type Cache struct {
-	ID uuid.UUID
+	ID    uuid.UUID
 	Store map[string]Item
 }
 
 type Item struct {
-	Key string
-	Value interface{}
+	Key     string
+	Value   interface{}
 	Created time.Time
+	Updated time.Time
 }
 
 func (c *Cache) ListKeys() []string {
@@ -37,7 +38,9 @@ func (c *Cache) Set(key string, val interface{}) *Item {
 	item := c.Store[key]
 	item.Key = key
 	item.Value = val
+	// TODO: Only set Created timestamp once, not for every update
 	item.Created = time.Now()
+	item.Updated = time.Now()
 	c.Store[key] = item
 	return &item
 }

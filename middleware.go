@@ -1,9 +1,9 @@
 package multikube
 
 import (
-	"net/http"
 	"context"
 	"log"
+	"net/http"
 )
 
 type MiddlewareFunc func(next http.HandlerFunc) http.HandlerFunc

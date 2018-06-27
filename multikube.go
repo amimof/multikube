@@ -1,13 +1,12 @@
 package multikube
 
 import (
-	"errors"
-	"fmt"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
-	"net/http"
-	"encoding/json"
+	"fmt"
+	"errors"
 	"io/ioutil"
+	"encoding/json"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func handleResponse(m *v1.Status) error {
@@ -37,38 +36,23 @@ func exists(path string) bool {
 	return true
 }
 
-func NewGroup(name string) *Group {
-	return &Group{ 
-		Name: name,
-		clusters: []Cluster{}, 
-	}
-}
-
-// NewContext returns a Context instance.
-func NewContext(w http.ResponseWriter, r *http.Request) Context {
-	return Context{
-		Request:  r,
-		Response: &w,
-	}
-}
-
 func SetupConfig(configPath string) (*Config, error) {
 
-  b, err := ioutil.ReadFile(configPath)
-  if err != nil {
-    return nil, err
-  }
+	b, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
 
-  c := &Config{
-		LogPath: "/var/log/multikube.log",
-		APIServers: []APIServer{},
-  }
+	c := &Config{
+		LogPath:    "/var/log/multikube.log",
+		APIServers: []*APIServer{},
+	}
 
-  err = json.Unmarshal(b, &c)
-  if err != nil {
-    return nil, err
-  }
+	err = json.Unmarshal(b, &c)
+	if err != nil {
+		return nil, err
+	}
 
-  return c, nil
+	return c, nil
 
 }

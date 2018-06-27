@@ -17,20 +17,20 @@ LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.
 all: test clean fmt linux darwin windows
 
 linux: 
-	go get ./... ; \
-	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-linux-${GOARCH} .
+	go get ./cmd/multikube/... ; \
+	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-linux-${GOARCH} ./cmd/multikube/
 
 rpi: 
-	go get ./... ; \
-	GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ${BINARY}-linux-arm .
+	go get ./cmd/multikube/... ; \
+	GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ${BINARY}-linux-arm ./cmd/multikube/
 
 darwin:
-	go get ./... ; \
-	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-darwin-${GOARCH} .
+	go get ./cmd/multikube/... ; \
+	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-darwin-${GOARCH} ./cmd/multikube/
 
 windows:
-	go get ./... ; \
-	GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-windows-${GOARCH}.exe .
+	go get ./cmd/multikube/... ; \
+	GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-windows-${GOARCH}.exe ./cmd/multikube/
 
 test:
 	cd ${BUILD_DIR}; \
@@ -41,11 +41,6 @@ fmt:
 	cd ${BUILD_DIR}; \
 	go fmt $$(go list ./... | grep -v /vendor/) ; \
 	cd - >/dev/null
-
-# generate-api: 
-# 	cd ${BUILD_DIR}
-# 	swagger validate api/v1/swagger.yml
-# 	swagger generate server -A ${BINARY} -s server -a restapi -t api/v1/ -f api/v1/swagger.yml --flag-strategy=pflag
 
 clean:
 	-rm -f ${BINARY}-*

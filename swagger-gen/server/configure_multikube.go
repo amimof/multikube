@@ -16,7 +16,6 @@ import (
 
 	"gitlab.com/amimof/multikube/api/v1/server/restapi"
 	"gitlab.com/amimof/multikube/api/v1/server/restapi/clusters"
-	
 	//"github.com/go-openapi/swag"
 )
 
@@ -83,4 +82,3 @@ func setupMiddlewares(handler http.Handler) http.Handler {
 func setupGlobalMiddleware(handler http.Handler) http.Handler {
 	return handler
 }
-

@@ -96,5 +96,5 @@ func TestGetClusterNamespace(t *testing.T) {
 			n := cluster.Namespace(ns.ObjectMeta.Name)
 			t.Logf("Namespace: %s", n.ObjectMeta.Name)
 		}
-	}	
+	}
 }
