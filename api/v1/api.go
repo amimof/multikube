@@ -52,7 +52,7 @@ func NewAPI() *API {
 	return api
 }
 
-// Use chains all middlewars and applies a context to the request flow
+// Use chains all middlewares and applies a context to the request flow
 func (a *API) Use(mw ...multikube.MiddlewareFunc) multikube.MiddlewareFunc {
 	return func(final http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {

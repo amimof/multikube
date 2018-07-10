@@ -3,7 +3,6 @@ package multikube
 import (
 	"k8s.io/api/core/v1"
 	//"k8s.io/api/apps/v1beta1"
-	"github.com/google/uuid"
 
 	apimachineryversion "k8s.io/apimachinery/pkg/version"
 
@@ -111,7 +110,7 @@ func (c *APIServer) SyncHTTP() (*Cache, error) {
 func (c *APIServer) Namespaces() v1.NamespaceList {
 	data := c.Cache().Get("/namespaces/").Value
 	nslist := v1.NamespaceList{}
-	_ = json.Unmarshal(data.([]byte), &nslist)
+	_ = json.Unmarshal(data, &nslist)
 	return nslist
 }
 
@@ -119,17 +118,14 @@ func (c *APIServer) Namespaces() v1.NamespaceList {
 func (c *APIServer) Namespace(name string) v1.Namespace {
 	data := c.Cache().Get(path.Join("/namespaces/", name)).Value
 	ns := v1.Namespace{}
-	_ = json.Unmarshal(data.([]byte), &ns)
+	_ = json.Unmarshal(data, &ns)
 	return ns
 }
 
 // Cache returns the current cache instance of the cluster
 func (c *APIServer) Cache() *Cache {
 	if c.cache == nil {
-		c.cache = &Cache{
-			ID:    uuid.New(),
-			Store: make(map[string]Item),
-		}
+		c.cache = NewCache()
 	}
 	return c.cache
 }

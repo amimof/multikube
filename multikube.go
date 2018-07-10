@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/google/uuid"
 )
 
 func handleResponse(m *v1.Status) error {
@@ -55,4 +56,12 @@ func SetupConfig(configPath string) (*Config, error) {
 
 	return c, nil
 
+}
+
+// NewCache return a new empty cache
+func NewCache() *Cache {
+	return &Cache{
+		ID:    uuid.New(),
+		Store: make(map[string]Item),
+	}
 }

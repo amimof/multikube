@@ -13,7 +13,7 @@ type Cache struct {
 
 type Item struct {
 	Key     string
-	Value   interface{}
+	Value   []byte
 	Created time.Time
 	Updated time.Time
 }
@@ -34,7 +34,7 @@ func (c *Cache) Get(key string) *Item {
 	return &item
 }
 
-func (c *Cache) Set(key string, val interface{}) *Item {
+func (c *Cache) Set(key string, val []byte) *Item {
 	item := c.Store[key]
 	item.Key = key
 	item.Value = val
@@ -56,6 +56,10 @@ func (c *Cache) Exists(key string) bool {
 	return false
 }
 
+func (c *Cache) Len() int {
+	return len(c.Store)
+}
+
 func (c *Cache) Size() int {
 	l := 0
 	for _, val := range c.Store {
@@ -65,5 +69,5 @@ func (c *Cache) Size() int {
 }
 
 func (i *Item) Bytes() int {
-	return len(i.Value.([]byte))
+	return len(i.Value)
 }

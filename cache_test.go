@@ -2,49 +2,81 @@ package multikube_test
 
 import (
 	"testing"
+	"gitlab.com/amimof/multikube"
+	//"github.com/stretchr/testify/assert"
 )
 
-func TestGetItem(t *testing.T) {
-	for _, cluster := range group.Clusters() {
-		item := cluster.Cache().Get("namespaces")
-		t.Logf("Item: %+v", item)
+func TestCacheGetItem(t *testing.T) {
+	cache := multikube.NewCache()
+	item := cache.Get("namespaces")
+	t.Logf("Key: %s", item.Key)
+	t.Logf("Value: %s", item.Value)
+	t.Logf("Created: %s", item.Created.String())
+	t.Logf("Updated: %s", item.Updated.String())
+}
+
+func TestCacheSetItem(t *testing.T) {
+	cache := multikube.NewCache()
+	item := cache.Set("namespaces", []byte("Hello World"))
+	t.Logf("Key: %s", item.Key)
+	t.Logf("Value: %s", item.Value)
+	t.Logf("Created: %s", item.Created.String())
+	t.Logf("Updated: %s", item.Updated.String())
+}
+
+func TestCacheDeleteItem(t *testing.T) {
+	cache := multikube.NewCache()
+
+	item := cache.Set("namespaces", []byte("Hello World"))
+	t.Logf("Existing:")
+	t.Logf("  Key: %s", item.Key)
+	t.Logf("  Value: %s", item.Value)
+	t.Logf("  Created: %s", item.Created.String())
+	t.Logf("  Updated: %s", item.Updated.String())
+
+	cache.Delete(item.Key)
+	item = cache.Get("namespaces")
+	t.Logf("Deleted:")
+	t.Logf("  Key: %s", item.Key)
+	t.Logf("  Value: %s", item.Value)
+	t.Logf("  Created: %s", item.Created.String())
+	t.Logf("  Updated: %s", item.Updated.String())
+}
+
+func TestCacheListKeys(t *testing.T) {
+	cache := multikube.NewCache()
+	cache.Set("/namespaces/", []byte{'a'})
+	cache.Set("/namespaces/pods", []byte{'b'})
+	cache.Set("/namespaces/pods/pod-1", []byte{'c'})
+	for i, key := range cache.ListKeys() {
+		t.Logf("[%d]: %s", i, key)
 	}
 }
 
-func TestSetItem(t *testing.T) {
-	for _, cluster := range group.Clusters() {
-		item := cluster.Cache().Set("namespaces", "Hello World")
-		t.Logf("Item: %+v", item)
-	}
-}
-
-func TestDeleteItem(t *testing.T) {
-	for _, cluster := range group.Clusters() {
-		item := cluster.Cache().Set("namespaces", "hello world")
-		t.Logf("Item: %+v", item)
-		cluster.Cache().Delete(item.Key)
-		item = cluster.Cache().Get("namespaces")
-		t.Logf("Item: %+v", item)
-	}
-}
-
-func TestListKeys(t *testing.T) {
-	for _, cluster := range group.Clusters() {
-		cluster.Cache().Set("/namespaces/", []byte{'a'})
-		cluster.Cache().Set("/namespaces/pods", []byte{'b'})
-		cluster.Cache().Set("/namespaces/pods/pod-1", []byte{'c'})
-		for _, key := range cluster.Cache().ListKeys() {
-			t.Logf("%s", key)
-		}
-	}
+func TestCacheSize(t *testing.T) {
+	cache := multikube.NewCache()
+	cache.Set("A", []byte("foo"))
+	t.Logf("Cache size is %d bytes", cache.Size())
 }
 
 func TestCacheBytes(t *testing.T) {
-	for _, cluster := range group.Clusters() {
-		cache, err := cluster.SyncHTTP()
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("Cache size is %d bytes", cache.Size())
-	}
+	cache := multikube.NewCache()
+	cache.Set("A", []byte("foo"))
+	cache.Set("B", []byte("bar"))
+
+	a := cache.Get("A")
+	b := cache.Get("B")
+
+	t.Logf("Item %s is %d bytes", a.Key, a.Bytes())
+	t.Logf("Item %s is %d bytes", b.Key, b.Bytes())
+	t.Logf("Items are %d bytes in total", cache.Size())
+}
+
+func TestCacheLen(t *testing.T) {
+	cache := multikube.NewCache()
+	cache.Set("A", []byte("alpha"))
+	cache.Set("B", []byte("bravo"))
+	cache.Set("C", []byte("charlie"))
+
+	t.Logf("Cache length is %d", cache.Len())
 }
