@@ -230,10 +230,11 @@ func (s *Server) Serve() error {
 	if s.hasScheme(schemeUnix) {
 		domainSocket := &graceful.Server{Server: new(http.Server)}
 		domainSocket.MaxHeaderBytes = int(s.MaxHeaderSize)
-		domainSocket.Handler = s.handler
 		if int64(s.CleanupTimeout) > 0 {
 			domainSocket.Timeout = s.CleanupTimeout
 		}
+
+		domainSocket.Handler = s.handler
 
 		wg.Add(2)
 		log.Printf("Serving multikube at unix://%s", s.SocketPath)
@@ -289,6 +290,7 @@ func (s *Server) Serve() error {
 		if int64(s.CleanupTimeout) > 0 {
 			httpsServer.Timeout = s.CleanupTimeout
 		}
+
 		httpsServer.Handler = s.handler
 
 		// Inspired by https://blog.bracebin.com/achieving-perfect-ssl-labs-score-with-go
@@ -310,6 +312,7 @@ func (s *Server) Serve() error {
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			},
+			ClientAuth: tls.RequestClientCert,
 		}
 
 		if s.TLSCertificate != "" && s.TLSCertificateKey != "" {
@@ -345,8 +348,6 @@ func (s *Server) Serve() error {
 				log.Fatalf("the required flag `--tls-key` was not specified")
 			}
 		}
-
-		httpsServer.Handler = s.handler
 
 		wg.Add(2)
 		log.Printf("Serving multikube at https://%s", s.httpsServerL.Addr())

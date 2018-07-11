@@ -30,45 +30,51 @@ type Request struct {
 	err          error
 }
 
-type Options struct {
-	Name     string
-	Hostname string
-	CA       string
-	Cert     string
-	Key      string
+type Options interface {
+	Hostname()  string
+	CA()        string
+	Cert()      string
+	Key()       string
+	Insecure()	bool
 }
 
-func NewRequest(options *Options) *Request {
+func NewRequest(options Options) *Request {
 
 	r := &Request{}
-
-	// Load client certificate
-	cert, err := tls.LoadX509KeyPair(options.Cert, options.Key)
-	if err != nil {
-		r.err = newErr(err.Error())
-		return r
-	}
-
-	// Load CA certificate
-	caCert, err := ioutil.ReadFile(options.CA)
-	if err != nil {
-		r.err = newErr(err.Error())
-		return r
-	}
-
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caCertPool,
+		InsecureSkipVerify: options.Insecure(),
 	}
 
-	tlsConfig.BuildNameToCertificate()
+	if options.CA() != "" {
+
+		// Load CA certificate
+		caCert, err := ioutil.ReadFile(options.CA())
+		if err != nil {
+			r.err = newErr(err.Error())
+			return r
+		}
+	
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = caCertPool
+	
+	}
+
+	if options.Cert() != "" && options.Key() != "" {
+		//Load client certificate
+		cert, err := tls.LoadX509KeyPair(options.Cert(), options.Key())
+		if err != nil {
+			r.err = newErr(err.Error())
+			return r
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+		tlsConfig.BuildNameToCertificate()
+	}
+
 	tr := &http.Transport{TLSClientConfig: tlsConfig}
 	r.client = &http.Client{Transport: tr}
 
-	base, err := url.Parse(options.Hostname)
+	base, err := url.Parse(options.Hostname())
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r
@@ -148,7 +154,12 @@ func (r *Request) Data() []byte {
 	return r.data
 }
 
-func (r *Request) SetHeader(key string, values ...string) *Request {
+func (r *Request) Headers(h http.Header) *Request {
+	r.headers = &h
+	return r
+}
+
+func (r *Request) Header(key string, values ...string) *Request {
 	if r.headers == nil {
 		r.headers = &http.Header{}
 	}
@@ -221,6 +232,7 @@ func (r *Request) Do() (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.Header = *r.headers
 
 	res, err := r.client.Do(req)
 	if err != nil {

@@ -73,20 +73,15 @@ func (a *API) proxy(w http.ResponseWriter, r *http.Request) {
 	// This part is hardcoded. We need a way of determining an apiserver
 	// based on cert data, token or headers.
 	// Might need a middleware that propagates context before calling proxy() function.
-	options := &multikube.Options{
-		Hostname: "https://192.168.99.100:8443",
-		CA:       "/Users/amir/.minikube/ca.crt",
-		Cert:     "/Users/amir/.minikube/client.crt",
-		Key:      "/Users/amir/.minikube/client.key",
-	}
+	config := r.Context().Value("config").(*multikube.Config)
 
 	// Build the request and execute the call to the backend apiserver
 	req, err := multikube.
-		NewRequest(options).
+		NewRequest(config.APIServers[0]).
 		Method(r.Method).
 		Body(r.Body).
 		Path(r.URL.Path).
-		SetHeader("Content-Type", "application/json").
+		Headers(r.Header).
 		Do()
 
 	// Catch any unexpected errors 

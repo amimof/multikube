@@ -19,20 +19,46 @@ type ResourceSpec struct {
 	Path       string
 }
 
+
+
+type apiserver struct {
+	Hostname  string `json:"hostname,omitempty"`
+	CA        string `json:"ca,omitempty"`
+	Cert      string `json:"cert,omitempty"`
+	Key       string `json:"key,omitempty"`
+	Insecure  bool `json:"insecure,omitempty"`
+	cache		  *Cache
+}
+
 type APIServer struct {
-	Name     string `json:"name,omitempty"`
-	Hostname string `json:"hostname,omitempty"`
-	CA       string `json:"ca,omitempty"`
-	Cert     string `json:"cert,omitempty"`
-	Key      string `json:"key,omitempty"`
-	cache		 *Cache
+	apiserver
+}
+
+func (c *APIServer) Hostname() string {
+	return c.apiserver.Hostname
+}
+
+func (c *APIServer) CA() string {
+	return c.apiserver.CA
+}
+
+func (c *APIServer) Cert() string {
+	return c.apiserver.Cert
+}
+
+func (c *APIServer) Key() string {
+	return c.apiserver.Key
+} 
+
+func (c *APIServer) Insecure() bool {
+	return c.apiserver.Insecure
 }
 
 // Version returns the version of the connected backend.
 // This does a call to /version on the Kubernetes API.
 func (c *APIServer) Version() apimachineryversion.Info {
 	version := apimachineryversion.Info{}
-	NewRequest(fromAPIServer(c)).Get().Path("/version").Into(&version).Do()
+	NewRequest(c).Get().Path("/version").Into(&version).Do()
 	return version
 }
 
@@ -41,11 +67,9 @@ func (c *APIServer) Version() apimachineryversion.Info {
 // will be overwritten.
 func (c *APIServer) SyncHTTP() (*Cache, error) {
 
-	opt := fromAPIServer(c)
-
 	// Sync namespaces
 	nslist := v1.NamespaceList{}
-	r, err := NewRequest(opt).Get().Namespace("/").Into(&nslist).Do()
+	r, err := NewRequest(c).Get().Namespace("/").Into(&nslist).Do()
 	if err != nil {
 		return c.Cache(), err
 	}
@@ -53,7 +77,7 @@ func (c *APIServer) SyncHTTP() (*Cache, error) {
 
 	// Sync Nodes
 	//nodelist := v1.NodeList{}
-	r, err = NewRequest(opt).Get().Resource("Nodes").Do()
+	r, err = NewRequest(c).Get().Resource("Nodes").Do()
 	if err != nil {
 		return c.Cache(), err
 	}
@@ -61,7 +85,7 @@ func (c *APIServer) SyncHTTP() (*Cache, error) {
 
 	// Sync PersistentVolumes
 	//pvlist := v1.PersistentVolumeList{}
-	r, err = NewRequest(opt).Get().Resource("PersistentVolumes").Do()
+	r, err = NewRequest(c).Get().Resource("PersistentVolumes").Do()
 	if err != nil {
 		return c.Cache(), err
 	}
@@ -86,14 +110,14 @@ func (c *APIServer) SyncHTTP() (*Cache, error) {
 	// Sync namespace and its resources
 	for _, ns := range nslist.Items {
 
-		r, err := NewRequest(opt).Get().Namespace(ns.ObjectMeta.Name).Do()
+		r, err := NewRequest(c).Get().Namespace(ns.ObjectMeta.Name).Do()
 		if err != nil {
 			return c.Cache(), nil
 		}
 		c.Cache().Set(path.Join("/namespaces/", ns.ObjectMeta.Name), r.Data())
 
 		for _, resource := range resources {
-			r, err := NewRequest(opt).Get().Resource(resource.Name).Namespace(ns.ObjectMeta.Name).ApiVer(resource.ApiVersion).Do()
+			r, err := NewRequest(c).Get().Resource(resource.Name).Namespace(ns.ObjectMeta.Name).ApiVer(resource.ApiVersion).Do()
 			if err != nil {
 				return c.Cache(), nil
 			}
@@ -128,13 +152,4 @@ func (c *APIServer) Cache() *Cache {
 		c.cache = NewCache()
 	}
 	return c.cache
-}
-
-func fromAPIServer(a *APIServer) *Options {
-	return &Options{
-		Hostname: a.Hostname,
-		CA: a.CA,
-		Cert: a.Cert,
-		Key: a.Key,
-	}
 }
