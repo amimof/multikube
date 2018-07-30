@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"errors"
 	"io/ioutil"
+	//"gopkg.in/yaml.v2"
 	"encoding/json"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func handleResponse(m *v1.Status) error {
@@ -49,11 +50,11 @@ func SetupConfig(configPath string) (*Config, error) {
 		APIServers: []*APIServer{},
 	}
 
-	err = json.Unmarshal(b, &c)
+	err = json.Unmarshal(b, c)
 	if err != nil {
 		return nil, err
 	}
-
+	
 	return c, nil
 
 }

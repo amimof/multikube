@@ -1,10 +1,10 @@
 package v1_test
 
 import (
-	"testing"
+	"gitlab.com/amimof/multikube/api/v1"
 	"io/ioutil"
 	"net/http/httptest"
-	"gitlab.com/amimof/multikube/api/v1"
+	"testing"
 )
 
 func TestApi(t *testing.T) {
@@ -12,7 +12,7 @@ func TestApi(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/namespaces/", nil)
 	w := httptest.NewRecorder()
 	api.Router.ServeHTTP(w, req)
-	
+
 	resp := w.Result()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

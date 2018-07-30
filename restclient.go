@@ -3,7 +3,7 @@ package multikube
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
+	//"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -11,31 +11,36 @@ import (
 	"path"
 	"strings"
 	//"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"log"
+	//"golang.org/x/net/http2"
 )
 
 type Request struct {
 	client       *http.Client
 	baseURL      *url.URL
 	path         string
+	query			 	 string
 	apiVersion   string
 	verb         string
 	resourceType string
 	resourceName string
 	namespace    string
-	headers      *http.Header
+	headers      http.Header
 	params       *url.Values
 	body         io.Reader
 	data         []byte
 	interf       interface{}
 	err          error
+	resp			 	 *http.Response
+	tlsConfig		 *tls.Config
 }
 
 type Options interface {
-	Hostname()  string
-	CA()        string
-	Cert()      string
-	Key()       string
-	Insecure()	bool
+	Hostname() string
+	CA() string
+	Cert() string
+	Key() string
+	Insecure() bool
 }
 
 func NewRequest(options Options) *Request {
@@ -43,6 +48,7 @@ func NewRequest(options Options) *Request {
 	r := &Request{}
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.Insecure(),
+		NextProtos: []string{"http/1.1"},
 	}
 
 	if options.CA() != "" {
@@ -53,11 +59,11 @@ func NewRequest(options Options) *Request {
 			r.err = newErr(err.Error())
 			return r
 		}
-	
+
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
 		tlsConfig.RootCAs = caCertPool
-	
+
 	}
 
 	if options.Cert() != "" && options.Key() != "" {
@@ -71,8 +77,18 @@ func NewRequest(options Options) *Request {
 		tlsConfig.BuildNameToCertificate()
 	}
 
+	r.tlsConfig = tlsConfig
+
 	tr := &http.Transport{TLSClientConfig: tlsConfig}
-	r.client = &http.Client{Transport: tr}
+	// err := http2.ConfigureTransport(tr)
+	// if err != nil {
+	// 	log.Printf("Unable to upgrade transport to HTTP/2")
+	// }
+
+	r.client = &http.Client{
+		Transport: tr,
+		Timeout: 0,
+	}
 
 	base, err := url.Parse(options.Hostname())
 	if err != nil {
@@ -83,6 +99,10 @@ func NewRequest(options Options) *Request {
 
 	return r
 
+}
+
+func (r *Request) TLSConfig() *tls.Config {
+	return r.tlsConfig
 }
 
 func (r *Request) Get() *Request {
@@ -145,6 +165,11 @@ func (r *Request) Path(p string) *Request {
 	return r
 }
 
+func (r *Request) Query(q string) *Request {
+	r.query = q
+	return r
+}
+
 func (r *Request) Body(b io.Reader) *Request {
 	r.body = b
 	return r
@@ -155,13 +180,17 @@ func (r *Request) Data() []byte {
 }
 
 func (r *Request) Headers(h http.Header) *Request {
-	r.headers = &h
+	r.headers = h
 	return r
+}
+
+func (r *Request) Response() *http.Response {
+	return r.resp
 }
 
 func (r *Request) Header(key string, values ...string) *Request {
 	if r.headers == nil {
-		r.headers = &http.Header{}
+		r.headers = http.Header{}
 	}
 	r.headers.Del(key)
 	for _, value := range values {
@@ -186,6 +215,10 @@ func (r *Request) URL() *url.URL {
 		p = r.path
 	}
 
+	if r.query != "" {
+		r.baseURL.RawQuery = r.query
+	}
+
 	// Set Api version only if not v1
 	if len(r.apiVersion) > 0 && r.apiVersion != "v1" {
 		p = path.Join("/apis", r.apiVersion)
@@ -207,63 +240,91 @@ func (r *Request) URL() *url.URL {
 	}
 
 	r.baseURL.Path = path.Join(r.baseURL.Path, p)
-	// TODO: Include query params in request
-	//
-	// query := url.Values{}
-	// for key, values := range r.params {
-	// 	for _, value := range values {
-	// 		query.Add(key, value)
-	// 	}
-	// }
 
 	return r.baseURL
 }
 
 func (r *Request) Do() (*Request, error) {
 
+	
 	// Return any error if any has been generated along the way before continuing
 	if r.err != nil {
 		return nil, r.err
 	}
-
+	
 	u := r.URL().String()
 
 	req, err := http.NewRequest(r.verb, u, r.body)
 	if err != nil {
 		return nil, err
 	}
-	req.Header = *r.headers
+	req.Header = r.headers
 
 	res, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+	r.resp = res
+
+	log.Printf("--- APISERVER RESPONSE START ---")
+	for k, _ := range res.Header {
+		log.Printf("%s: %s", k, res.Header.Get(k))
+	}
+	log.Printf("Status: %s", res.Status)
+	log.Printf("--- APISERVER RESPONSE END ---")
 
 	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
+	
 	if err != nil {
 		return nil, err
 	}
 	r.data = body
 
-	// Lets try to see if response is a failure
-	if r.interf != nil {
-		// status := &v1.Status{}
-		// _ = json.Unmarshal(r.Data(), status)
-		// // if err != nil {
-		// // 	return nil, err
-		// // }
-		// err = handleResponse(status)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		err = json.Unmarshal(r.Data(), r.interf)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return r, nil
+
+}
+
+
+func (r *Request) Doo() (*http.Response, error) {
+
+	
+	// Return any error if any has been generated along the way before continuing
+	if r.err != nil {
+		return nil, r.err
+	}
+	
+	u := r.URL().String()
+
+	req, err := http.NewRequest(r.verb, u, r.body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = r.headers
+
+	res, err := r.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	r.resp = res
+
+	log.Printf("--- RESPONSE START ---")
+	for k, _ := range res.Header {
+		log.Printf("%s: %s", k, res.Header.Get(k))
+	}
+	log.Printf("Status: %s", res.Status)
+	log.Printf("--- RESPONSE END ---")
+
+	//defer res.Body.Close()
+
+	// body, err := ioutil.ReadAll(res.Body)
+	
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//r.data = res.body
+
+	return res, nil
 
 }

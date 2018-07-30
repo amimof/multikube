@@ -23,7 +23,7 @@ func WithContext(next http.HandlerFunc) http.HandlerFunc {
 
 func WithLogging(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s %s", r.Method, r.RequestURI, r.RemoteAddr, r.Proto)
+		log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
 		next.ServeHTTP(w, r)
 	}
 }

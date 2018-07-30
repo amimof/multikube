@@ -20,7 +20,7 @@ type Item struct {
 
 func (c *Cache) ListKeys() []string {
 	keys := make([]string, 0)
-	for key, _ := range c.Store {
+	for key := range c.Store {
 		keys = append(keys, key)
 	}
 	return keys

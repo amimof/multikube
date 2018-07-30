@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	//"golang.org/x/net/http2"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -278,7 +279,9 @@ func (s *Server) Serve() error {
 	}
 
 	if s.hasScheme(schemeHTTPS) {
-		httpsServer := &graceful.Server{Server: new(http.Server)}
+		
+		srv := http.Server{}
+		httpsServer := &graceful.Server{Server: &srv}
 		httpsServer.MaxHeaderBytes = int(s.MaxHeaderSize)
 		httpsServer.ReadTimeout = s.TLSReadTimeout
 		httpsServer.WriteTimeout = s.TLSWriteTimeout
@@ -302,7 +305,9 @@ func (s *Server) Serve() error {
 			// https://github.com/golang/go/tree/master/src/crypto/elliptic
 			CurvePreferences: []tls.CurveID{tls.CurveP256},
 			// Use modern tls mode https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
-			NextProtos: []string{"http/1.1", "h2"},
+			NextProtos: []string{"h2", "http/1.1"},
+			//NextProtos: []string{"http/1.1","h2"},
+			//NextProtos: []string{"http/1.1"},
 			// https://www.owasp.org/index.php/Transport_Layer_Protection_Cheat_Sheet#Rule_-_Only_Support_Strong_Protocols
 			MinVersion: tls.VersionTLS12,
 			// These ciphersuites support Forward Secrecy: https://en.wikipedia.org/wiki/Forward_secrecy
@@ -348,6 +353,12 @@ func (s *Server) Serve() error {
 				log.Fatalf("the required flag `--tls-key` was not specified")
 			}
 		}
+
+		// Add HTTP/2 support to the server
+		// err := http2.ConfigureServer(&srv, nil)
+		// if err != nil {
+		// 	log.Fatalf("Unable to upgrade client to HTTP/2")
+		// }
 
 		wg.Add(2)
 		log.Printf("Serving multikube at https://%s", s.httpsServerL.Addr())

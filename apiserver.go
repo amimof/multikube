@@ -1,14 +1,11 @@
 package multikube
 
 import (
-	"k8s.io/api/core/v1"
-	//"k8s.io/api/apps/v1beta1"
-
-	apimachineryversion "k8s.io/apimachinery/pkg/version"
-
 	"encoding/json"
+	"k8s.io/api/core/v1"
+	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	"path"
-	//"log"
+	//"k8s.io/api/apps/v1beta1"
 )
 
 type ResourceSpec struct {
@@ -19,15 +16,13 @@ type ResourceSpec struct {
 	Path       string
 }
 
-
-
 type apiserver struct {
-	Hostname  string `json:"hostname,omitempty"`
-	CA        string `json:"ca,omitempty"`
-	Cert      string `json:"cert,omitempty"`
-	Key       string `json:"key,omitempty"`
-	Insecure  bool `json:"insecure,omitempty"`
-	cache		  *Cache
+	Hostname string `json:"hostname,omitempty"`
+	CA       string `json:"ca,omitempty"`
+	Cert     string `json:"cert,omitempty"`
+	Key      string `json:"key,omitempty"`
+	Insecure bool   `json:"insecure,omitempty"`
+	cache    *Cache
 }
 
 type APIServer struct {
@@ -48,7 +43,7 @@ func (c *APIServer) Cert() string {
 
 func (c *APIServer) Key() string {
 	return c.apiserver.Key
-} 
+}
 
 func (c *APIServer) Insecure() bool {
 	return c.apiserver.Insecure
@@ -92,19 +87,19 @@ func (c *APIServer) SyncHTTP() (*Cache, error) {
 	c.Cache().Set("/persistentvolumes", r.Data())
 
 	resources := []ResourceSpec{
-		ResourceSpec{ApiVersion: "v1", Name: "pods"},
-		ResourceSpec{ApiVersion: "v1", Name: "services"},
-		ResourceSpec{ApiVersion: "v1", Name: "serviceaccounts"},
-		ResourceSpec{ApiVersion: "v1", Name: "secrets"},
-		ResourceSpec{ApiVersion: "v1", Name: "replicationcontrollers"},
-		ResourceSpec{ApiVersion: "v1", Name: "configmaps"},
-		ResourceSpec{ApiVersion: "v1", Name: "events"},
-		ResourceSpec{ApiVersion: "v1", Name: "limitranges"},
-		ResourceSpec{ApiVersion: "v1", Name: "persistentvolumeclaims"},
-		ResourceSpec{ApiVersion: "v1", Name: "podtemplates"},
-		ResourceSpec{ApiVersion: "v1", Name: "resourcequotas"},
-		ResourceSpec{ApiVersion: "apps/v1beta1", Name: "deployments"},
-		ResourceSpec{ApiVersion: "apps/v1beta1", Name: "statefulsets"},
+		{ApiVersion: "v1", Name: "pods"},
+		{ApiVersion: "v1", Name: "services"},
+		{ApiVersion: "v1", Name: "serviceaccounts"},
+		{ApiVersion: "v1", Name: "secrets"},
+		{ApiVersion: "v1", Name: "replicationcontrollers"},
+		{ApiVersion: "v1", Name: "configmaps"},
+		{ApiVersion: "v1", Name: "events"},
+		{ApiVersion: "v1", Name: "limitranges"},
+		{ApiVersion: "v1", Name: "persistentvolumeclaims"},
+		{ApiVersion: "v1", Name: "podtemplates"},
+		{ApiVersion: "v1", Name: "resourcequotas"},
+		{ApiVersion: "apps/v1beta1", Name: "deployments"},
+		{ApiVersion: "apps/v1beta1", Name: "statefulsets"},
 	}
 
 	// Sync namespace and its resources
