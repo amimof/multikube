@@ -7,7 +7,6 @@ import (
 	//"time"
 	"github.com/spf13/pflag"
 	"gitlab.com/amimof/multikube"
-	"gitlab.com/amimof/multikube/api/v1"
 )
 
 func main() {
@@ -29,7 +28,7 @@ func main() {
 	pflag.Parse()
 
 	// Create the api
-	a := v1.NewAPI()
+	a := multikube.NewAPI()
 
 	// Create the server
 	s := multikube.NewServer(a)

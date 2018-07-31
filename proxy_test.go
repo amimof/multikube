@@ -1,4 +1,4 @@
-package v1_test
+package multikube_test
 
 import (
 	"gitlab.com/amimof/multikube/api/v1"

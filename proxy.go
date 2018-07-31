@@ -1,24 +1,16 @@
-package v1
+package multikube
 
 import (
 	"context"
 	"github.com/spf13/pflag"
-	"gitlab.com/amimof/multikube"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
-	//"time"
 	"crypto/tls"
 	"io"
 	//"io/ioutil"
 	//"bufio"
-	//"bufio"
-	//"k8s.io/client-go/rest"
-	//"k8s.io/client-go/tools/clientcmd"
-	//"k8s.io/client-go/kubernetes"
-	//"golang.org/x/net/http2"
-	//"io"
 )
 
 var (
@@ -29,8 +21,7 @@ var (
 type API struct {
 	Path    string
 	Version string
-	//Router  *http.ServeMux
-	Config  *multikube.Config
+	Config  *Config
 }
 
 func init() {
@@ -42,7 +33,7 @@ func init() {
 func NewAPI() *API {
 
 	// Read config from disk
-	c, err := multikube.SetupConfig(configPath)
+	c, err := SetupConfig(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,24 +42,20 @@ func NewAPI() *API {
 	api := &API{
 		Path:    "/api/v1",
 		Version: "v1",
-		//Router:  http.NewServeMux(),
 		Config:  c,
 	}
 
-	// Setup middlewares in order
-	// mw := api.Use(
-	// 	multikube.WithEmpty,
-	// 	multikube.WithLogging,
-	// )
-
-	// Handle all requests here through the proxy
-	//api.Router.HandleFunc("/", mw(api.routeHTTP))
+	// Apply middleware
+	api.Use(
+		WithEmpty,
+		WithLogging
+	)
 
 	return api
 }
 
 // Use chains all middlewares and applies a context to the request flow
-func (a *API) Use(mw ...multikube.MiddlewareFunc) multikube.MiddlewareFunc {
+func (a *API) Use(mw ...MiddlewareFunc) MiddlewareFunc {
 	return func(final http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			last := final
@@ -81,20 +68,12 @@ func (a *API) Use(mw ...multikube.MiddlewareFunc) multikube.MiddlewareFunc {
 	}
 }
 
+
 // Works except Watch
 //
 // proxy routes the request to an apiserver. It determines resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
-	log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
-
-	if pusher, ok := w.(http.Pusher); ok {
-		// Push is supported.
-		if err := pusher.Push("/app.js", nil); err != nil {
-				log.Printf("Failed to push: %s", err)
-		}
-	}
 
 	log.Printf("--- CLIENT REQUEST START ---")
 	for k, _ := range r.Header {
@@ -111,10 +90,10 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// This part is hardcoded. We need a way of determining an apiserver
 	// based on cert data, token or headers.
 	// Might need a middleware that propagates context before calling proxy() function.
-	//config := r.Context().Value("config").(*multikube.Config)
+	//config := r.Context().Value("config").(*Config)
 
 	// Build the request and execute the call to the backend apiserver
-	req := multikube.
+	req := 
 		NewRequest(a.Config.APIServers[1]).
 		Method(r.Method).
 		Body(r.Body).
@@ -141,8 +120,8 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) tunnel(w http.ResponseWriter, r *http.Request) {
 
-	//config := r.Context().Value("config").(*multikube.Config)
-	req := multikube.NewRequest(a.Config.APIServers[1])
+	//config := r.Context().Value("config").(*Config)
+	req := NewRequest(a.Config.APIServers[1])
 	tlsConfig := req.TLSConfig()
 
 	dump, err := httputil.DumpRequest(r, true)
@@ -167,7 +146,6 @@ func (a *API) tunnel(w http.ResponseWriter, r *http.Request) {
 
 	dst_conn.Write(dump)
 	
-	//w.WriteHeader(http.StatusOK)
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		log.Printf("Hijacking not supported")
