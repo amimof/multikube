@@ -67,6 +67,8 @@ func (p *Proxy) Use(mw ...MiddlewareFunc) MiddlewareFunc {
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
+	log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
+
 	if r.Header.Get("Upgrade") != "" {
 		p.tunnel(w, r)
 		return
@@ -94,7 +96,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", req.Response().Header.Get("Content-Type"))
+	copyHeader(w.Header(), res.Header)
 	w.WriteHeader(res.StatusCode)
 
 	buf := make([]byte, 4096)
@@ -111,6 +113,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}		
 	
 }
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
+
 
 // tunnel hijacks the client request, creates a pipe between client and backend server
 // and starts streaming data between the two connections.
