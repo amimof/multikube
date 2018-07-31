@@ -1,10 +1,9 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	"log"
-	"os"
-	//"time"
 	"github.com/spf13/pflag"
 	"gitlab.com/amimof/multikube"
 )
@@ -27,11 +26,11 @@ func main() {
 	// parse the CLI flags
 	pflag.Parse()
 
-	// Create the api
-	a := multikube.NewAPI()
+	// Create the proxy
+	p := multikube.NewProxy()
 
 	// Create the server
-	s := multikube.NewServer(a)
+	s := multikube.NewServer(p)
 
 	err := s.Serve()
 	if err != nil {

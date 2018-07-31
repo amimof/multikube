@@ -1,18 +1,14 @@
 package multikube
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	//"encoding/json"
 	"io"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"path"
 	"strings"
-	//"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"log"
-	//"golang.org/x/net/http2"
+	"net/url"
+	"net/http"
+	"io/ioutil"
+	"crypto/tls"
+	"crypto/x509"
 )
 
 type Request struct {
@@ -41,64 +37,6 @@ type Options interface {
 	Cert() string
 	Key() string
 	Insecure() bool
-}
-
-func NewRequest(options Options) *Request {
-
-	r := &Request{}
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.Insecure(),
-		NextProtos: []string{"http/1.1"},
-	}
-
-	if options.CA() != "" {
-
-		// Load CA certificate
-		caCert, err := ioutil.ReadFile(options.CA())
-		if err != nil {
-			r.err = newErr(err.Error())
-			return r
-		}
-
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-		tlsConfig.RootCAs = caCertPool
-
-	}
-
-	if options.Cert() != "" && options.Key() != "" {
-		//Load client certificate
-		cert, err := tls.LoadX509KeyPair(options.Cert(), options.Key())
-		if err != nil {
-			r.err = newErr(err.Error())
-			return r
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
-		tlsConfig.BuildNameToCertificate()
-	}
-
-	r.tlsConfig = tlsConfig
-
-	tr := &http.Transport{TLSClientConfig: tlsConfig}
-	// err := http2.ConfigureTransport(tr)
-	// if err != nil {
-	// 	log.Printf("Unable to upgrade transport to HTTP/2")
-	// }
-
-	r.client = &http.Client{
-		Transport: tr,
-		Timeout: 0,
-	}
-
-	base, err := url.Parse(options.Hostname())
-	if err != nil {
-		r.err = newErr(err.Error())
-		return r
-	}
-	r.baseURL = base
-
-	return r
-
 }
 
 func (r *Request) TLSConfig() *tls.Config {
@@ -244,9 +182,9 @@ func (r *Request) URL() *url.URL {
 	return r.baseURL
 }
 
-func (r *Request) Do() (*Request, error) {
+// Doo executes the request and returns an http.Response. The caller is responible of closing the Body
+func (r *Request) Do() (*http.Response, error) {
 
-	
 	// Return any error if any has been generated along the way before continuing
 	if r.err != nil {
 		return nil, r.err
@@ -258,6 +196,7 @@ func (r *Request) Do() (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
+	req.Close = false
 	req.Header = r.headers
 
 	res, err := r.client.Do(req)
@@ -266,65 +205,59 @@ func (r *Request) Do() (*Request, error) {
 	}
 	r.resp = res
 
-	log.Printf("--- APISERVER RESPONSE START ---")
-	for k, _ := range res.Header {
-		log.Printf("%s: %s", k, res.Header.Get(k))
-	}
-	log.Printf("Status: %s", res.Status)
-	log.Printf("--- APISERVER RESPONSE END ---")
-
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	
-	if err != nil {
-		return nil, err
-	}
-	r.data = body
-
-	return r, nil
+	return res, nil
 
 }
 
+func NewRequest(options Options) *Request {
 
-func (r *Request) Doo() (*http.Response, error) {
-
-	
-	// Return any error if any has been generated along the way before continuing
-	if r.err != nil {
-		return nil, r.err
+	r := &Request{}
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: options.Insecure(),
+		NextProtos: []string{"http/1.1"},
 	}
-	
-	u := r.URL().String()
 
-	req, err := http.NewRequest(r.verb, u, r.body)
+	if options.CA() != "" {
+
+		// Load CA certificate
+		caCert, err := ioutil.ReadFile(options.CA())
+		if err != nil {
+			r.err = newErr(err.Error())
+			return r
+		}
+
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = caCertPool
+
+	}
+
+	if options.Cert() != "" && options.Key() != "" {
+		//Load client certificate
+		cert, err := tls.LoadX509KeyPair(options.Cert(), options.Key())
+		if err != nil {
+			r.err = newErr(err.Error())
+			return r
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+		tlsConfig.BuildNameToCertificate()
+	}
+
+	r.tlsConfig = tlsConfig
+
+	tr := &http.Transport{TLSClientConfig: tlsConfig}
+	r.client = &http.Client{
+		Transport: tr,
+		Timeout: 0,
+	}
+
+	base, err := url.Parse(options.Hostname())
 	if err != nil {
-		return nil, err
+		r.err = newErr(err.Error())
+		return r
 	}
-	req.Header = r.headers
+	r.baseURL = base
 
-	res, err := r.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	r.resp = res
-
-	log.Printf("--- RESPONSE START ---")
-	for k, _ := range res.Header {
-		log.Printf("%s: %s", k, res.Header.Get(k))
-	}
-	log.Printf("Status: %s", res.Status)
-	log.Printf("--- RESPONSE END ---")
-
-	//defer res.Body.Close()
-
-	// body, err := ioutil.ReadAll(res.Body)
-	
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//r.data = res.body
-
-	return res, nil
+	return r
 
 }
