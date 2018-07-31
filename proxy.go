@@ -67,7 +67,7 @@ func (p *Proxy) Use(mw ...MiddlewareFunc) MiddlewareFunc {
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
+	log.Printf("%s %s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, r.Header.Get("User-Agent"))
 
 	if r.Header.Get("Upgrade") != "" {
 		p.tunnel(w, r)
@@ -128,7 +128,6 @@ func copyHeader(dst, src http.Header) {
 func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 
 	req := NewRequest(p.Config.APIServers[1])
-	tlsConfig := req.TLSConfig()
 
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
@@ -136,7 +135,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst_conn, err := tls.Dial("tcp", "192.168.99.100:8443", tlsConfig)
+	dst_conn, err := tls.Dial("tcp", "192.168.99.100:8443", req.TLSConfig)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return

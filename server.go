@@ -87,7 +87,7 @@ func init() {
 	pflag.DurationVar(&cleanupTimout, "cleanup-timeout", 10*time.Second, "grace period for which to wait before shutting down the server")
 	pflag.Uint64Var(&maxHeaderSize, "max-header-size", 1000000, "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
 
-	pflag.StringVar(&socketPath, "socket-path", "/var/run/todo-list.sock", "the unix socket to listen on")
+	pflag.StringVar(&socketPath, "socket-path", "/tmp/multikube.sock", "the unix socket to listen on")
 
 	pflag.StringVar(&host, "host", "localhost", "the IP to listen on")
 	pflag.IntVar(&port, "port", 443, "the port to listen on for insecure connections, defaults to 443")
@@ -116,8 +116,7 @@ func (s *Server) hasScheme(scheme string) bool {
 	return false
 }
 
-// NewServer creates a new api multikube server but does not configure it
-// func NewServer(h http.Handler) *Server {
+// NewServer creates a new multikube server
 func NewServer(h http.Handler) *Server {
 	s := new(Server)
 
@@ -146,6 +145,7 @@ func NewServer(h http.Handler) *Server {
 	return s
 }
 
+// Listen configures server listeners 
 func (s *Server) Listen() error {
 	if s.hasListeners { // already done this
 		return nil
@@ -283,8 +283,8 @@ func (s *Server) Serve() error {
 		srv := http.Server{}
 		httpsServer := &graceful.Server{Server: &srv}
 		httpsServer.MaxHeaderBytes = int(s.MaxHeaderSize)
-		httpsServer.ReadTimeout = s.TLSReadTimeout
-		httpsServer.WriteTimeout = s.TLSWriteTimeout
+		//httpsServer.ReadTimeout = s.TLSReadTimeout
+		//httpsServer.WriteTimeout = s.TLSWriteTimeout
 		httpsServer.SetKeepAlivesEnabled(int64(s.TLSKeepAlive) > 0)
 		httpsServer.TCPKeepAlive = s.TLSKeepAlive
 		if s.TLSListenLimit > 0 {
@@ -306,8 +306,6 @@ func (s *Server) Serve() error {
 			CurvePreferences: []tls.CurveID{tls.CurveP256},
 			// Use modern tls mode https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
 			NextProtos: []string{"h2", "http/1.1"},
-			//NextProtos: []string{"http/1.1","h2"},
-			//NextProtos: []string{"http/1.1"},
 			// https://www.owasp.org/index.php/Transport_Layer_Protection_Cheat_Sheet#Rule_-_Only_Support_Strong_Protocols
 			MinVersion: tls.VersionTLS12,
 			// These ciphersuites support Forward Secrecy: https://en.wikipedia.org/wiki/Forward_secrecy
@@ -353,12 +351,6 @@ func (s *Server) Serve() error {
 				log.Fatalf("the required flag `--tls-key` was not specified")
 			}
 		}
-
-		// Add HTTP/2 support to the server
-		// err := http2.ConfigureServer(&srv, nil)
-		// if err != nil {
-		// 	log.Fatalf("Unable to upgrade client to HTTP/2")
-		// }
 
 		wg.Add(2)
 		log.Printf("Serving multikube at https://%s", s.httpsServerL.Addr())

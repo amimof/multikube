@@ -13,8 +13,7 @@ import (
 
 type Request struct {
 	client       *http.Client
-	baseURL      *url.URL
-	path         string
+	url      		 *url.URL
 	query			 	 string
 	apiVersion   string
 	verb         string
@@ -22,13 +21,10 @@ type Request struct {
 	resourceName string
 	namespace    string
 	headers      http.Header
-	params       *url.Values
 	body         io.Reader
-	data         []byte
 	interf       interface{}
 	err          error
-	resp			 	 *http.Response
-	tlsConfig		 *tls.Config
+	TLSConfig		 *tls.Config
 }
 
 type Options interface {
@@ -39,32 +35,28 @@ type Options interface {
 	Insecure() bool
 }
 
-func (r *Request) TLSConfig() *tls.Config {
-	return r.tlsConfig
-}
-
 func (r *Request) Get() *Request {
-	r.Method("GET")
+	r.Method(http.MethodGet)
 	return r
 }
 
 func (r *Request) Post() *Request {
-	r.Method("POST")
+	r.Method(http.MethodPost)
 	return r
 }
 
 func (r *Request) Put() *Request {
-	r.Method("PUT")
+	r.Method(http.MethodPut)
 	return r
 }
 
 func (r *Request) Delete() *Request {
-	r.Method("DELETE")
+	r.Method(http.MethodDelete)
 	return r
 }
 
 func (r *Request) Options() *Request {
-	r.Method("OPTIONS")
+	r.Method(http.MethodOptions)
 	return r
 }
 
@@ -99,12 +91,12 @@ func (r *Request) Into(obj interface{}) *Request {
 }
 
 func (r *Request) Path(p string) *Request {
-	r.path = p
+	r.url.Path = p
 	return r
 }
 
 func (r *Request) Query(q string) *Request {
-	r.query = q
+	r.url.RawQuery = q
 	return r
 }
 
@@ -113,17 +105,9 @@ func (r *Request) Body(b io.Reader) *Request {
 	return r
 }
 
-func (r *Request) Data() []byte {
-	return r.data
-}
-
 func (r *Request) Headers(h http.Header) *Request {
 	r.headers = h
 	return r
-}
-
-func (r *Request) Response() *http.Response {
-	return r.resp
 }
 
 func (r *Request) Header(key string, values ...string) *Request {
@@ -140,21 +124,9 @@ func (r *Request) Header(key string, values ...string) *Request {
 // URL returns the current working URL.
 func (r *Request) URL() *url.URL {
 
-	if r.baseURL == nil {
-		r.baseURL = &url.URL{}
-	}
-
-	if r.baseURL.Path != "" {
-		r.baseURL.Path = ""
-	}
-
 	p := "/api/v1/"
-	if r.path != "" {
-		p = r.path
-	}
-
-	if r.query != "" {
-		r.baseURL.RawQuery = r.query
+	if r.url.Path != "" {
+		p = r.url.Path
 	}
 
 	// Set Api version only if not v1
@@ -177,9 +149,9 @@ func (r *Request) URL() *url.URL {
 		p = path.Join(p, r.resourceName)
 	}
 
-	r.baseURL.Path = path.Join(r.baseURL.Path, p)
+	r.url.Path = p
 
-	return r.baseURL
+	return r.url
 }
 
 // Doo executes the request and returns an http.Response. The caller is responible of closing the Body
@@ -203,10 +175,8 @@ func (r *Request) Do() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	r.resp = res
 
 	return res, nil
-
 }
 
 func NewRequest(options Options) *Request {
@@ -243,7 +213,7 @@ func NewRequest(options Options) *Request {
 		tlsConfig.BuildNameToCertificate()
 	}
 
-	r.tlsConfig = tlsConfig
+	r.TLSConfig = tlsConfig
 
 	tr := &http.Transport{TLSClientConfig: tlsConfig}
 	r.client = &http.Client{
@@ -256,7 +226,7 @@ func NewRequest(options Options) *Request {
 		r.err = newErr(err.Error())
 		return r
 	}
-	r.baseURL = base
+	r.url = base
 
 	return r
 
