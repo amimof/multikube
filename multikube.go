@@ -1,14 +1,13 @@
 package multikube
 
 import (
-	"os"
-	"fmt"
-	"errors"
-	"io/ioutil"
-	//"gopkg.in/yaml.v2"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/google/uuid"
+	"io/ioutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"os"
 )
 
 func handleResponse(m *v1.Status) error {
@@ -54,7 +53,7 @@ func SetupConfig(configPath string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return c, nil
 
 }

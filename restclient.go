@@ -1,20 +1,20 @@
 package multikube
 
 import (
-	"io"
-	"path"
-	"strings"
-	"net/url"
-	"net/http"
-	"io/ioutil"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"path"
+	"strings"
 )
 
 type Request struct {
 	client       *http.Client
-	url      		 *url.URL
-	query			 	 string
+	url          *url.URL
+	query        string
 	apiVersion   string
 	verb         string
 	resourceType string
@@ -24,7 +24,7 @@ type Request struct {
 	body         io.Reader
 	interf       interface{}
 	err          error
-	TLSConfig		 *tls.Config
+	TLSConfig    *tls.Config
 }
 
 type Options interface {
@@ -161,7 +161,7 @@ func (r *Request) Do() (*http.Response, error) {
 	if r.err != nil {
 		return nil, r.err
 	}
-	
+
 	u := r.URL().String()
 
 	req, err := http.NewRequest(r.verb, u, r.body)
@@ -184,7 +184,7 @@ func NewRequest(options Options) *Request {
 	r := &Request{}
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.Insecure(),
-		NextProtos: []string{"http/1.1"},
+		NextProtos:         []string{"http/1.1"},
 	}
 
 	if options.CA() != "" {
@@ -218,7 +218,7 @@ func NewRequest(options Options) *Request {
 	tr := &http.Transport{TLSClientConfig: tlsConfig}
 	r.client = &http.Client{
 		Transport: tr,
-		Timeout: 0,
+		Timeout:   0,
 	}
 
 	base, err := url.Parse(options.Hostname())

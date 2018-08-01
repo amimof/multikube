@@ -10,7 +10,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	//"golang.org/x/net/http2"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -145,7 +144,7 @@ func NewServer(h http.Handler) *Server {
 	return s
 }
 
-// Listen configures server listeners 
+// Listen configures server listeners
 func (s *Server) Listen() error {
 	if s.hasListeners { // already done this
 		return nil
@@ -279,7 +278,7 @@ func (s *Server) Serve() error {
 	}
 
 	if s.hasScheme(schemeHTTPS) {
-		
+
 		srv := http.Server{}
 		httpsServer := &graceful.Server{Server: &srv}
 		httpsServer.MaxHeaderBytes = int(s.MaxHeaderSize)

@@ -1,16 +1,13 @@
 package multikube
 
 import (
-	//"io"
+	"context"
+	"crypto/tls"
+	"github.com/spf13/pflag"
 	"log"
 	"net"
-	"context"
 	"net/http"
-	"crypto/tls"
 	"net/http/httputil"
-	"github.com/spf13/pflag"
-	//"io/ioutil"
-	//"bufio"
 )
 
 var (
@@ -18,7 +15,8 @@ var (
 )
 
 type Proxy struct {
-	Config  *Config
+	Config *Config
+	mw     http.Handler
 }
 
 func init() {
@@ -35,19 +33,15 @@ func NewProxy() *Proxy {
 	}
 
 	// Define API
-	p := &Proxy{c}
-
-	// Apply middleware
-	p.Use(
-		WithEmpty,
-		WithLogging,
-	)
+	p := &Proxy{
+		Config: c,
+	}
 
 	return p
 }
 
 // Use chains all middlewares and applies a context to the request flow
-func (p *Proxy) Use(mw ...MiddlewareFunc) MiddlewareFunc {
+func (p *Proxy) use(mw ...MiddlewareFunc) MiddlewareFunc {
 	return func(final http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			last := final
@@ -60,6 +54,18 @@ func (p *Proxy) Use(mw ...MiddlewareFunc) MiddlewareFunc {
 	}
 }
 
+// Use chains all middlewares and applies a context to the request flow
+func (p *Proxy) Use(mw ...Middleware) Middleware {
+	return func(final http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			last := final
+			for i := len(mw) - 1; i >= 0; i-- {
+				last = mw[i](last)
+			}
+			last.ServeHTTP(w, r)
+		})
+	}
+}
 
 // Works except Watch
 //
@@ -67,24 +73,22 @@ func (p *Proxy) Use(mw ...MiddlewareFunc) MiddlewareFunc {
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	log.Printf("%s %s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, r.Header.Get("User-Agent"))
-
 	if r.Header.Get("Upgrade") != "" {
 		p.tunnel(w, r)
 		return
 	}
-	
+
 	// Build the request and execute the call to the backend apiserver
 	// Config is hardcoded. We need a way of determining an apiserver
 	// based on cert data, token or headers.
 	// Might need a middleware that propagates context before calling proxy() function.
-	req := 
+	req :=
 		NewRequest(p.Config.APIServers[1]).
-		Method(r.Method).
-		Body(r.Body).
-		Path(r.URL.Path).
-		Query(r.URL.RawQuery).
-		Headers(r.Header)
+			Method(r.Method).
+			Body(r.Body).
+			Path(r.URL.Path).
+			Query(r.URL.RawQuery).
+			Headers(r.Header)
 
 	// Execute!
 	res, err := req.Do()
@@ -110,8 +114,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-	}		
-	
+	}
+
 }
 
 func copyHeader(dst, src http.Header) {
@@ -121,7 +125,6 @@ func copyHeader(dst, src http.Header) {
 		}
 	}
 }
-
 
 // tunnel hijacks the client request, creates a pipe between client and backend server
 // and starts streaming data between the two connections.
@@ -142,7 +145,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dst_conn.Write(dump)
-	
+
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
@@ -175,7 +178,7 @@ func transfer(src, dst net.Conn) {
 		_, err = dst.Write(b)
 		if err != nil {
 			break
-		}	
+		}
 	}
 
 	log.Printf("Transfered src: %s dst: %s bytes: %d", src.LocalAddr().String(), dst.RemoteAddr().String(), len(buff))

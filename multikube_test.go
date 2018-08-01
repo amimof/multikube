@@ -5,5 +5,5 @@ import (
 )
 
 func TestMultikube(t *testing.T) {
-
+	t.Logf("Tests not implemented")
 }

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"os"
 	"fmt"
-	"log"
 	"github.com/spf13/pflag"
 	"gitlab.com/amimof/multikube"
+	"log"
+	"os"
 )
 
 func main() {
@@ -28,9 +28,13 @@ func main() {
 
 	// Create the proxy
 	p := multikube.NewProxy()
+	m := p.Use(
+		multikube.WithEmpty,
+		multikube.Withlogging,
+	)
 
 	// Create the server
-	s := multikube.NewServer(p)
+	s := multikube.NewServer(m(p))
 
 	err := s.Serve()
 	if err != nil {

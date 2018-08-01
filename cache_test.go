@@ -3,7 +3,6 @@ package multikube_test
 import (
 	"gitlab.com/amimof/multikube"
 	"testing"
-	//"github.com/stretchr/testify/assert"
 )
 
 func TestCacheGetItem(t *testing.T) {
