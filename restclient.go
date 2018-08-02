@@ -1,14 +1,14 @@
 package multikube
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"io"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"path"
 	"strings"
+	"net/url"
+	"net/http"
+	"io/ioutil"
+	"crypto/tls"
+	"crypto/x509"
 )
 
 type Request struct {

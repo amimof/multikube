@@ -1,15 +1,7 @@
 package multikube
 
-type ResourceSpec struct {
-	ApiVersion string
-	Name       string
-	Namespace  string
-	Type       interface{}
-	Path       string
-}
-
 type apiserver struct {
-	Name     string `json:"hostname,omitempty"`
+	Name     string `json:"name,omitempty"`
 	Hostname string `json:"hostname,omitempty"`
 	CA       string `json:"ca,omitempty"`
 	Cert     string `json:"cert,omitempty"`

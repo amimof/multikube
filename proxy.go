@@ -20,7 +20,7 @@ type Proxy struct {
 }
 
 func init() {
-	pflag.StringVar(&configPath, "config", "/etc/multikube/multikube.yaml", "Path to the multikube configuration")
+	pflag.StringVar(&configPath, "config", "/etc/multikube/multikube.json", "Path to the multikube configuration")
 }
 
 // NewProxy crerates a new Proxy and initialises router and configuration
@@ -67,11 +67,26 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 	}
 }
 
+func (p *Proxy) getCluster(n string) *APIServer {
+	for _, a := range p.Config.APIServers {
+		if a.Name == n {
+			return a
+		}
+	}
+	return nil
+}
+
 // Works except Watch
 //
 // proxy routes the request to an apiserver. It determines resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	a := p.getCluster(r.Context().Value("Target").(string))
+	if a == nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
 
 	if r.Header.Get("Upgrade") != "" {
 		p.tunnel(w, r)
@@ -83,7 +98,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// based on cert data, token or headers.
 	// Might need a middleware that propagates context before calling proxy() function.
 	req :=
-		NewRequest(p.Config.APIServers[1]).
+		NewRequest(a).
 			Method(r.Method).
 			Body(r.Body).
 			Path(r.URL.Path).

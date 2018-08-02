@@ -30,7 +30,8 @@ func main() {
 	p := multikube.NewProxy()
 	m := p.Use(
 		multikube.WithEmpty,
-		multikube.Withlogging,
+		multikube.WithLogging,
+		multikube.WithValidate,
 	)
 
 	// Create the server
