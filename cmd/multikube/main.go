@@ -4,16 +4,64 @@ import (
 	"os"
 	"fmt"
 	"log"
+	"time"
 	"github.com/spf13/pflag"
 	"gitlab.com/amimof/multikube"
 	"k8s.io/client-go/tools/clientcmd"
-	//"k8s.io/client-go/tools/clientcmd/api"
+)
+var (
+	enabledListeners []string
+	cleanupTimout    time.Duration
+	maxHeaderSize    uint64
+
+	socketPath string
+
+	host         string
+	port         int
+	listenLimit  int
+	keepAlive    time.Duration
+	readTimeout  time.Duration
+	writeTimeout time.Duration
+
+	tlsHost           string
+	tlsPort           int
+	tlsListenLimit    int
+	tlsKeepAlive      time.Duration
+	tlsReadTimeout    time.Duration
+	tlsWriteTimeout   time.Duration
+	tlsCertificate    string
+	tlsCertificateKey string
+	tlsCACertificate  string
+	
+	kubeconfigPath string
 )
 
-var kubeconfigPath string
 
 func init() {
-		pflag.StringVar(&kubeconfigPath, "kubeconfig", "~/.kube/config", "Absolute path to the kubeconfig file")
+	
+	pflag.StringVar(&socketPath, "socket-path", "/tmp/multikube.sock", "the unix socket to listen on")
+	pflag.StringVar(&host, "host", "localhost", "the IP to listen on")
+	pflag.StringVar(&tlsHost, "tls-host", "localhost", "the IP to listen on")
+	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
+	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
+	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
+	pflag.StringVar(&kubeconfigPath, "kubeconfig", "~/.kube/config", "Absolute path to the kubeconfig file")
+	pflag.StringSliceVar(&enabledListeners, "scheme", []string{}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
+	
+	pflag.IntVar(&port, "port", 443, "the port to listen on for insecure connections, defaults to 443")
+	pflag.IntVar(&listenLimit, "listen-limit", 0, "limit the number of outstanding requests")
+	pflag.IntVar(&tlsPort, "tls-port", 0, "the port to listen on for secure connections, defaults to a random value")
+	pflag.IntVar(&tlsListenLimit, "tls-listen-limit", 0, "limit the number of outstanding requests")
+	pflag.Uint64Var(&maxHeaderSize, "max-header-size", 1000000, "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
+	
+	pflag.DurationVar(&cleanupTimout, "cleanup-timeout", 10*time.Second, "grace period for which to wait before shutting down the server")
+	pflag.DurationVar(&keepAlive, "keep-alive", 3*time.Minute, "sets the TCP keep-alive timeouts on accepted connections. It prunes dead TCP connections ( e.g. closing laptop mid-download)")
+	pflag.DurationVar(&readTimeout, "read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
+	pflag.DurationVar(&writeTimeout, "write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
+	pflag.DurationVar(&tlsKeepAlive, "tls-keep-alive", 3*time.Minute, "sets the TCP keep-alive timeouts on accepted connections. It prunes dead TCP connections ( e.g. closing laptop mid-download)")
+	pflag.DurationVar(&tlsReadTimeout, "tls-read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
+	pflag.DurationVar(&tlsWriteTimeout, "tls-write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
+	
 }
 
 func main() {
@@ -49,8 +97,31 @@ func main() {
 	)
 
 	// Create the server
-	s := multikube.NewServer(m(p))
+	s := &multikube.Server{
+		EnabledListeners: enabledListeners,
+		CleanupTimeout: cleanupTimout,
+		MaxHeaderSize: maxHeaderSize,
+		SocketPath: socketPath,
+		Host: host,
+		Port: port,
+		ListenLimit: listenLimit,
+		KeepAlive: keepAlive,
+		ReadTimeout: readTimeout,
+		WriteTimeout: writeTimeout,
+		TLSHost: tlsHost,
+		TLSPort: tlsPort,
+		TLSCertificate: tlsCertificate,
+		TLSCertificateKey: tlsCertificateKey,
+		TLSCACertificate: tlsCACertificate,
+		TLSListenLimit: tlsListenLimit,
+		TLSKeepAlive: tlsKeepAlive,
+		TLSReadTimeout: tlsReadTimeout,
+		TLSWriteTimeout: tlsWriteTimeout,
+		Shutdown: make(chan struct{}),
+		Handler: m(p),
+	}
 
+	// Listen and serve!
 	err = s.Serve()
 	if err != nil {
 		log.Fatal(err)
