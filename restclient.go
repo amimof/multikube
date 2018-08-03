@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"crypto/tls"
 	"crypto/x509"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 type Request struct {
@@ -27,12 +28,9 @@ type Request struct {
 	TLSConfig    *tls.Config
 }
 
-type Options interface {
-	Hostname() string
-	CA() string
-	Cert() string
-	Key() string
-	Insecure() bool
+type Options struct {
+	*api.Cluster
+	*api.AuthInfo
 }
 
 func (r *Request) Get() *Request {
@@ -179,18 +177,18 @@ func (r *Request) Do() (*http.Response, error) {
 	return res, nil
 }
 
-func NewRequest(options Options) *Request {
+func NewRequest(options *Options) *Request {
 
 	r := &Request{}
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.Insecure(),
+		InsecureSkipVerify: options.InsecureSkipTLSVerify,
 		NextProtos:         []string{"http/1.1"},
 	}
 
-	if options.CA() != "" {
+	// Load CA from file 
+	if options.CertificateAuthority != "" {
 
-		// Load CA certificate
-		caCert, err := ioutil.ReadFile(options.CA())
+		caCert, err := ioutil.ReadFile(options.CertificateAuthority)
 		if err != nil {
 			r.err = newErr(err.Error())
 			return r
@@ -202,9 +200,28 @@ func NewRequest(options Options) *Request {
 
 	}
 
-	if options.Cert() != "" && options.Key() != "" {
-		//Load client certificate
-		cert, err := tls.LoadX509KeyPair(options.Cert(), options.Key())
+	// Load CA from block
+	if options.CertificateAuthorityData != nil {
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(options.CertificateAuthorityData)
+		tlsConfig.RootCAs = caCertPool
+	}
+
+
+	// Load certs from file
+	if options.ClientCertificate != "" && options.ClientKey != "" {
+		cert, err := tls.LoadX509KeyPair(options.ClientCertificate, options.ClientKey)
+		if err != nil {
+			r.err = newErr(err.Error())
+			return r
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+		tlsConfig.BuildNameToCertificate()
+	}
+
+	// Load certs from block
+	if options.ClientCertificateData != nil && options.ClientKeyData != nil {
+		cert, err := tls.X509KeyPair(options.ClientCertificateData, options.ClientKeyData)
 		if err != nil {
 			r.err = newErr(err.Error())
 			return r
@@ -221,7 +238,7 @@ func NewRequest(options Options) *Request {
 		Timeout:   0,
 	}
 
-	base, err := url.Parse(options.Hostname())
+	base, err := url.Parse(options.Server)
 	if err != nil {
 		r.err = newErr(err.Error())
 		return r

@@ -1,12 +1,20 @@
 package main
 
 import (
+	"os"
 	"fmt"
+	"log"
 	"github.com/spf13/pflag"
 	"gitlab.com/amimof/multikube"
-	"log"
-	"os"
+	"k8s.io/client-go/tools/clientcmd"
+	//"k8s.io/client-go/tools/clientcmd/api"
 )
+
+var kubeconfigPath string
+
+func init() {
+		pflag.StringVar(&kubeconfigPath, "kubeconfig", "~/.kube/config", "Absolute path to the kubeconfig file")
+}
 
 func main() {
 
@@ -26,8 +34,14 @@ func main() {
 	// parse the CLI flags
 	pflag.Parse()
 
+	// Read provided kubeconfig file
+	c, err := clientcmd.LoadFromFile(kubeconfigPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Create the proxy
-	p := multikube.NewProxy()
+	p := multikube.NewProxyFrom(c)
 	m := p.Use(
 		multikube.WithEmpty,
 		multikube.WithLogging,
@@ -37,7 +51,7 @@ func main() {
 	// Create the server
 	s := multikube.NewServer(m(p))
 
-	err := s.Serve()
+	err = s.Serve()
 	if err != nil {
 		log.Fatal(err)
 	}

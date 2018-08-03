@@ -1,43 +1,43 @@
 package multikube
 
 import (
-	"context"
-	"crypto/tls"
-	"github.com/spf13/pflag"
 	"log"
 	"net"
+	"fmt"
+	"context"
 	"net/http"
+	"crypto/tls"
 	"net/http/httputil"
-)
-
-var (
-	configPath string
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 type Proxy struct {
 	Config *Config
+	config *api.Config
 	mw     http.Handler
 }
 
-func init() {
-	pflag.StringVar(&configPath, "config", "/etc/multikube/multikube.json", "Path to the multikube configuration")
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
 }
 
 // NewProxy crerates a new Proxy and initialises router and configuration
 func NewProxy() *Proxy {
-
-	// Read config from disk
-	c, err := SetupConfig(configPath)
-	if err != nil {
-		log.Fatal(err)
+	return &Proxy{
+		Config: &Config{},
 	}
+}
 
-	// Define API
-	p := &Proxy{
-		Config: c,
-	}
+func NewProxyFrom(c *api.Config) *Proxy {
 
+	p := NewProxy()
+	p.config = c
 	return p
+	
 }
 
 // Use chains all middlewares and applies a context to the request flow
@@ -67,38 +67,73 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 	}
 }
 
-func (p *Proxy) getCluster(n string) *APIServer {
-	for _, a := range p.Config.APIServers {
-		if a.Name == n {
-			return a
+func (p *Proxy) getCluster(n string) *api.Cluster {
+	for k, v := range p.config.Clusters {
+		if k == n {
+			return v
 		}
 	}
 	return nil
 }
 
-// Works except Watch
-//
-// proxy routes the request to an apiserver. It determines resolves an apiserver using
+func (p *Proxy) getAuthInfo(n string) *api.AuthInfo {
+	for k, v := range p.config.AuthInfos {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func (p *Proxy) getContext(n string) *api.Context {
+	for k, v := range p.config.Contexts {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func (p *Proxy) getOptions(n string) *Options {
+	ctx := p.getContext(n)
+	if ctx == nil {
+		return nil
+	}
+	authInfo := p.getAuthInfo(ctx.AuthInfo)
+	if authInfo == nil {
+		return nil
+	}
+	cluster := p.getCluster(ctx.Cluster)
+	if cluster == nil {
+		return nil
+	}
+	return &Options{
+		cluster,
+		authInfo,
+	}
+}
+
+// ServeHTTP routes the request to an apiserver. It determines, resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	a := p.getCluster(r.Context().Value("Target").(string))
-	if a == nil {
-		http.Error(w, "", http.StatusInternalServerError)
+	target := r.Context().Value("Context").(string)
+	opts := p.getOptions(target)
+	
+	if opts == nil {
+		http.Error(w, fmt.Sprintf("Unable to resolve context %s", target), http.StatusInternalServerError)
 		return
 	}
 
+	// Tunnel the connection if server sends Upgrade
 	if r.Header.Get("Upgrade") != "" {
 		p.tunnel(w, r)
 		return
 	}
 
 	// Build the request and execute the call to the backend apiserver
-	// Config is hardcoded. We need a way of determining an apiserver
-	// based on cert data, token or headers.
-	// Might need a middleware that propagates context before calling proxy() function.
 	req :=
-		NewRequest(a).
+		NewRequest(opts).
 			Method(r.Method).
 			Body(r.Body).
 			Path(r.URL.Path).
@@ -115,9 +150,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Copy all response headers
 	copyHeader(w.Header(), res.Header)
 	w.WriteHeader(res.StatusCode)
 
+	// Read body into buffer before writing to response and wait until client cancels
 	buf := make([]byte, 4096)
 	for {
 		n, err := res.Body.Read(buf)
@@ -133,19 +170,20 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func copyHeader(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
-
 // tunnel hijacks the client request, creates a pipe between client and backend server
 // and starts streaming data between the two connections.
 func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 
-	req := NewRequest(p.Config.APIServers[1])
+	target := r.Context().Value("Context").(string)
+	opts := p.getOptions(target)
+	
+	if opts == nil {
+		log.Printf("Unable to resolve target '%s'", target)
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	req := NewRequest(opts)
 
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
