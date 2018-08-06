@@ -1,15 +1,15 @@
 package multikube
 
 import (
-	"io"
-	"path"
-	"strings"
-	"net/url"
-	"net/http"
-	"io/ioutil"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
+	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"net/http"
+	"net/url"
+	"path"
+	"strings"
 )
 
 type Request struct {
@@ -185,7 +185,7 @@ func NewRequest(options *Options) *Request {
 		NextProtos:         []string{"http/1.1"},
 	}
 
-	// Load CA from file 
+	// Load CA from file
 	if options.CertificateAuthority != "" {
 
 		caCert, err := ioutil.ReadFile(options.CertificateAuthority)
@@ -206,7 +206,6 @@ func NewRequest(options *Options) *Request {
 		caCertPool.AppendCertsFromPEM(options.CertificateAuthorityData)
 		tlsConfig.RootCAs = caCertPool
 	}
-
 
 	// Load certs from file
 	if options.ClientCertificate != "" && options.ClientKey != "" {

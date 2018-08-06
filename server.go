@@ -1,18 +1,18 @@
 package multikube
 
 import (
-	"log"
-	"net"
-	"sync"
-	"time"
-	"strconv"
-	"net/http"
-	"io/ioutil"
 	"crypto/tls"
 	"crypto/x509"
-	"sync/atomic"
 	"github.com/go-openapi/swag"
 	"github.com/tylerb/graceful"
+	"io/ioutil"
+	"log"
+	"net"
+	"net/http"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 const (
@@ -23,33 +23,33 @@ const (
 
 // Server for the multikube API
 type Server struct {
-	Host         			string
-	Port         			int
-	ListenLimit  			int
+	Host              string
+	Port              int
+	ListenLimit       int
 	TLSHost           string
 	TLSPort           int
 	TLSListenLimit    int
 	TLSCertificate    string
 	TLSCertificateKey string
 	TLSCACertificate  string
-	SocketPath    		string
-	KeepAlive    			time.Duration
-	ReadTimeout  			time.Duration
-	WriteTimeout 			time.Duration
+	SocketPath        string
+	KeepAlive         time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
 	TLSKeepAlive      time.Duration
 	TLSReadTimeout    time.Duration
 	TLSWriteTimeout   time.Duration
-	CleanupTimeout   	time.Duration
-	MaxHeaderSize    	uint64
-	EnabledListeners 	[]string
-	Handler      			http.Handler
-	Shutdown     			chan struct{}
-	
-	httpServerL  			net.Listener
-	httpsServerL      net.Listener
-	domainSocketL 		net.Listener
-	hasListeners bool
-	shuttingDown int32
+	CleanupTimeout    time.Duration
+	MaxHeaderSize     uint64
+	EnabledListeners  []string
+	Handler           http.Handler
+	Shutdown          chan struct{}
+
+	httpServerL   net.Listener
+	httpsServerL  net.Listener
+	domainSocketL net.Listener
+	hasListeners  bool
+	shuttingDown  int32
 }
 
 func (s *Server) hasScheme(scheme string) bool {
@@ -59,12 +59,6 @@ func (s *Server) hasScheme(scheme string) bool {
 		}
 	}
 	return false
-}
-
-// NewServer creates a new multikube server
-func NewServer(h http.Handler) *Server {
-	s := new(Server)
-	return s
 }
 
 // Listen configures server listeners
