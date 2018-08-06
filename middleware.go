@@ -1,13 +1,12 @@
 package multikube
 
 import (
-	"log"
 	"context"
-	"net/http"
 	"crypto/x509"
-	"encoding/pem"
-	"github.com/SermoDigital/jose/jws"
 	"github.com/SermoDigital/jose/crypto"
+	"github.com/SermoDigital/jose/jws"
+	"log"
+	"net/http"
 )
 
 type MiddlewareFunc func(next http.HandlerFunc) http.HandlerFunc
@@ -20,7 +19,7 @@ func WithEmpty(next http.Handler) http.Handler {
 	})
 }
 
-// Middleware (just a http.Handler)
+// WithLogging applies access log style logging to the HTTP server
 func WithLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
@@ -28,35 +27,11 @@ func WithLogging(next http.Handler) http.Handler {
 	})
 }
 
+// WithValidate validates JWT tokens in the request. For example Bearer-tokens
 func WithValidate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		pub := `-----BEGIN CERTIFICATE-----
-MIICvDCCAaQCCQC7lkJGUK5yrTANBgkqhkiG9w0BAQsFADAgMQswCQYDVQQGEwJT
-RTERMA8GA1UEAwwIbWluaWt1YmUwHhcNMTgwODAyMTM1NjI0WhcNMTkwODAyMTM1
-NjI0WjAgMQswCQYDVQQGEwJTRTERMA8GA1UEAwwIbWluaWt1YmUwggEiMA0GCSqG
-SIb3DQEBAQUAA4IBDwAwggEKAoIBAQC2vGjj3Frrcl8WVoJVlpSt2TPda64+9jyV
-rVJiGcMhnY2ZbepmAKWadHG/euHwkYc2TmGzwgm2vhPSbaYyrGE5GMwOSnzX2Lwj
-rCZr9PzijD05o3ci61VB5B/9PTgyNXOYljmqmGFNOhr2CGU4ifn+3IMHbc4cEr3M
-AAkLTbAENk06kVYlR2S297nPbyAd9/nzR5uR9aQ+46TAS530zHL5Nvb8XA9VVc/y
-Z2704URrRu2rc/1Lzz36nRayXFRux/JTUylZISenF5pfrUBN2gI55no/R1zm0NMD
-p1wuu1ou4IOBsgZIOlsJHglmT0A0JMFBllqtYN9AMuU2nyOE6UpVAgMBAAEwDQYJ
-KoZIhvcNAQELBQADggEBAFvPbN6IZ26gCVy3BTxJ+3Cc6R9VDS2yH86wP9iXQ/87
-7+yg+u+H9oTCZOkR/Jt7UB/3oDy4IhMfv2ysh3+v3+FbgXc44WuCDYHmFTZB/o+G
-4YR0/58rLLU6w5We8BduICzT32fmbkaAV9NObO4cXooDwLzV9Tiwjk83avaMMawg
-Y/hnV1dSgVTfL/VMOahi030PgV+EsrmOXA1u424YmF6Xrc0MlWZadMUitdns46Pl
-HuHLMeKcrWw6wPVnysSeJeu+RsNxuW0LBroLpcvRYrszEeHwrN/ljy1/PJFW6n6V
-J5xPObhvjG6pisQUWwSRYm7B5dH7hLbOT3pMTjlFscc=
------END CERTIFICATE-----`
-		
-		block, _ := pem.Decode([]byte(pub))
-
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			log.Printf("ERROR Parse Cert: %s", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		cert := r.Context().Value("signer").(*x509.Certificate)
 
 		t, err := jws.ParseJWTFromRequest(r)
 		if err != nil {
@@ -79,7 +54,7 @@ J5xPObhvjG6pisQUWwSRYm7B5dH7hLbOT3pMTjlFscc=
 		}
 
 		ctx := context.WithValue(r.Context(), "Context", t.Claims().Get("ctx").(string))
-		ctx = context.WithValue(ctx, "Subject", t.Claims().Get("sub").(string)) 
+		ctx = context.WithValue(ctx, "Subject", t.Claims().Get("sub").(string))
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 

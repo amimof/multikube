@@ -1,20 +1,22 @@
 package multikube
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"k8s.io/client-go/tools/clientcmd/api"
 	"log"
 	"net"
-	"fmt"
-	"context"
 	"net/http"
-	"crypto/tls"
 	"net/http/httputil"
-	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 type Proxy struct {
-	Config *Config
-	config *api.Config
-	mw     http.Handler
+	Config 		*Config
+	config 		*api.Config
+	mw     		http.Handler
+	CertChain *x509.Certificate
 }
 
 func copyHeader(dst, src http.Header) {
@@ -37,21 +39,7 @@ func NewProxyFrom(c *api.Config) *Proxy {
 	p := NewProxy()
 	p.config = c
 	return p
-	
-}
 
-// Use chains all middlewares and applies a context to the request flow
-func (p *Proxy) use(mw ...MiddlewareFunc) MiddlewareFunc {
-	return func(final http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			last := final
-			for i := len(mw) - 1; i >= 0; i-- {
-				last = mw[i](last)
-			}
-			ctx := context.WithValue(r.Context(), "config", p.Config)
-			last(w, r.WithContext(ctx))
-		}
-	}
 }
 
 // Use chains all middlewares and applies a context to the request flow
@@ -62,7 +50,8 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 			for i := len(mw) - 1; i >= 0; i-- {
 				last = mw[i](last)
 			}
-			last.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), "signer", p.CertChain)
+			last.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
@@ -119,7 +108,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	target := r.Context().Value("Context").(string)
 	opts := p.getOptions(target)
-	
+
 	if opts == nil {
 		http.Error(w, fmt.Sprintf("Unable to resolve context %s", target), http.StatusInternalServerError)
 		return
@@ -176,7 +165,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 
 	target := r.Context().Value("Context").(string)
 	opts := p.getOptions(target)
-	
+
 	if opts == nil {
 		log.Printf("Unable to resolve target '%s'", target)
 		http.Error(w, "", http.StatusInternalServerError)

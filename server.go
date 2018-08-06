@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"github.com/go-openapi/swag"
-	"github.com/spf13/pflag"
 	"github.com/tylerb/graceful"
 	"io/ioutil"
 	"log"
@@ -22,88 +21,35 @@ const (
 	schemeUnix  = "unix"
 )
 
-var (
-	enabledListeners []string
-	cleanupTimout    time.Duration
-	maxHeaderSize    uint64
-
-	socketPath string
-
-	host         string
-	port         int
-	listenLimit  int
-	keepAlive    time.Duration
-	readTimeout  time.Duration
-	writeTimeout time.Duration
-
-	tlsHost           string
-	tlsPort           int
-	tlsListenLimit    int
-	tlsKeepAlive      time.Duration
-	tlsReadTimeout    time.Duration
-	tlsWriteTimeout   time.Duration
-	tlsCertificate    string
-	tlsCertificateKey string
-	tlsCACertificate  string
-)
-
 // Server for the multikube API
 type Server struct {
-	EnabledListeners []string
-	CleanupTimeout   time.Duration
-	MaxHeaderSize    uint64
-
-	SocketPath    string
-	domainSocketL net.Listener
-
-	Host         string
-	Port         int
-	ListenLimit  int
-	KeepAlive    time.Duration
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	httpServerL  net.Listener
-
+	Host              string
+	Port              int
+	ListenLimit       int
 	TLSHost           string
 	TLSPort           int
+	TLSListenLimit    int
 	TLSCertificate    string
 	TLSCertificateKey string
 	TLSCACertificate  string
-	TLSListenLimit    int
+	SocketPath        string
+	KeepAlive         time.Duration
+	ReadTimeout       time.Duration
+	WriteTimeout      time.Duration
 	TLSKeepAlive      time.Duration
 	TLSReadTimeout    time.Duration
 	TLSWriteTimeout   time.Duration
-	httpsServerL      net.Listener
+	CleanupTimeout    time.Duration
+	MaxHeaderSize     uint64
+	EnabledListeners  []string
+	Handler           http.Handler
+	Shutdown          chan struct{}
 
-	handler      http.Handler
-	hasListeners bool
-	shutdown     chan struct{}
-	shuttingDown int32
-}
-
-func init() {
-	pflag.StringSliceVar(&enabledListeners, "scheme", []string{}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
-	pflag.DurationVar(&cleanupTimout, "cleanup-timeout", 10*time.Second, "grace period for which to wait before shutting down the server")
-	pflag.Uint64Var(&maxHeaderSize, "max-header-size", 1000000, "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
-
-	pflag.StringVar(&socketPath, "socket-path", "/tmp/multikube.sock", "the unix socket to listen on")
-
-	pflag.StringVar(&host, "host", "localhost", "the IP to listen on")
-	pflag.IntVar(&port, "port", 443, "the port to listen on for insecure connections, defaults to 443")
-	pflag.IntVar(&listenLimit, "listen-limit", 0, "limit the number of outstanding requests")
-	pflag.DurationVar(&keepAlive, "keep-alive", 3*time.Minute, "sets the TCP keep-alive timeouts on accepted connections. It prunes dead TCP connections ( e.g. closing laptop mid-download)")
-	pflag.DurationVar(&readTimeout, "read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
-	pflag.DurationVar(&writeTimeout, "write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
-
-	pflag.StringVar(&tlsHost, "tls-host", "localhost", "the IP to listen on")
-	pflag.IntVar(&tlsPort, "tls-port", 0, "the port to listen on for secure connections, defaults to a random value")
-	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
-	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
-	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
-	pflag.IntVar(&tlsListenLimit, "tls-listen-limit", 0, "limit the number of outstanding requests")
-	pflag.DurationVar(&tlsKeepAlive, "tls-keep-alive", 3*time.Minute, "sets the TCP keep-alive timeouts on accepted connections. It prunes dead TCP connections ( e.g. closing laptop mid-download)")
-	pflag.DurationVar(&tlsReadTimeout, "tls-read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
-	pflag.DurationVar(&tlsWriteTimeout, "tls-write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
+	httpServerL   net.Listener
+	httpsServerL  net.Listener
+	domainSocketL net.Listener
+	hasListeners  bool
+	shuttingDown  int32
 }
 
 func (s *Server) hasScheme(scheme string) bool {
@@ -113,35 +59,6 @@ func (s *Server) hasScheme(scheme string) bool {
 		}
 	}
 	return false
-}
-
-// NewServer creates a new multikube server
-func NewServer(h http.Handler) *Server {
-	s := new(Server)
-
-	s.EnabledListeners = enabledListeners
-	s.CleanupTimeout = cleanupTimout
-	s.MaxHeaderSize = maxHeaderSize
-	s.SocketPath = socketPath
-	s.Host = host
-	s.Port = port
-	s.ListenLimit = listenLimit
-	s.KeepAlive = keepAlive
-	s.ReadTimeout = readTimeout
-	s.WriteTimeout = writeTimeout
-	s.TLSHost = tlsHost
-	s.TLSPort = tlsPort
-	s.TLSCertificate = tlsCertificate
-	s.TLSCertificateKey = tlsCertificateKey
-	s.TLSCACertificate = tlsCACertificate
-	s.TLSListenLimit = tlsListenLimit
-	s.TLSKeepAlive = tlsKeepAlive
-	s.TLSReadTimeout = tlsReadTimeout
-	s.TLSWriteTimeout = tlsWriteTimeout
-	s.shutdown = make(chan struct{})
-	s.handler = h
-
-	return s
 }
 
 // Listen configures server listeners
@@ -234,7 +151,7 @@ func (s *Server) Serve() error {
 			domainSocket.Timeout = s.CleanupTimeout
 		}
 
-		domainSocket.Handler = s.handler
+		domainSocket.Handler = s.Handler
 
 		wg.Add(2)
 		log.Printf("Serving multikube at unix://%s", s.SocketPath)
@@ -263,7 +180,7 @@ func (s *Server) Serve() error {
 			httpServer.Timeout = s.CleanupTimeout
 		}
 
-		httpServer.Handler = s.handler
+		httpServer.Handler = s.Handler
 
 		wg.Add(2)
 		log.Printf("Serving multikube at http://%s", s.httpServerL.Addr())
@@ -293,7 +210,7 @@ func (s *Server) Serve() error {
 			httpsServer.Timeout = s.CleanupTimeout
 		}
 
-		httpsServer.Handler = s.handler
+		httpsServer.Handler = s.Handler
 
 		// Inspired by https://blog.bracebin.com/achieving-perfect-ssl-labs-score-with-go
 		httpsServer.TLSConfig = &tls.Config{
@@ -371,7 +288,7 @@ func (s *Server) handleShutdown(wg *sync.WaitGroup, server *graceful.Server) {
 	defer wg.Done()
 	for {
 		select {
-		case <-s.shutdown:
+		case <-s.Shutdown:
 			atomic.AddInt32(&s.shuttingDown, 1)
 			server.Stop(s.CleanupTimeout)
 			<-server.StopChan()

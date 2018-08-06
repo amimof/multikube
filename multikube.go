@@ -1,15 +1,15 @@
 package multikube
 
 import (
-	"os"
-	"fmt"
-	"errors"
-	"io/ioutil"
 	"encoding/json"
-	"gopkg.in/yaml.v2"
+	"errors"
+	"fmt"
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"os"
 )
 
 func handleResponse(m *v1.Status) error {
@@ -42,12 +42,12 @@ func exists(path string) bool {
 func ConfigFrom(p string) (api.Config, error) {
 	b, err := ioutil.ReadFile(p)
 	var c api.Config
-	
+
 	if err != nil {
 		return c, err
 	}
 	fmt.Printf("%s", string(b))
-	
+
 	err = yaml.Unmarshal(b, &c)
 	if err != nil {
 		return c, err

@@ -3,8 +3,8 @@ package multikube_test
 import (
 	"gitlab.com/amimof/multikube"
 	"io/ioutil"
-	"net/http/httptest"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -14,14 +14,14 @@ func TestProxyNewProxy(t *testing.T) {
 	t.Logf("Config: %+v", p.Config)
 }
 
-// Test the logging middleware. Should print output to the console 
+// Test the logging middleware. Should print output to the console
 func TestProxyLoggingMiddleware(t *testing.T) {
 	p := multikube.NewProxy()
 	m := p.Use(multikube.WithLogging)
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/", nil)
 	w := httptest.NewRecorder()
-	
+
 	m(p).ServeHTTP(w, req)
 
 }
@@ -44,7 +44,7 @@ func TestProxyGetResource(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/", nil)
 	w := httptest.NewRecorder()
-	
+
 	m(p).ServeHTTP(w, req)
 
 	resp := w.Result()
@@ -65,7 +65,7 @@ func TestProxyWatchResource(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/namespaces?watch=true", nil)
 	w := httptest.NewRecorder()
-	
+
 	m(p).ServeHTTP(w, req)
 
 	resp := w.Result()
