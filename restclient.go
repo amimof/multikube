@@ -21,6 +21,7 @@ type Request struct {
 	resourceType string
 	resourceName string
 	namespace    string
+	impersonate  string
 	headers      http.Header
 	body         io.Reader
 	interf       interface{}
@@ -108,6 +109,11 @@ func (r *Request) Headers(h http.Header) *Request {
 	return r
 }
 
+func (r *Request) Impersonate(n string) *Request {
+	r.impersonate = n
+	return r
+}
+
 func (r *Request) Header(key string, values ...string) *Request {
 	if r.headers == nil {
 		r.headers = http.Header{}
@@ -168,6 +174,10 @@ func (r *Request) Do() (*http.Response, error) {
 	}
 	req.Close = false
 	req.Header = r.headers
+
+ 	if r.impersonate != "" {
+		 req.Header.Set("Impersonate-User", r.impersonate)
+	 }
 
 	res, err := r.client.Do(req)
 	if err != nil {

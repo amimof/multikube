@@ -23,6 +23,7 @@ const (
 
 // Server for the multikube API
 type Server struct {
+	EnabledListeners  []string
 	Host              string
 	Port              int
 	ListenLimit       int
@@ -41,15 +42,39 @@ type Server struct {
 	TLSWriteTimeout   time.Duration
 	CleanupTimeout    time.Duration
 	MaxHeaderSize     uint64
-	EnabledListeners  []string
 	Handler           http.Handler
-	Shutdown          chan struct{}
+	
+	shutdown          chan struct{}
+	httpServerL   		net.Listener
+	httpsServerL  		net.Listener
+	domainSocketL 		net.Listener
+	hasListeners  		bool
+	shuttingDown  		int32
+}
 
-	httpServerL   net.Listener
-	httpsServerL  net.Listener
-	domainSocketL net.Listener
-	hasListeners  bool
-	shuttingDown  int32
+// NewServer returns a server with default configuration
+func NewServer() *Server {
+	return &Server{
+		EnabledListeners:  []string{"https"},
+		CleanupTimeout:    10*time.Second,
+		MaxHeaderSize:     1000000,
+		SocketPath:        "/var/run/multikube.sock",
+		Host:              "127.0.0.1",
+		Port:              8080,
+		ListenLimit:       0,
+		KeepAlive:         3*time.Minute,
+		ReadTimeout:       30*time.Second,
+		WriteTimeout:      30*time.Second,
+		TLSHost:           "127.0.0.1",
+		TLSPort:           8443,
+		TLSCertificate:    "",
+		TLSCertificateKey: "",
+		TLSCACertificate:  "",
+		TLSListenLimit:    0,
+		TLSKeepAlive:      3*time.Minute,
+		TLSReadTimeout:    30*time.Second,
+		TLSWriteTimeout:   30*time.Second,
+	}
 }
 
 func (s *Server) hasScheme(scheme string) bool {
@@ -63,6 +88,11 @@ func (s *Server) hasScheme(scheme string) bool {
 
 // Listen configures server listeners
 func (s *Server) Listen() error {
+
+	if s.shutdown == nil {
+		s.shutdown = make(chan struct{})
+	}
+
 	if s.hasListeners { // already done this
 		return nil
 	}
@@ -288,7 +318,7 @@ func (s *Server) handleShutdown(wg *sync.WaitGroup, server *graceful.Server) {
 	defer wg.Done()
 	for {
 		select {
-		case <-s.Shutdown:
+		case <-s.shutdown:
 			atomic.AddInt32(&s.shuttingDown, 1)
 			server.Stop(s.CleanupTimeout)
 			<-server.StopChan()
