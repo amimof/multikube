@@ -9,28 +9,12 @@ COMMIT=$(shell git rev-parse HEAD)
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 GITHUB_USERNAME=amimof
 BUILD_DIR=${GOPATH}/src/gitlab.com/${GITHUB_USERNAME}/${BINARY}
-
+PKG_LIST=$$(go list ./... | grep -v /vendor/)
 # Setup the -ldflags option for go build here, interpolate the variable values
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH}"
 
 # Build the project
-all: test clean fmt linux darwin windows
-
-linux: 
-	go get ./cmd/multikube/... ; \
-	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-linux-${GOARCH} ./cmd/multikube/
-
-rpi: 
-	go get ./cmd/multikube/... ; \
-	GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ${BINARY}-linux-arm ./cmd/multikube/
-
-darwin:
-	go get ./cmd/multikube/... ; \
-	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-darwin-${GOARCH} ./cmd/multikube/
-
-windows:
-	go get ./cmd/multikube/... ; \
-	GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BINARY}-windows-${GOARCH}.exe ./cmd/multikube/
+all: build
 
 test:
 	cd ${BUILD_DIR}; \
@@ -39,10 +23,27 @@ test:
 
 fmt:
 	cd ${BUILD_DIR}; \
-	go fmt $$(go list ./... | grep -v /vendor/) ; \
+	go fmt ${PKG_LIST} ; \
 	cd - >/dev/null
 
+dep:
+	go get -v -d ./cmd/multikube/... ;
+
+linux: dep
+	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-linux-${GOARCH} ./cmd/multikube/
+
+rpi: dep
+	GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-linux-arm ./cmd/multikube/
+
+darwin: dep
+	GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-darwin-${GOARCH} ./cmd/multikube/
+
+windows: dep
+	GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-windows-${GOARCH}.exe ./cmd/multikube/
+
+build: linux darwin rpi windows
+
 clean:
-	-rm -f ${BINARY}-*
+	-rm -rf ${BUILD_DIR}/out/
 
 .PHONY: linux darwin windows test fmt clean

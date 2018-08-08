@@ -1,0 +1,20 @@
+image: golang:1.10
+
+stages:
+  - test
+  - build
+
+unit_tests:
+  stage: test
+  script:
+    - make test
+
+format_code:
+  stage: test
+  script:
+    - make fmt
+
+build:
+  stage: build
+  script:
+    - make 
