@@ -1,0 +1,34 @@
+image: golang:1.10
+
+cache:
+  paths:
+    - /apt-cache
+    - /go/src/github.com
+    - /go/src/golang.org
+    - /go/src/google.golang.org
+    - /go/src/gopkg.in
+
+before_script:
+  - mkdir -p /go/src/gitlab.com/amimof /go/src/_/builds
+  - cp -r $CI_PROJECT_DIR /go/src/gitlab.com/amimof/multikube
+  - ln -s /go/src/gitlab.com/amimof /go/src/_/builds/amimof
+  - make dep
+
+stages:
+  - test
+  - build
+
+# unit_tests:
+#   stage: test
+#   script:
+#     - make test
+
+format_code:
+  stage: test
+  script:
+    - make fmt
+
+build:
+  stage: build
+  script:
+    - make 

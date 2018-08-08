@@ -1,13 +1,11 @@
-
-# Won't work as long project exists in private Git-repo
-
-FROM golang:1.10 as build
+FROM golang:1.10-alpine
 LABEL maintaner="@amimof (amir.mofasser@gmail.com)"
-WORKDIR /go/src/app
-COPY . .
+COPY . $GOPATH/src/gitlab.com/amimof/multikube
+WORKDIR $GOPATH/src/gitlab.com/amimof/multikube
 RUN set -x \
-&&  make linux 
-
-FROM scratch
-COPY --from=build /go/src/app/multikube-linux-amd64 /go/bin/multikube
+&&  apk add --update --virtual .build-dep make git gcc \
+&&  make linux \
+&&  mv out/multikube-linux-amd64 /go/bin/multikube \
+&&  apk del .build-dep \
+&&  rm -rf /var/cache/apk
 ENTRYPOINT [ "/go/bin/multikube" ]
