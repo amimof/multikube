@@ -134,13 +134,14 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Execute!
 	res, err := req.Do()
-	defer res.Body.Close()
-
+	
 	// Catch any unexpected errors
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	defer res.Body.Close()
 
 	// Copy all response headers
 	copyHeader(w.Header(), res.Header)
