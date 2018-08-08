@@ -9,6 +9,8 @@ Multikube is a multi-cluster API router for Kubernetes. It's responsible of rout
 * Request interceptors allows for manipulating Kubernetes objects sent arount
 * Audit logs 
 * No database or dependencies makes scaling multikube a breeze 
+* Configured with a kubeconfig from file or remote http server
+* Supports JTI revocation lists in order to prevent rogue tokens
 
 A typical multi-cluster Kubernetes topology
 [PICTURE]

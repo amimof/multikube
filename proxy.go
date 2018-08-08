@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 	"log"
 	"net"
+	"net/url"
 	"net/http"
 	"net/http/httputil"
 )
@@ -106,6 +107,7 @@ func (p *Proxy) getOptions(n string) *Options {
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
+	subject := r.Context().Value("Subject").(string)
 	target := r.Context().Value("Context").(string)
 	opts := p.getOptions(target)
 
@@ -127,7 +129,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Body(r.Body).
 			Path(r.URL.Path).
 			Query(r.URL.RawQuery).
-			Headers(r.Header)
+			Headers(r.Header).
+			Impersonate(subject)
 
 	// Execute!
 	res, err := req.Do()
@@ -167,8 +170,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 	opts := p.getOptions(target)
 
 	if opts == nil {
-		log.Printf("Unable to resolve target '%s'", target)
-		http.Error(w, "", http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Unable to resolve context %s", target), http.StatusInternalServerError)
 		return
 	}
 
@@ -180,7 +182,13 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst_conn, err := tls.Dial("tcp", "192.168.99.100:8443", req.TLSConfig)
+	u, err := url.Parse(opts.Server)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return	
+	}
+
+	dst_conn, err := tls.Dial("tcp", u.Host, req.TLSConfig)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return

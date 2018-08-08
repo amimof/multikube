@@ -15,7 +15,7 @@ import (
 
 var (
 	enabledListeners []string
-	cleanupTimout    time.Duration
+	cleanupTimeout   time.Duration
 	maxHeaderSize    uint64
 
 	socketPath string
@@ -42,7 +42,7 @@ var (
 )
 
 func init() {
-	pflag.StringVar(&socketPath, "socket-path", "/tmp/multikube.sock", "the unix socket to listen on")
+	pflag.StringVar(&socketPath, "socket-path", "/var/run/multikube.sock", "the unix socket to listen on")
 	pflag.StringVar(&host, "host", "localhost", "the IP to listen on")
 	pflag.StringVar(&tlsHost, "tls-host", "localhost", "the IP to listen on")
 	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
@@ -58,7 +58,7 @@ func init() {
 	pflag.IntVar(&tlsListenLimit, "tls-listen-limit", 0, "limit the number of outstanding requests")
 	pflag.Uint64Var(&maxHeaderSize, "max-header-size", 1000000, "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
 
-	pflag.DurationVar(&cleanupTimout, "cleanup-timeout", 10*time.Second, "grace period for which to wait before shutting down the server")
+	pflag.DurationVar(&cleanupTimeout, "cleanup-timeout", 10*time.Second, "grace period for which to wait before shutting down the server")
 	pflag.DurationVar(&keepAlive, "keep-alive", 3*time.Minute, "sets the TCP keep-alive timeouts on accepted connections. It prunes dead TCP connections ( e.g. closing laptop mid-download)")
 	pflag.DurationVar(&readTimeout, "read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
 	pflag.DurationVar(&writeTimeout, "write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
@@ -118,7 +118,7 @@ func main() {
 	// Create the server
 	s := &multikube.Server{
 		EnabledListeners:  enabledListeners,
-		CleanupTimeout:    cleanupTimout,
+		CleanupTimeout:    cleanupTimeout,
 		MaxHeaderSize:     maxHeaderSize,
 		SocketPath:        socketPath,
 		Host:              host,
@@ -136,7 +136,6 @@ func main() {
 		TLSKeepAlive:      tlsKeepAlive,
 		TLSReadTimeout:    tlsReadTimeout,
 		TLSWriteTimeout:   tlsWriteTimeout,
-		Shutdown:          make(chan struct{}),
 		Handler:           m(p),
 	}
 
