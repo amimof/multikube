@@ -1,5 +1,19 @@
 image: golang:1.10
 
+cache:
+  paths:
+    - /apt-cache
+    - /go/src/github.com
+    - /go/src/golang.org
+    - /go/src/google.golang.org
+    - /go/src/gopkg.in
+
+before_script:
+  - mkdir -p /go/src/gitlab.com/multikube /go/src/_/builds
+  - cp -r $CI_PROJECT_DIR /go/src/gitlab.com/multikube/pantomath
+  - ln -s /go/src/gitlab.com/multikube /go/src/_/builds/multikube
+  - make dep
+
 stages:
   - test
   - build
