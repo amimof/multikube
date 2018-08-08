@@ -52,19 +52,27 @@ type Server struct {
 	shuttingDown  		int32
 }
 
-// NewServer returns a server with default configuration
+// NewServer returns a default non-tls server
 func NewServer() *Server {
 	return &Server{
-		EnabledListeners:  []string{"https"},
+		EnabledListeners:  []string{"http"},
 		CleanupTimeout:    10*time.Second,
 		MaxHeaderSize:     1000000,
-		SocketPath:        "/var/run/multikube.sock",
 		Host:              "127.0.0.1",
 		Port:              8080,
 		ListenLimit:       0,
 		KeepAlive:         3*time.Minute,
 		ReadTimeout:       30*time.Second,
 		WriteTimeout:      30*time.Second,
+	}
+}
+
+// NewServerTLS returns a default TLS enabled server
+func NewServerTLS() *Server {
+	return &Server{
+		EnabledListeners:  []string{"https"},
+		CleanupTimeout:    10*time.Second,
+		MaxHeaderSize:     1000000,
 		TLSHost:           "127.0.0.1",
 		TLSPort:           8443,
 		TLSCertificate:    "",
