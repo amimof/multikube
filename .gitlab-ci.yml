@@ -9,9 +9,9 @@ cache:
     - /go/src/gopkg.in
 
 before_script:
-  - mkdir -p /go/src/gitlab.com/multikube /go/src/_/builds
-  - cp -r $CI_PROJECT_DIR /go/src/gitlab.com/multikube/pantomath
-  - ln -s /go/src/gitlab.com/multikube /go/src/_/builds/multikube
+  - mkdir -p /go/src/gitlab.com/amimof /go/src/_/builds
+  - cp -r $CI_PROJECT_DIR /go/src/gitlab.com/amimof/multikube
+  - ln -s /go/src/gitlab.com/amimof /go/src/_/builds/amimof
   - make dep
 
 stages:
