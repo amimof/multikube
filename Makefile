@@ -27,7 +27,7 @@ fmt:
 	cd - >/dev/null
 
 dep:
-	go get -v -d ./cmd/multikube/... ;
+	go get ./cmd/multikube/... ;
 
 linux: dep
 	GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-linux-${GOARCH} ./cmd/multikube/

@@ -4,10 +4,10 @@ stages:
   - test
   - build
 
-unit_tests:
-  stage: test
-  script:
-    - make test
+# unit_tests:
+#   stage: test
+#   script:
+#     - make test
 
 format_code:
   stage: test
