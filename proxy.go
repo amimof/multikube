@@ -107,12 +107,24 @@ func (p *Proxy) getOptions(n string) *Options {
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	subject := r.Context().Value("Subject").(string)
-	target := r.Context().Value("Context").(string)
-	opts := p.getOptions(target)
+	// Make sure Subject is set
+	sub, ok := r.Context().Value("Subject").(string)
+	if !ok || sub == "" {
+		http.Error(w, fmt.Sprintf("No route! sub: '%s'", sub), http.StatusInternalServerError)
+		return
+	}
 
+	// Make sure Context is set
+	ctx, ok := r.Context().Value("Context").(string)
+	if !ok || ctx == "" {
+		http.Error(w, fmt.Sprintf("No route! ctx: '%s'", ctx), http.StatusInternalServerError)
+		return
+	}
+
+	// Get a kubeconfig context 
+	opts := p.getOptions(ctx)
 	if opts == nil {
-		http.Error(w, fmt.Sprintf("Unable to resolve context %s", target), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("No route! sub: '%s' ctx: '%s'", sub, ctx), http.StatusInternalServerError)
 		return
 	}
 
@@ -130,7 +142,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Path(r.URL.Path).
 			Query(r.URL.RawQuery).
 			Headers(r.Header).
-			Impersonate(subject)
+			Impersonate(sub)
 
 	// Execute!
 	res, err := req.Do()

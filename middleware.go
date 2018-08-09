@@ -53,8 +53,18 @@ func WithValidate(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), "Context", t.Claims().Get("ctx").(string))
-		ctx = context.WithValue(ctx, "Subject", t.Claims().Get("sub").(string))
+		c, ok := t.Claims().Get("ctx").(string)
+		if !ok {
+			c = ""
+		}
+
+		s, ok := t.Claims().Get("sub").(string)
+		if !ok {
+			s = ""
+		}
+
+		ctx := context.WithValue(r.Context(), "Context", c)
+		ctx = context.WithValue(ctx, "Subject", s)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 
