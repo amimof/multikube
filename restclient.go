@@ -190,6 +190,14 @@ func (r *Request) Do() (*http.Response, error) {
 func NewRequest(options *Options) *Request {
 
 	r := &Request{}
+
+	base, err := url.Parse(options.Server)
+	if err != nil {
+		r.err = err
+		return r
+	}
+	r.url = base
+
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.InsecureSkipTLSVerify,
 		NextProtos:         []string{"http/1.1"},
@@ -246,13 +254,6 @@ func NewRequest(options *Options) *Request {
 		Transport: tr,
 		Timeout:   0,
 	}
-
-	base, err := url.Parse(options.Server)
-	if err != nil {
-		r.err = newErr(err.Error())
-		return r
-	}
-	r.url = base
 
 	return r
 
