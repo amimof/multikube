@@ -43,27 +43,27 @@ type Server struct {
 	CleanupTimeout    time.Duration
 	MaxHeaderSize     uint64
 	Handler           http.Handler
-	
-	shutdown          chan struct{}
-	httpServerL   		net.Listener
-	httpsServerL  		net.Listener
-	domainSocketL 		net.Listener
-	hasListeners  		bool
-	shuttingDown  		int32
+
+	shutdown      chan struct{}
+	httpServerL   net.Listener
+	httpsServerL  net.Listener
+	domainSocketL net.Listener
+	hasListeners  bool
+	shuttingDown  int32
 }
 
 // NewServer returns a default non-tls server
 func NewServer() *Server {
 	return &Server{
-		EnabledListeners:  []string{"http"},
-		CleanupTimeout:    10*time.Second,
-		MaxHeaderSize:     1000000,
-		Host:              "127.0.0.1",
-		Port:              8080,
-		ListenLimit:       0,
-		KeepAlive:         3*time.Minute,
-		ReadTimeout:       30*time.Second,
-		WriteTimeout:      30*time.Second,
+		EnabledListeners: []string{"http"},
+		CleanupTimeout:   10 * time.Second,
+		MaxHeaderSize:    1000000,
+		Host:             "127.0.0.1",
+		Port:             8080,
+		ListenLimit:      0,
+		KeepAlive:        3 * time.Minute,
+		ReadTimeout:      30 * time.Second,
+		WriteTimeout:     30 * time.Second,
 	}
 }
 
@@ -71,7 +71,7 @@ func NewServer() *Server {
 func NewServerTLS() *Server {
 	return &Server{
 		EnabledListeners:  []string{"https"},
-		CleanupTimeout:    10*time.Second,
+		CleanupTimeout:    10 * time.Second,
 		MaxHeaderSize:     1000000,
 		TLSHost:           "127.0.0.1",
 		TLSPort:           8443,
@@ -79,9 +79,9 @@ func NewServerTLS() *Server {
 		TLSCertificateKey: "",
 		TLSCACertificate:  "",
 		TLSListenLimit:    0,
-		TLSKeepAlive:      3*time.Minute,
-		TLSReadTimeout:    30*time.Second,
-		TLSWriteTimeout:   30*time.Second,
+		TLSKeepAlive:      3 * time.Minute,
+		TLSReadTimeout:    30 * time.Second,
+		TLSWriteTimeout:   30 * time.Second,
 	}
 }
 

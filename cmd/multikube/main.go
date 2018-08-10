@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"github.com/spf13/pflag"
 	"gitlab.com/amimof/multikube"
+	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"os"
@@ -93,7 +93,7 @@ func main() {
 
 	// Create the proxy
 	p := multikube.NewProxyFrom(c)
-	
+
 	// Read provided signer cert file
 	if tlsSignerCertificate != "" {
 		signer, err := ioutil.ReadFile(tlsSignerCertificate)

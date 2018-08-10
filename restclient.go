@@ -3,6 +3,7 @@ package multikube
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -26,6 +27,7 @@ type Request struct {
 	body         io.Reader
 	interf       interface{}
 	err          error
+	Opts         *Options
 	TLSConfig    *tls.Config
 }
 
@@ -172,12 +174,16 @@ func (r *Request) Do() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Close = false
+	req.Close = true
 	req.Header = r.headers
 
- 	if r.impersonate != "" {
-		 req.Header.Set("Impersonate-User", r.impersonate)
-	 }
+	// Set any headers that we might want
+	if r.impersonate != "" {
+		req.Header.Set("Impersonate-User", r.impersonate)
+	}
+	if r.Opts.Token != "" {
+		r.headers.Set("Authorization", fmt.Sprintf("Bearer %s", r.Opts.Token))
+	}
 
 	res, err := r.client.Do(req)
 	if err != nil {
@@ -187,9 +193,12 @@ func (r *Request) Do() (*http.Response, error) {
 	return res, nil
 }
 
+// NewRequest builds an http request to be used for execution. It expects an Option interface.
+// Currently NewRequest creates a new http.Transport for each request making connection non-reusable.
+// This must change in the future!
 func NewRequest(options *Options) *Request {
 
-	r := &Request{}
+	r := &Request{Opts: options}
 
 	base, err := url.Parse(options.Server)
 	if err != nil {
@@ -205,7 +214,6 @@ func NewRequest(options *Options) *Request {
 
 	// Load CA from file
 	if options.CertificateAuthority != "" {
-
 		caCert, err := ioutil.ReadFile(options.CertificateAuthority)
 		if err != nil {
 			r.err = newErr(err.Error())
@@ -215,7 +223,6 @@ func NewRequest(options *Options) *Request {
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
 		tlsConfig.RootCAs = caCertPool
-
 	}
 
 	// Load CA from block

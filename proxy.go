@@ -8,15 +8,15 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 	"log"
 	"net"
-	"net/url"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 )
 
 type Proxy struct {
-	Config 		*Config
-	config 		*api.Config
-	mw     		http.Handler
+	Config    *Config
+	config    *api.Config
+	mw        http.Handler
 	CertChain *x509.Certificate
 }
 
@@ -121,7 +121,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get a kubeconfig context 
+	// Get a kubeconfig context
 	opts := p.getOptions(ctx)
 	if opts == nil {
 		http.Error(w, fmt.Sprintf("No route! sub: '%s' ctx: '%s'", sub, ctx), http.StatusInternalServerError)
@@ -146,7 +146,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Execute!
 	res, err := req.Do()
-	
+
 	// Catch any unexpected errors
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -198,7 +198,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 	u, err := url.Parse(opts.Server)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return	
+		return
 	}
 
 	dst_conn, err := tls.Dial("tcp", u.Host, req.TLSConfig)
