@@ -14,10 +14,10 @@ import (
 )
 
 type Proxy struct {
-	Config    *Config
-	config    *api.Config
-	mw        http.Handler
-	CertChain *x509.Certificate
+	config     *api.Config
+	mw         http.Handler
+	CertChain  *x509.Certificate
+	transports map[string]*http.Transport
 }
 
 func copyHeader(dst, src http.Header) {
@@ -31,16 +31,14 @@ func copyHeader(dst, src http.Header) {
 // NewProxy crerates a new Proxy and initialises router and configuration
 func NewProxy() *Proxy {
 	return &Proxy{
-		Config: &Config{},
+		transports: make(map[string]*http.Transport),
 	}
 }
 
 func NewProxyFrom(c *api.Config) *Proxy {
-
 	p := NewProxy()
 	p.config = c
 	return p
-
 }
 
 // Use chains all middlewares and applies a context to the request flow
@@ -143,6 +141,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Query(r.URL.RawQuery).
 			Headers(r.Header).
 			Impersonate(sub)
+
+	// Remember the transport created by the restclient so that we can re-use the connection
+	if p.transports[ctx] == nil {
+		p.transports[ctx] = req.Transport
+	} else {
+		req.Transport = p.transports[ctx]
+	}
 
 	// Execute!
 	res, err := req.Do()
