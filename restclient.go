@@ -3,6 +3,7 @@ package multikube
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -12,7 +13,11 @@ import (
 	"strings"
 )
 
+// Request is a simple type used to compose inidivudal requests to an HTTP server.
 type Request struct {
+	Opts         *Options
+	Transport		 *http.Transport
+	TLSConfig    *tls.Config
 	client       *http.Client
 	url          *url.URL
 	query        string
@@ -26,94 +31,117 @@ type Request struct {
 	body         io.Reader
 	interf       interface{}
 	err          error
-	TLSConfig    *tls.Config
 }
 
+// Options embeds Cluster and AuthInfo from https://godoc.org/k8s.io/client-go/tools/clientcmd/api
+// so that fields and methods are easily accessible from one type.
 type Options struct {
 	*api.Cluster
 	*api.AuthInfo
 }
 
+// Get method sets the method on a request to GET. Get will invoke Method(http.MethodGet).
 func (r *Request) Get() *Request {
 	r.Method(http.MethodGet)
 	return r
 }
 
+// Post method sets the method on a request to POST. Post will invoke Method(http.MethodPost).
 func (r *Request) Post() *Request {
 	r.Method(http.MethodPost)
 	return r
 }
 
+// Put method sets the method on a request to PUT. Put will invoke Method(http.MethodPut).
 func (r *Request) Put() *Request {
 	r.Method(http.MethodPut)
 	return r
 }
 
+// Delete method sets the method on a request to DELETE. Delete will invoke Method(http.MethodDelete).
 func (r *Request) Delete() *Request {
 	r.Method(http.MethodDelete)
 	return r
 }
 
+// Options method sets the method on a request to OPTIONS. Options will invoke Method(http.MethodOptions),
 func (r *Request) Options() *Request {
 	r.Method(http.MethodOptions)
 	return r
 }
 
+// Method methdo sets the method on a request.
 func (r *Request) Method(m string) *Request {
 	r.verb = m
 	return r
 }
 
+// Resource sets the Kubernetes resource to be used when building the URI. For example
+// setting the resource to 'Pod' will create an uri like /api/v1/namespaces/pods.
 func (r *Request) Resource(res string) *Request {
 	r.resourceType = res
 	return r
 }
 
+// Name sets the name of the Kubernetes resource to be used when building the URI. For example
+// setting the name to 'app-pod-1' will create an uri like /api/v1/namespaces/pods/app-pod-1.
 func (r *Request) Name(n string) *Request {
 	r.resourceName = n
 	return r
 }
 
+// Namespace sets the Kubernetes namespace to be used when building the URI. For example
+// setting the namespace to 'default' will create an uri like /api/v1/namespaces/default.
 func (r *Request) Namespace(ns string) *Request {
 	r.namespace = ns
 	return r
 }
 
+// ApiVer sets the api version to be used when building the URI for the request.
+// Defaults to 'v1' if not set.
 func (r *Request) ApiVer(v string) *Request {
 	r.apiVersion = v
 	return r
 }
 
+// Into sets the interface in which the returning data will be marshaled into.
 func (r *Request) Into(obj interface{}) *Request {
 	r.interf = obj
 	return r
 }
 
+// Path sets the raw URI path later used by the request.
 func (r *Request) Path(p string) *Request {
 	r.url.Path = p
 	return r
 }
 
+// Query sets the raw query path to be used when performing the request
 func (r *Request) Query(q string) *Request {
 	r.url.RawQuery = q
 	return r
 }
 
+// Body sets the request body of the request beeing made.
 func (r *Request) Body(b io.Reader) *Request {
 	r.body = b
 	return r
 }
 
+// Headers overrides the entire headers field of the http request.
+// Use Header() method to set individual headers.
 func (r *Request) Headers(h http.Header) *Request {
 	r.headers = h
 	return r
 }
 
+// Impersonat sets the Impersonate-User HTTP header for the request
 func (r *Request) Impersonate(n string) *Request {
 	r.impersonate = n
 	return r
 }
 
+// Header sets one header and replacing any headers with equal key
 func (r *Request) Header(key string, values ...string) *Request {
 	if r.headers == nil {
 		r.headers = http.Header{}
@@ -125,7 +153,7 @@ func (r *Request) Header(key string, values ...string) *Request {
 	return r
 }
 
-// URL returns the current working URL.
+// URL composes a complete URL and return an url.URL then used by the request
 func (r *Request) URL() *url.URL {
 
 	p := "/api/v1/"
@@ -158,7 +186,8 @@ func (r *Request) URL() *url.URL {
 	return r.url
 }
 
-// Doo executes the request and returns an http.Response. The caller is responible of closing the Body
+// Do executes the request and returns an http.Response.
+// The caller is responible of closing the Body.
 func (r *Request) Do() (*http.Response, error) {
 
 	// Return any error if any has been generated along the way before continuing
@@ -172,12 +201,16 @@ func (r *Request) Do() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Close = false
+	req.Close = true
 	req.Header = r.headers
 
- 	if r.impersonate != "" {
-		 req.Header.Set("Impersonate-User", r.impersonate)
-	 }
+	// Set any headers that we might want
+	if r.impersonate != "" {
+		req.Header.Set("Impersonate-User", r.impersonate)
+	}
+	if r.Opts.Token != "" {
+		r.headers.Set("Authorization", fmt.Sprintf("Bearer %s", r.Opts.Token))
+	}
 
 	res, err := r.client.Do(req)
 	if err != nil {
@@ -187,9 +220,13 @@ func (r *Request) Do() (*http.Response, error) {
 	return res, nil
 }
 
+// NewRequest builds an http request to be used for execution and returns a Request type.
+// and expects an Option interface. NewRequest creates an http.Client for each individual request
+// but you may access the Client field on the Request type returned by NewRequest in order to
+// override the defaults.
 func NewRequest(options *Options) *Request {
 
-	r := &Request{}
+	r := &Request{Opts: options}
 
 	base, err := url.Parse(options.Server)
 	if err != nil {
@@ -205,7 +242,6 @@ func NewRequest(options *Options) *Request {
 
 	// Load CA from file
 	if options.CertificateAuthority != "" {
-
 		caCert, err := ioutil.ReadFile(options.CertificateAuthority)
 		if err != nil {
 			r.err = newErr(err.Error())
@@ -215,7 +251,6 @@ func NewRequest(options *Options) *Request {
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
 		tlsConfig.RootCAs = caCertPool
-
 	}
 
 	// Load CA from block
@@ -249,9 +284,9 @@ func NewRequest(options *Options) *Request {
 
 	r.TLSConfig = tlsConfig
 
-	tr := &http.Transport{TLSClientConfig: tlsConfig}
+	r.Transport = &http.Transport{TLSClientConfig: tlsConfig}
 	r.client = &http.Client{
-		Transport: tr,
+		Transport: r.Transport,
 		Timeout:   0,
 	}
 

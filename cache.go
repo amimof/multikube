@@ -71,3 +71,11 @@ func (c *Cache) Size() int {
 func (i *Item) Bytes() int {
 	return len(i.Value)
 }
+
+// NewCache return a new empty cache
+func NewCache() *Cache {
+	return &Cache{
+		ID:    uuid.New(),
+		Store: make(map[string]Item),
+	}
+}
