@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
+	"github.com/opentracing/opentracing-go"
 	"log"
 	"net/http"
 )
@@ -19,10 +20,20 @@ func WithEmpty(next http.Handler) http.Handler {
 	})
 }
 
+// WithEmpty is a middleware that starts a new span and populates the context
+func WithTracing(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		span := opentracing.GlobalTracer().StartSpan("hello")
+		ctx := opentracing.ContextWithSpan(r.Context(), span)
+		defer span.Finish()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 // WithLogging applies access log style logging to the HTTP server
 func WithLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
+		log.Printf("-> %s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
 		next.ServeHTTP(w, r)
 	})
 }

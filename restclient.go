@@ -1,6 +1,7 @@
 package multikube
 
 import (
+	"log"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"context"
+	"golang.org/x/net/http2"
 )
 
 // Request is a simple type used to compose inidivudal requests to an HTTP server.
@@ -18,7 +21,7 @@ type Request struct {
 	Opts         *Options
 	Transport		 *http.Transport
 	TLSConfig    *tls.Config
-	client       *http.Client
+	req					 *http.Request
 	url          *url.URL
 	query        string
 	apiVersion   string
@@ -189,6 +192,14 @@ func (r *Request) URL() *url.URL {
 // Do executes the request and returns an http.Response.
 // The caller is responible of closing the Body.
 func (r *Request) Do() (*http.Response, error) {
+	res, err := r.DoWithContext(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 
 	// Return any error if any has been generated along the way before continuing
 	if r.err != nil {
@@ -201,7 +212,7 @@ func (r *Request) Do() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Close = true
+	r.req = req
 	req.Header = r.headers
 
 	// Set any headers that we might want
@@ -212,12 +223,17 @@ func (r *Request) Do() (*http.Response, error) {
 		r.headers.Set("Authorization", fmt.Sprintf("Bearer %s", r.Opts.Token))
 	}
 
-	res, err := r.client.Do(req)
+	// Make the call
+	res, err := r.Transport.RoundTrip(r.req)
 	if err != nil {
+		log.Printf("Err: %s", err.Error())
 		return nil, err
 	}
 
+	log.Printf("<- %s %s %s %s %s %s", req.Method, req.URL.Path, req.URL.RawQuery, req.RemoteAddr, res.Proto, res.Status)
+
 	return res, nil
+
 }
 
 // NewRequest builds an http request to be used for execution and returns a Request type.
@@ -235,9 +251,14 @@ func NewRequest(options *Options) *Request {
 	}
 	r.url = base
 
+	// Use already defined transport
+	if r.Transport != nil {
+		return r
+	}
+
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.InsecureSkipTLSVerify,
-		NextProtos:         []string{"http/1.1"},
+		NextProtos: []string{"h2", "http/1.1"},
 	}
 
 	// Load CA from file
@@ -283,12 +304,8 @@ func NewRequest(options *Options) *Request {
 	}
 
 	r.TLSConfig = tlsConfig
-
 	r.Transport = &http.Transport{TLSClientConfig: tlsConfig}
-	r.client = &http.Client{
-		Transport: r.Transport,
-		Timeout:   0,
-	}
+	http2.ConfigureTransport(r.Transport)
 
 	return r
 
