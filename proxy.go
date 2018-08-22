@@ -5,12 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"k8s.io/client-go/tools/clientcmd/api"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 type Proxy struct {
@@ -184,11 +184,17 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // and starts streaming data between the two connections.
 func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 
-	target := r.Context().Value("Context").(string)
-	opts := p.getOptions(target)
+	// Make sure Context is set
+	ctx, ok := r.Context().Value("Context").(string)
+	if !ok || ctx == "" {
+		http.Error(w, fmt.Sprintf("No route! ctx: '%s'", ctx), http.StatusInternalServerError)
+		return
+	}
 
+	// Get a kubeconfig context
+	opts := p.getOptions(ctx)
 	if opts == nil {
-		http.Error(w, fmt.Sprintf("Unable to resolve context %s", target), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("No route! ctx: '%s'", ctx), http.StatusInternalServerError)
 		return
 	}
 
@@ -234,6 +240,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 // transfer reads the data from src into a buffer before it writes it into dst
 func transfer(src, dst net.Conn) {
 	buff := make([]byte, 65535)
+	
 	defer src.Close()
 	defer dst.Close()
 

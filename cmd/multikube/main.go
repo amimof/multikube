@@ -4,13 +4,16 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/spf13/pflag"
-	"gitlab.com/amimof/multikube"
 	"io/ioutil"
-	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"os"
 	"time"
+	"github.com/spf13/pflag"
+	"gitlab.com/amimof/multikube"
+	"k8s.io/client-go/tools/clientcmd"
+	"github.com/opentracing/opentracing-go"
+	"github.com/uber/jaeger-client-go"
+	"github.com/uber/jaeger-client-go/config"
 )
 
 var (
@@ -138,6 +141,21 @@ func main() {
 		TLSWriteTimeout:   tlsWriteTimeout,
 		Handler:           m(p),
 	}
+
+	// Setup opentracing
+	cfg := config.Configuration{
+    Sampler: &config.SamplerConfig{
+			Type:  "const",
+			Param: 1,
+    },
+    Reporter: &config.ReporterConfig{
+			LogSpans:            true,
+			BufferFlushInterval: 1 * time.Second,
+    },
+	}
+  tracer, closer, err := cfg.New("multikube", config.Logger(jaeger.StdLogger))
+	opentracing.SetGlobalTracer(tracer)
+	defer closer.Close()
 
 	// Listen and serve!
 	err = s.Serve()
