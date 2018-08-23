@@ -33,7 +33,7 @@ func WithTracing(next http.Handler) http.Handler {
 // WithLogging applies access log style logging to the HTTP server
 func WithLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("-> %s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
+		log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
 		next.ServeHTTP(w, r)
 	})
 }

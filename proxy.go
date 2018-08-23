@@ -14,9 +14,9 @@ import (
 )
 
 type Proxy struct {
+	CertChain  *x509.Certificate
 	config     *api.Config
 	mw         http.Handler
-	CertChain  *x509.Certificate
 	transports map[string]*http.Transport
 }
 
@@ -139,8 +139,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Body(r.Body).
 			Path(r.URL.Path).
 			Query(r.URL.RawQuery).
-			Headers(r.Header).
-			Impersonate(sub)
+			Headers(r.Header)
+
+	// Set the Impersonate header
+	req.Header("Impersonate-User", sub)
 
 	// Remember the transport created by the restclient so that we can re-use the connection
 	if p.transports[ctx] == nil {

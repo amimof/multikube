@@ -1,7 +1,6 @@
 package multikube
 
 import (
-	"log"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -29,7 +28,6 @@ type Request struct {
 	resourceType string
 	resourceName string
 	namespace    string
-	impersonate  string
 	headers      http.Header
 	body         io.Reader
 	interf       interface{}
@@ -138,12 +136,6 @@ func (r *Request) Headers(h http.Header) *Request {
 	return r
 }
 
-// Impersonat sets the Impersonate-User HTTP header for the request
-func (r *Request) Impersonate(n string) *Request {
-	r.impersonate = n
-	return r
-}
-
 // Header sets one header and replacing any headers with equal key
 func (r *Request) Header(key string, values ...string) *Request {
 	if r.headers == nil {
@@ -216,9 +208,6 @@ func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 	req.Header = r.headers
 
 	// Set any headers that we might want
-	if r.impersonate != "" {
-		req.Header.Set("Impersonate-User", r.impersonate)
-	}
 	if r.Opts.Token != "" {
 		r.headers.Set("Authorization", fmt.Sprintf("Bearer %s", r.Opts.Token))
 	}
@@ -226,11 +215,8 @@ func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 	// Make the call
 	res, err := r.Transport.RoundTrip(r.req)
 	if err != nil {
-		log.Printf("Err: %s", err.Error())
 		return nil, err
 	}
-
-	log.Printf("<- %s %s %s %s %s %s", req.Method, req.URL.Path, req.URL.RawQuery, req.RemoteAddr, res.Proto, res.Status)
 
 	return res, nil
 
