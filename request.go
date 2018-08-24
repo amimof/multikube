@@ -17,9 +17,12 @@ import (
 
 // Request is a simple type used to compose inidivudal requests to an HTTP server.
 type Request struct {
+	
 	Opts         *Options
 	Transport		 *http.Transport
 	TLSConfig    *tls.Config
+	Cache				 *Cache
+	
 	req					 *http.Request
 	url          *url.URL
 	query        string
@@ -228,7 +231,10 @@ func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 // override the defaults.
 func NewRequest(options *Options) *Request {
 
-	r := &Request{Opts: options}
+	r := &Request{
+		Opts: options,
+		Cache: NewCache(),
+	}
 
 	base, err := url.Parse(options.Server)
 	if err != nil {
