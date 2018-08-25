@@ -17,7 +17,7 @@ type Proxy struct {
 	CertChain  *x509.Certificate
 	config     *api.Config
 	mw         http.Handler
-	transports map[string]*http.Transport
+	transports map[string]*Transport
 }
 
 func copyHeader(dst, src http.Header) {
@@ -31,7 +31,7 @@ func copyHeader(dst, src http.Header) {
 // NewProxy crerates a new Proxy and initialises router and configuration
 func NewProxy() *Proxy {
 	return &Proxy{
-		transports: make(map[string]*http.Transport),
+		transports: make(map[string]*Transport),
 	}
 }
 
@@ -135,11 +135,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Build the request and execute the call to the backend apiserver
 	req :=
 		NewRequest(opts).
-			Method(r.Method).
-			Body(r.Body).
-			Path(r.URL.Path).
-			Query(r.URL.RawQuery).
-			Headers(r.Header)
+		Method(r.Method).
+		Body(r.Body).
+		Path(r.URL.Path).
+		Query(r.URL.RawQuery).
+		Headers(r.Header)
 
 	// Set the Impersonate header
 	req.Header("Impersonate-User", sub)

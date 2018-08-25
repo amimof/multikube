@@ -12,17 +12,13 @@ import (
 	"path"
 	"strings"
 	"context"
-	"golang.org/x/net/http2"
 )
 
 // Request is a simple type used to compose inidivudal requests to an HTTP server.
 type Request struct {
-	
 	Opts         *Options
-	Transport		 *http.Transport
+	Transport		 *Transport
 	TLSConfig    *tls.Config
-	Cache				 *Cache
-	
 	req					 *http.Request
 	url          *url.URL
 	query        string
@@ -194,6 +190,8 @@ func (r *Request) Do() (*http.Response, error) {
 	return res, nil
 }
 
+// DoWithContext executes the request and returns an http.Response.
+// DoWithContext expect a context to be provided.
 func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 
 	// Return any error if any has been generated along the way before continuing
@@ -203,6 +201,7 @@ func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 
 	u := r.URL().String()
 
+	// Instantiate the http request for the roundtripper
 	req, err := http.NewRequest(r.verb, u, r.body)
 	if err != nil {
 		return nil, err
@@ -233,7 +232,6 @@ func NewRequest(options *Options) *Request {
 
 	r := &Request{
 		Opts: options,
-		Cache: NewCache(),
 	}
 
 	base, err := url.Parse(options.Server)
@@ -242,11 +240,6 @@ func NewRequest(options *Options) *Request {
 		return r
 	}
 	r.url = base
-
-	// Use already defined transport
-	if r.Transport != nil {
-		return r
-	}
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.InsecureSkipTLSVerify,
@@ -296,8 +289,7 @@ func NewRequest(options *Options) *Request {
 	}
 
 	r.TLSConfig = tlsConfig
-	r.Transport = &http.Transport{TLSClientConfig: tlsConfig}
-	http2.ConfigureTransport(r.Transport)
+	r.Transport = &Transport{TLSClientConfig: tlsConfig}
 
 	return r
 
