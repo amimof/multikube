@@ -243,7 +243,7 @@ func NewRequest(options *Options) *Request {
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.InsecureSkipTLSVerify,
-		NextProtos: []string{"h2", "http/1.1"},
+		NextProtos: []string{"http/1.1"},
 	}
 
 	// Load CA from file

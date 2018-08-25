@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -258,5 +257,4 @@ func transfer(src, dst net.Conn) {
 		}
 	}
 
-	log.Printf("Transfered src: %s dst: %s bytes: %d", src.LocalAddr().String(), dst.RemoteAddr().String(), len(buff))
 }
