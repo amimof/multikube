@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"io/ioutil"
 	"fmt"
 	"net"
 	"net/http"
@@ -16,7 +17,8 @@ type Proxy struct {
 	CertChain  *x509.Certificate
 	config     *api.Config
 	mw         http.Handler
-	transports map[string]*Transport
+	transports map[string]http.RoundTripper
+	tlsconfigs map[string]*tls.Config
 }
 
 func copyHeader(dst, src http.Header) {
@@ -30,7 +32,8 @@ func copyHeader(dst, src http.Header) {
 // NewProxy crerates a new Proxy and initialises router and configuration
 func NewProxy() *Proxy {
 	return &Proxy{
-		transports: make(map[string]*Transport),
+		transports: make(map[string]http.RoundTripper),
+		tlsconfigs: make(map[string]*tls.Config),
 	}
 }
 
@@ -133,7 +136,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Build the request and execute the call to the backend apiserver
 	req :=
-		NewRequest(opts).
+		NewRequest(parseURL(opts.Server)).
 		Method(r.Method).
 		Body(r.Body).
 		Path(r.URL.Path).
@@ -142,13 +145,25 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Set the Impersonate header
 	req.Header("Impersonate-User", sub)
+	req.Header("Authorization", fmt.Sprintf("Bearer %s", opts.Token))
+
+	// Setup TLS config
+	tlsConfig, err := configureTLS(opts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	p.tlsconfigs[ctx] = tlsConfig
 
 	// Remember the transport created by the restclient so that we can re-use the connection
 	if p.transports[ctx] == nil {
-		p.transports[ctx] = req.Transport
-	} else {
-		req.Transport = p.transports[ctx]
+		p.transports[ctx] = &Transport{
+			TLSClientConfig: tlsConfig,
+		}
 	}
+
+	// Assign our transport to the request
+	req.Transport = p.transports[ctx]
 
 	// Execute!
 	res, err := req.Do()
@@ -199,8 +214,6 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req := NewRequest(opts)
-
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
@@ -213,7 +226,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst_conn, err := tls.Dial("tcp", u.Host, req.TLSConfig)
+	dst_conn, err := tls.Dial("tcp", u.Host, p.tlsconfigs[ctx])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
@@ -257,4 +270,66 @@ func transfer(src, dst net.Conn) {
 		}
 	}
 
+}
+
+// configureTLS composes a TLS configuration from the provided Options parameter.
+// This is useful when building HTTP requests (for example with the net/http package) 
+// and the TLS data is configured elsewhere.
+func configureTLS(options *Options) (*tls.Config, error) {
+
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: options.InsecureSkipTLSVerify,
+		NextProtos: []string{"http/1.1"},
+	}
+
+	// Load CA from file
+	if options.CertificateAuthority != "" {
+		caCert, err := ioutil.ReadFile(options.CertificateAuthority)
+		if err != nil {
+			return nil, err
+		}
+
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	// Load CA from block
+	if options.CertificateAuthorityData != nil {
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(options.CertificateAuthorityData)
+		tlsConfig.RootCAs = caCertPool
+	}
+
+	// Load certs from file
+	if options.ClientCertificate != "" && options.ClientKey != "" {
+		cert, err := tls.LoadX509KeyPair(options.ClientCertificate, options.ClientKey)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+		tlsConfig.BuildNameToCertificate()
+	}
+
+	// Load certs from block
+	if options.ClientCertificateData != nil && options.ClientKeyData != nil {
+		cert, err := tls.X509KeyPair(options.ClientCertificateData, options.ClientKeyData)
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+		tlsConfig.BuildNameToCertificate()
+	}
+
+	return tlsConfig, nil
+}
+
+// parseURL is a helper function that tries to parse a string and return an url.URL.
+// Will return nil if errors occur.
+func parseURL(str string) *url.URL {
+	u, err := url.Parse(str)
+	if err != nil {
+		return nil
+	}
+	return u
 }

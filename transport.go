@@ -4,14 +4,13 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"crypto/tls"
-	"golang.org/x/net/http2"
 	"bytes"
 	"bufio"
 	"fmt"
 )
 
 // Tansport is an implementation of RoundTripper and extension of http.Transport with the 
-// addition of Cache.
+// addition of a Cache.
 type Transport struct {
 	Cache *Cache
 	TLSClientConfig *tls.Config
@@ -20,13 +19,14 @@ type Transport struct {
 
 func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error) {
 
+	// Use default transport with http2 if not told otherwise
 	if t.transport == nil {
 		t.transport = &http.Transport{
 			TLSClientConfig: t.TLSClientConfig,
 		}
-		http2.ConfigureTransport(t.transport)
 	}
 
+	// Initialize the cache
 	if t.Cache == nil {
 		t.Cache = NewCache()
 	}
