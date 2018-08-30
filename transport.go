@@ -1,20 +1,22 @@
 package multikube
 
 import (
+	"bufio"
+	"bytes"
+	"crypto/tls"
+	"golang.org/x/net/http2"
+	"net"
 	"net/http"
 	"net/http/httputil"
-	"crypto/tls"
-	"bytes"
-	"bufio"
-	"fmt"
+	"time"
 )
 
-// Tansport is an implementation of RoundTripper and extension of http.Transport with the 
+// Tansport is an implementation of RoundTripper and extension of http.Transport with the
 // addition of a Cache.
 type Transport struct {
-	Cache *Cache
+	Cache           *Cache
 	TLSClientConfig *tls.Config
-	transport *http.Transport
+	transport       *http.Transport
 }
 
 func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error) {
@@ -22,8 +24,19 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 	// Use default transport with http2 if not told otherwise
 	if t.transport == nil {
 		t.transport = &http.Transport{
-			TLSClientConfig: t.TLSClientConfig,
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			TLSClientConfig:       t.TLSClientConfig,
 		}
+		http2.ConfigureTransport(t.transport)
 	}
 
 	// Initialize the cache
@@ -33,15 +46,13 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 
 	// Either return a response from the cache or from a real request
 	item := t.Cache.Get(req.URL.String())
-	if item.Value != nil && item.Age() < t.Cache.TTL {
+	if item != nil && req.Method == http.MethodGet {
 
 		// Cache hit!
 		res, err = t.readResponse(req)
 		if err != nil {
 			return nil, err
 		}
-
-		res.Header.Set("X-Cache-Age", fmt.Sprintf("%d", item.Age()))
 
 	} else {
 
@@ -50,13 +61,16 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 		if err != nil {
 			return nil, err
 		}
-	
-		// Cache the response 
+
 		resBytes, err := httputil.DumpResponse(res, true)
 		if err != nil {
 			return nil, err
 		}
-		t.Cache.Set(req.URL.String(), resBytes)
+
+		// Cache the response if it's cacheable.
+		if req.Method == http.MethodGet && (res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotModified) {
+			t.Cache.Set(req.URL.String(), resBytes)
+		}
 
 	}
 

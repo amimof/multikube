@@ -4,13 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
 	"fmt"
+	"io/ioutil"
+	"k8s.io/client-go/tools/clientcmd/api"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 type Proxy struct {
@@ -130,6 +130,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Tunnel the connection if server sends Upgrade
 	if r.Header.Get("Upgrade") != "" {
+		p.transports[ctx].(*Transport).TLSClientConfig.NextProtos = []string{"http/1.1"}
 		p.tunnel(w, r)
 		return
 	}
@@ -137,11 +138,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Build the request and execute the call to the backend apiserver
 	req :=
 		NewRequest(parseURL(opts.Server)).
-		Method(r.Method).
-		Body(r.Body).
-		Path(r.URL.Path).
-		Query(r.URL.RawQuery).
-		Headers(r.Header)
+			Method(r.Method).
+			Body(r.Body).
+			Path(r.URL.Path).
+			Query(r.URL.RawQuery).
+			Headers(r.Header)
 
 	// Set the Impersonate header
 	req.Header("Impersonate-User", sub)
@@ -254,7 +255,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 // transfer reads the data from src into a buffer before it writes it into dst
 func transfer(src, dst net.Conn) {
 	buff := make([]byte, 65535)
-	
+
 	defer src.Close()
 	defer dst.Close()
 
@@ -273,13 +274,12 @@ func transfer(src, dst net.Conn) {
 }
 
 // configureTLS composes a TLS configuration from the provided Options parameter.
-// This is useful when building HTTP requests (for example with the net/http package) 
+// This is useful when building HTTP requests (for example with the net/http package)
 // and the TLS data is configured elsewhere.
 func configureTLS(options *Options) (*tls.Config, error) {
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: options.InsecureSkipTLSVerify,
-		NextProtos: []string{"http/1.1"},
 	}
 
 	// Load CA from file

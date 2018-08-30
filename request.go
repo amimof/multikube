@@ -1,19 +1,19 @@
 package multikube
 
 import (
+	"context"
 	"io"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
-	"context"
 )
 
 // Request is a simple type used to compose inidivudal requests to an HTTP server.
 type Request struct {
-	Transport		 http.RoundTripper
-	req					 *http.Request
+	Transport    http.RoundTripper
+	req          *http.Request
 	url          *url.URL
 	query        string
 	apiVersion   string
@@ -143,7 +143,7 @@ func (r *Request) Header(key string, values ...string) *Request {
 
 // URL composes a complete URL and return an url.URL then used by the request
 func (r *Request) URL() *url.URL {
-	
+
 	p := "/api/v1/"
 	if r.url.Path != "" {
 		p = r.url.Path
@@ -220,5 +220,5 @@ func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 
 // NewRequest will return a new Request object with the given URL
 func NewRequest(u *url.URL) *Request {
-	return &Request{url:u}
+	return &Request{url: u}
 }
