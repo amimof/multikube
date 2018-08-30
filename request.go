@@ -1,26 +1,19 @@
 package multikube
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	"fmt"
+	"context"
 	"io"
-	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
-	"context"
-	"golang.org/x/net/http2"
 )
 
 // Request is a simple type used to compose inidivudal requests to an HTTP server.
 type Request struct {
-	Opts         *Options
-	Transport		 *http.Transport
-	TLSConfig    *tls.Config
-	req					 *http.Request
+	Transport    http.RoundTripper
+	req          *http.Request
 	url          *url.URL
 	query        string
 	apiVersion   string
@@ -191,7 +184,14 @@ func (r *Request) Do() (*http.Response, error) {
 	return res, nil
 }
 
+// DoWithContext executes the request and returns an http.Response.
+// DoWithContext expect a context to be provided.
 func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
+
+	// Use default transport if none provided
+	if r.Transport == nil {
+		r.Transport = http.DefaultTransport
+	}
 
 	// Return any error if any has been generated along the way before continuing
 	if r.err != nil {
@@ -200,17 +200,13 @@ func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 
 	u := r.URL().String()
 
+	// Instantiate the http request for the roundtripper
 	req, err := http.NewRequest(r.verb, u, r.body)
 	if err != nil {
 		return nil, err
 	}
 	r.req = req
 	req.Header = r.headers
-
-	// Set any headers that we might want
-	if r.Opts.Token != "" {
-		r.headers.Set("Authorization", fmt.Sprintf("Bearer %s", r.Opts.Token))
-	}
 
 	// Make the call
 	res, err := r.Transport.RoundTrip(r.req)
@@ -222,77 +218,7 @@ func (r *Request) DoWithContext(ctx context.Context) (*http.Response, error) {
 
 }
 
-// NewRequest builds an http request to be used for execution and returns a Request type.
-// and expects an Option interface. NewRequest creates an http.Client for each individual request
-// but you may access the Client field on the Request type returned by NewRequest in order to
-// override the defaults.
-func NewRequest(options *Options) *Request {
-
-	r := &Request{Opts: options}
-
-	base, err := url.Parse(options.Server)
-	if err != nil {
-		r.err = err
-		return r
-	}
-	r.url = base
-
-	// Use already defined transport
-	if r.Transport != nil {
-		return r
-	}
-
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.InsecureSkipTLSVerify,
-		NextProtos: []string{"h2", "http/1.1"},
-	}
-
-	// Load CA from file
-	if options.CertificateAuthority != "" {
-		caCert, err := ioutil.ReadFile(options.CertificateAuthority)
-		if err != nil {
-			r.err = newErr(err.Error())
-			return r
-		}
-
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-		tlsConfig.RootCAs = caCertPool
-	}
-
-	// Load CA from block
-	if options.CertificateAuthorityData != nil {
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(options.CertificateAuthorityData)
-		tlsConfig.RootCAs = caCertPool
-	}
-
-	// Load certs from file
-	if options.ClientCertificate != "" && options.ClientKey != "" {
-		cert, err := tls.LoadX509KeyPair(options.ClientCertificate, options.ClientKey)
-		if err != nil {
-			r.err = newErr(err.Error())
-			return r
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
-		tlsConfig.BuildNameToCertificate()
-	}
-
-	// Load certs from block
-	if options.ClientCertificateData != nil && options.ClientKeyData != nil {
-		cert, err := tls.X509KeyPair(options.ClientCertificateData, options.ClientKeyData)
-		if err != nil {
-			r.err = newErr(err.Error())
-			return r
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
-		tlsConfig.BuildNameToCertificate()
-	}
-
-	r.TLSConfig = tlsConfig
-	r.Transport = &http.Transport{TLSClientConfig: tlsConfig}
-	http2.ConfigureTransport(r.Transport)
-
-	return r
-
+// NewRequest will return a new Request object with the given URL
+func NewRequest(u *url.URL) *Request {
+	return &Request{url: u}
 }
