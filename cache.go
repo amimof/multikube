@@ -7,7 +7,7 @@ import (
 
 // Root cache object
 type Cache struct {
-	Store map[string]Item
+	Store map[string]*Item
 	TTL   time.Duration
 	mux   sync.Mutex
 }
@@ -44,10 +44,10 @@ func (c *Cache) Get(key string) *Item {
 	item := c.Store[key]
 	if !item.expires.IsZero() && item.Age() > c.TTL {
 		// Item age exceeded time to live
-		c.Delete(item.Key)
+		delete(c.Store, key)
 		return nil
 	}
-	return &item
+	return item
 }
 
 // Set instantiates and allocates a key in the cache and overwrites any previously set item
@@ -55,20 +55,26 @@ func (c *Cache) Set(key string, val []byte) *Item {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	item := c.Store[key]
-	item.Key = key
-	item.Value = val
-	item.expires = time.Now().Add(c.TTL)
-	item.created = time.Now()
+	// Delete item if already exists in the cache
+	if c.Exists(key) {
+		delete(c.Store, key)
+	}
+
+	item := &Item{
+		Key:     key,
+		Value:   val,
+		expires: time.Now().Add(c.TTL),
+		created: time.Now(),
+	}
+
 	c.Store[key] = item
-	return &item
+	return item
 }
 
 // Delete removes an item by key
 func (c *Cache) Delete(key string) {
 	c.mux.Lock()
 	defer c.mux.Unlock()
-
 	delete(c.Store, key)
 }
 
@@ -118,7 +124,7 @@ func (i *Item) Bytes() int {
 // NewCache return a new empty cache
 func NewCache() *Cache {
 	return &Cache{
-		Store: make(map[string]Item),
+		Store: make(map[string]*Item),
 		TTL:   time.Second * 1,
 	}
 }
