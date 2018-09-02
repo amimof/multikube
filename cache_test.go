@@ -5,70 +5,102 @@ import (
 	"testing"
 )
 
-func TestCacheGetItem(t *testing.T) {
+var key string = "somekey"
+var val string = "hello world"
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
+func TestCacheGetNilItem(t *testing.T) {
 	cache := multikube.NewCache()
-	item := cache.Get("namespaces")
-	t.Logf("Key: %s", item.Key)
-	t.Logf("Value: %s", item.Value)
-	t.Logf("Created: %s", item.Created.String())
-	t.Logf("Updated: %s", item.Updated.String())
+	item := cache.Get(key)
+	if item != nil {
+		t.Fatalf("Item with key %s should be nil", key)
+	}
 }
 
 func TestCacheSetItem(t *testing.T) {
 	cache := multikube.NewCache()
-	item := cache.Set("namespaces", []byte("Hello World"))
-	t.Logf("Key: %s", item.Key)
-	t.Logf("Value: %s", item.Value)
-	t.Logf("Created: %s", item.Created.String())
-	t.Logf("Updated: %s", item.Updated.String())
+	item := cache.Set(key, []byte(val))
+	if item.Key != key {
+		t.Fatalf("Item key is not %s", key)
+	}
+	if string(item.Value) != val {
+		t.Fatalf("Item val is not %s", val)
+	}
+}
+
+func TestCacheSetGetItem(t *testing.T) {
+	cache := multikube.NewCache()
+	cache.Set(key, []byte(val))
+	item := cache.Get(key)
+	if item.Key != key {
+		t.Fatalf("Item key is not %s", key)
+	}
+	if string(item.Value) != val {
+		t.Fatalf("Item val is not %s", val)
+	}
 }
 
 func TestCacheDeleteItem(t *testing.T) {
 	cache := multikube.NewCache()
-
-	item := cache.Set("namespaces", []byte("Hello World"))
-	t.Logf("Existing:")
-	t.Logf("  Key: %s", item.Key)
-	t.Logf("  Value: %s", item.Value)
-	t.Logf("  Created: %s", item.Created.String())
-	t.Logf("  Updated: %s", item.Updated.String())
+	item := cache.Set(key, []byte(val))
 
 	cache.Delete(item.Key)
-	item = cache.Get("namespaces")
-	t.Logf("Deleted:")
-	t.Logf("  Key: %s", item.Key)
-	t.Logf("  Value: %s", item.Value)
-	t.Logf("  Created: %s", item.Created.String())
-	t.Logf("  Updated: %s", item.Updated.String())
+	item = cache.Get(key)
+	if item != nil {
+		t.Fatalf("Item with key %s should be nil", key)
+	}
 }
 
 func TestCacheListKeys(t *testing.T) {
 	cache := multikube.NewCache()
-	cache.Set("/namespaces/", []byte{'a'})
-	cache.Set("/namespaces/pods", []byte{'b'})
-	cache.Set("/namespaces/pods/pod-1", []byte{'c'})
-	for i, key := range cache.ListKeys() {
-		t.Logf("[%d]: %s", i, key)
+	items := []string{"/namespaces/", "/namespaces/pods", "/namespaces/pods/pod-1"}
+
+	cache.Set(items[0], []byte{'a'})
+	cache.Set(items[1], []byte{'b'})
+	cache.Set(items[2], []byte{'c'})
+
+	for i, k := range cache.ListKeys() {
+		if !contains(items, k) {
+			t.Fatalf("Key should be %s but got %s", items[i], k)
+		}
 	}
+	
 }
 
 func TestCacheSize(t *testing.T) {
 	cache := multikube.NewCache()
-	cache.Set("A", []byte("foo"))
-	t.Logf("Cache size is %d bytes", cache.Size())
+	cache.Set(key, []byte("a"))
+	if cache.Size() != 1 {
+		t.Fatalf("Expected cache size to be %d but got %d", 1, cache.Size())
+	}
 }
 
-func TestCacheBytes(t *testing.T) {
+func TestCacheItemBytes(t *testing.T) {
 	cache := multikube.NewCache()
-	cache.Set("A", []byte("foo"))
-	cache.Set("B", []byte("bar"))
+	cache.Set("A", []byte("a"))
+	cache.Set("B", []byte("b"))
+	cache.Set("C", []byte("c"))
 
 	a := cache.Get("A")
 	b := cache.Get("B")
+	c := cache.Get("C")
 
-	t.Logf("Item %s is %d bytes", a.Key, a.Bytes())
-	t.Logf("Item %s is %d bytes", b.Key, b.Bytes())
-	t.Logf("Items are %d bytes in total", cache.Size())
+	items := []*multikube.Item{a, b, c}
+
+	for _, item := range items {
+		if item.Bytes() != 1 {
+			t.Fatalf("Expected item bytes to be %d but got %d", 1, item.Bytes())
+		}
+	}
+
 }
 
 func TestCacheLen(t *testing.T) {
@@ -77,5 +109,8 @@ func TestCacheLen(t *testing.T) {
 	cache.Set("B", []byte("bravo"))
 	cache.Set("C", []byte("charlie"))
 
-	t.Logf("Cache length is %d", cache.Len())
+	if cache.Len() != 3 {
+		t.Logf("Expected cache length to be %d but got %d", 3, cache.Len())
+	}
+
 }
