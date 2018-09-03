@@ -1,31 +1,30 @@
 package multikube_test
 
 import (
-	"testing"
+	"gitlab.com/amimof/multikube"
 	"net/http"
 	"net/http/httptest"
-	"gitlab.com/amimof/multikube"
+	"testing"
 )
 
 func testHandler(w http.ResponseWriter, r *http.Request) {
-    // A very simple health check.
-    w.WriteHeader(http.StatusOK)
-    w.Header().Set("Content-Type", "application/json")
+	// A very simple health check.
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 
-    // In the future we could report back on the status of our DB, or our cache 
-    // (e.g. Redis) by performing a simple PING, and include them in the response.
-    w.Write([]byte(`{"alive": true}`))
+	// In the future we could report back on the status of our DB, or our cache
+	// (e.g. Redis) by performing a simple PING, and include them in the response.
+	w.Write([]byte(`{"alive": true}`))
 }
 
 func TestMiddleware(t *testing.T) {
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/", nil)
 	w := httptest.NewRecorder()
 
 	handler := http.HandlerFunc(testHandler)
 	handler.ServeHTTP(w, req)
 
-	
 	// Check the status code is what we expect.
 	if status := w.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)

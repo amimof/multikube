@@ -1,20 +1,20 @@
 package multikube_test
 
 import (
-	"testing"
 	"gitlab.com/amimof/multikube"
 	"k8s.io/client-go/tools/clientcmd/api"
-)
-var (
-	name string = "minikube"
-	defServer string = "https://127.0.0.1:8443"
-	defToken string = "aGVsbG93b3JsZA=="
+	"testing"
 )
 
+var (
+	name      string = "minikube"
+	defServer string = "https://127.0.0.1:8443"
+	defToken  string = "aGVsbG93b3JsZA=="
+)
 
 var conf *api.Config = &api.Config{
 	APIVersion: "v1",
-	Kind: "Config",
+	Kind:       "Config",
 	Clusters: map[string]*api.Cluster{
 		name: &api.Cluster{
 			Server: defServer,
@@ -27,7 +27,7 @@ var conf *api.Config = &api.Config{
 	},
 	Contexts: map[string]*api.Context{
 		name: &api.Context{
-			Cluster: name,
+			Cluster:  name,
 			AuthInfo: name,
 		},
 	},

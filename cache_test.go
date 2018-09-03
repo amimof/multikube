@@ -72,7 +72,7 @@ func TestCacheListKeys(t *testing.T) {
 			t.Fatalf("Key should be %s but got %s", items[i], k)
 		}
 	}
-	
+
 }
 
 func TestCacheSize(t *testing.T) {

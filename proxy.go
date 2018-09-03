@@ -16,7 +16,7 @@ import (
 const (
 	SubjectUndefined string = "No route: subject undefined"
 	ContextUndefined string = "No route: context undefined"
-	ContextNotFound string = "No route: context not found"
+	ContextNotFound  string = "No route: context not found"
 )
 
 type Proxy struct {
