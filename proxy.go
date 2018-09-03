@@ -13,9 +13,15 @@ import (
 	"net/url"
 )
 
+const (
+	SubjectUndefined string = "No route: subject undefined"
+	ContextUndefined string = "No route: context undefined"
+	ContextNotFound string = "No route: context not found"
+)
+
 type Proxy struct {
 	CertChain  *x509.Certificate
-	config     *api.Config
+	Config     *api.Config
 	mw         http.Handler
 	transports map[string]http.RoundTripper
 	tlsconfigs map[string]*tls.Config
@@ -39,7 +45,7 @@ func NewProxy() *Proxy {
 
 func NewProxyFrom(c *api.Config) *Proxy {
 	p := NewProxy()
-	p.config = c
+	p.Config = c
 	return p
 }
 
@@ -58,7 +64,7 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 }
 
 func (p *Proxy) getCluster(n string) *api.Cluster {
-	for k, v := range p.config.Clusters {
+	for k, v := range p.Config.Clusters {
 		if k == n {
 			return v
 		}
@@ -67,7 +73,7 @@ func (p *Proxy) getCluster(n string) *api.Cluster {
 }
 
 func (p *Proxy) getAuthInfo(n string) *api.AuthInfo {
-	for k, v := range p.config.AuthInfos {
+	for k, v := range p.Config.AuthInfos {
 		if k == n {
 			return v
 		}
@@ -76,7 +82,7 @@ func (p *Proxy) getAuthInfo(n string) *api.AuthInfo {
 }
 
 func (p *Proxy) getContext(n string) *api.Context {
-	for k, v := range p.config.Contexts {
+	for k, v := range p.Config.Contexts {
 		if k == n {
 			return v
 		}
@@ -110,21 +116,21 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Make sure Subject is set
 	sub, ok := r.Context().Value("Subject").(string)
 	if !ok || sub == "" {
-		http.Error(w, fmt.Sprintf("No route! sub: '%s'", sub), http.StatusInternalServerError)
+		http.Error(w, SubjectUndefined, http.StatusInternalServerError)
 		return
 	}
 
 	// Make sure Context is set
 	ctx, ok := r.Context().Value("Context").(string)
 	if !ok || ctx == "" {
-		http.Error(w, fmt.Sprintf("No route! ctx: '%s'", ctx), http.StatusInternalServerError)
+		http.Error(w, ContextUndefined, http.StatusInternalServerError)
 		return
 	}
 
 	// Get a kubeconfig context
 	opts := p.getOptions(ctx)
 	if opts == nil {
-		http.Error(w, fmt.Sprintf("No route! sub: '%s' ctx: '%s'", sub, ctx), http.StatusInternalServerError)
+		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
 	}
 
@@ -204,14 +210,14 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 	// Make sure Context is set
 	ctx, ok := r.Context().Value("Context").(string)
 	if !ok || ctx == "" {
-		http.Error(w, fmt.Sprintf("No route! ctx: '%s'", ctx), http.StatusInternalServerError)
+		http.Error(w, ContextUndefined, http.StatusInternalServerError)
 		return
 	}
 
 	// Get a kubeconfig context
 	opts := p.getOptions(ctx)
 	if opts == nil {
-		http.Error(w, fmt.Sprintf("No route! ctx: '%s'", ctx), http.StatusInternalServerError)
+		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
 	}
 
