@@ -1,7 +1,8 @@
 # multikube
 
-Multikube is a multi-cluster API router for [Kubernetes](http://kubernetes.io/). It's responsible of routing requests to multiple Kubernetes API's (`kube-apiserver`) based on client tokens. Multikube acts as a proxy sitting between clients, such as `kubectl`, `curl`, web apps etc, and Kubernetes kube-apiserver thus separating the network into two security domains.
+Multikube is a multi-cluster API router for [Kubernetes](http://kubernetes.io/). It is responsible of routing requests to one or more Kubernetes API's (`kube-apiserver`) based on client tokens. Multikube acts as a proxy sitting between clients, such as `kubectl`, `curl`, web apps etc, and Kubernetes kube-apiserver thus separating the network into two security domains.
 
+Features
 * Off-loads API calls by re-using connections and serving data from cache
 * Split network security domains
 * Total transparency means compatibility with any kubectl command
@@ -12,9 +13,9 @@ Multikube is a multi-cluster API router for [Kubernetes](http://kubernetes.io/).
 
 ## How it works
 
-In it's core, Multikube is a special type of HTTP router that is capable of routing requests based on the `HTTP authorization header`. For this to be possible Multikube expects clients to send special *"multikube-friendly"* access tokens when they wish to leverage the routing capabilities of Multikube. These special access tokens are JWT's ([JSON Web Tokens](https://jwt.io/)), much like those in Kubernetes, but with additional metadata that tells Multikube which kube-apiserver to route the request to.
+In it's core, Multikube is a special type of HTTP router capable of routing requests based on the `HTTP authorization header`. Multikube expects clients to send special *"multikube-friendly"* access tokens when they wish to leverage the routing capabilities of Multikube. These special access tokens are JWT's ([JSON Web Tokens](https://jwt.io/)), much like those in Kubernetes, but with additional metadata that tells Multikube which kube-apiserver to route the request to.
 
-A typical Multikube JWT header might look like this. The following shows a token with two important fields that are necessary in order for multikube to succesfully route the request to the correct Kubernetes API. These fields are `sub` and `ctx`. 
+A typical Multikube JWT header might look like this. The following shows a token with two important fields that are necessary in order for multikube to succesfully route the request to the correct Kubernetes API. In this case a cluster named *minikube*. These fields are `sub` and `ctx`. 
 ```json
 {
   "sub": "developer",
@@ -28,7 +29,7 @@ View the entire token on [jwt.io](https://jwt.io/#debugger-io?token=eyJhbGciOiJS
 
 The `sub` field corresponds to the user which Multikube will impersonate all API calls to Kubernetes as. By setting the `Impersonate-User` header. The `ctx` field corresponds to the `context` name configured in the kubeconfig file provided to Multikube on the command-line during startup. Clients using this JWT will ask Multikube to try route requests to the context minikube as user developer. 
 
-If the value of `ctx` is set to something that multikube doesn't recognize (not configured in the kubeconfig), then you will get a `No route!` error. Multikube doesn't care about what the value of `sub` is. Just as long as rolebinding exists on that Kubernetes cluster. And if it doesn't then that user isn't granted any permissions.
+If the value of `ctx` is set to something that multikube doesn't recognize (not configured in the kubeconfig), then you will get a `ContextNotFound` error. Multikube doesn't care about what the value of `sub` is. Just as long as rolebinding exists on that Kubernetes cluster. And if it doesn't then that user isn't granted any permissions. In other terms, Multikube does not apply any authorization policies, Kubernetes does.
 
 ## Connecting Multikube to Kubernetes clusters
 

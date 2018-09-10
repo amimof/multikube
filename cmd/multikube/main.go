@@ -17,6 +17,10 @@ import (
 )
 
 var (
+	VERSION string
+	COMMIT  string
+	BRANCH  string
+
 	enabledListeners []string
 	cleanupTimeout   time.Duration
 	maxHeaderSize    uint64
@@ -72,9 +76,11 @@ func init() {
 
 func main() {
 
+	showver := pflag.Bool("version", false, "Print version")
+
 	pflag.Usage = func() {
 		fmt.Fprint(os.Stderr, "Usage:\n")
-		fmt.Fprint(os.Stderr, "  multikube-server [OPTIONS]\n\n")
+		fmt.Fprint(os.Stderr, "  multikube [OPTIONS]\n\n")
 
 		title := "Kubernetes multi-cluster manager"
 		fmt.Fprint(os.Stderr, title+"\n\n")
@@ -87,6 +93,12 @@ func main() {
 
 	// parse the CLI flags
 	pflag.Parse()
+
+	// Show version if requested
+	if *showver {
+		fmt.Printf("Version: %s\nCommit: %s\nBranch: %s\n", VERSION, COMMIT, BRANCH)
+		return
+	}
 
 	// Read provided kubeconfig file
 	c, err := clientcmd.LoadFromFile(kubeconfigPath)

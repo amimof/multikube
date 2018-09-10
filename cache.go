@@ -25,7 +25,7 @@ func (c *Cache) ListKeys() []string {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
-	keys := make([]string, 0)
+	keys := make([]string, 0, len(c.Store))
 	for key := range c.Store {
 		keys = append(keys, key)
 	}

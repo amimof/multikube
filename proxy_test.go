@@ -2,78 +2,55 @@ package multikube_test
 
 import (
 	"gitlab.com/amimof/multikube"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
+	"k8s.io/client-go/tools/clientcmd/api"
 	"testing"
 )
 
+var (
+	name      string = "minikube"
+	defServer string = "https://127.0.0.1:8443"
+	defToken  string = "aGVsbG93b3JsZA=="
+)
+
+var conf *api.Config = &api.Config{
+	APIVersion: "v1",
+	Kind:       "Config",
+	Clusters: map[string]*api.Cluster{
+		name: &api.Cluster{
+			Server: defServer,
+		},
+	},
+	AuthInfos: map[string]*api.AuthInfo{
+		name: &api.AuthInfo{
+			Token: defToken,
+		},
+	},
+	Contexts: map[string]*api.Context{
+		name: &api.Context{
+			Cluster:  name,
+			AuthInfo: name,
+		},
+	},
+	CurrentContext: name,
+}
+
 // Just creates a new proxy instance
 func TestProxyNewProxy(t *testing.T) {
-	p := multikube.NewProxy()
-	t.Logf("Config: %+v", p.Config)
-}
-
-// Test the logging middleware. Should print output to the console
-func TestProxyLoggingMiddleware(t *testing.T) {
-	p := multikube.NewProxy()
-	m := p.Use(multikube.WithLogging)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/", nil)
-	w := httptest.NewRecorder()
-
-	m(p).ServeHTTP(w, req)
-
-}
-
-// Test the empty middleware. Shouldn't do anything
-func TestProxyEmptyMiddleware(t *testing.T) {
-	p := multikube.NewProxy()
-	m := p.Use(multikube.WithEmpty)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/", nil)
-	w := httptest.NewRecorder()
-
-	m(p).ServeHTTP(w, req)
-}
-
-// Send a request through the proxy just to see that something on the other end responds
-func TestProxyGetResource(t *testing.T) {
-	p := multikube.NewProxy()
-	m := p.Use(multikube.WithLogging)
-
-	req := httptest.NewRequest("GET", "/api/v1/", nil)
-	w := httptest.NewRecorder()
-
-	m(p).ServeHTTP(w, req)
-
-	resp := w.Result()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
+	p := multikube.NewProxyFrom(conf)
+	server := p.Config.Clusters[name].Server
+	if server != defServer {
+		t.Fatalf("Expected config cluster to be %s, got %s", defServer, server)
 	}
-	t.Logf("Status: %d", resp.StatusCode)
-	t.Logf("Content-Type: %s", resp.Header.Get("Content-Type"))
-	t.Logf("Body: %s", string(body))
-}
-
-// Send a request through the proxy just to see that something on the other end responds
-// Currently this will wait until client closes the connections
-func TestProxyWatchResource(t *testing.T) {
-	p := multikube.NewProxy()
-	m := p.Use(multikube.WithLogging)
-
-	req := httptest.NewRequest("GET", "/api/v1/namespaces?watch=true", nil)
-	w := httptest.NewRecorder()
-
-	m(p).ServeHTTP(w, req)
-
-	resp := w.Result()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
+	token := p.Config.AuthInfos[name].Token
+	if token != defToken {
+		t.Fatalf("Expected config token to be %s, got %s", defToken, token)
 	}
-	t.Logf("Status: %d", resp.StatusCode)
-	t.Logf("Content-Type: %s", resp.Header.Get("Content-Type"))
-	t.Logf("Body: %s", string(body))
+	context := p.Config.Contexts[name]
+	if context.Cluster != name && context.AuthInfo != name {
+		t.Fatalf("Expected config context cluster & authinfo to be %s, got cluster: %s authinfo: %s", name, context.Cluster, context.AuthInfo)
+	}
+	currcontext := p.Config.CurrentContext
+	if currcontext != name {
+		t.Fatalf("Expected config current-context to be %s, got %s", name, currcontext)
+	}
 }
