@@ -32,6 +32,8 @@ type Request struct {
 type Options struct {
 	*api.Cluster
 	*api.AuthInfo
+	ctx string
+	sub string
 }
 
 // Get method sets the method on a request to GET. Get will invoke Method(http.MethodGet).
