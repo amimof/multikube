@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"bufio"
+	"os"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"net"
@@ -25,14 +27,6 @@ type Proxy struct {
 	mw         http.Handler
 	transports map[string]http.RoundTripper
 	tlsconfigs map[string]*tls.Config
-}
-
-func copyHeader(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
 }
 
 // NewProxy crerates a new Proxy and initialises router and configuration
@@ -63,80 +57,29 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 	}
 }
 
-func (p *Proxy) getCluster(n string) *api.Cluster {
-	for k, v := range p.Config.Clusters {
-		if k == n {
-			return v
-		}
-	}
-	return nil
-}
-
-func (p *Proxy) getAuthInfo(n string) *api.AuthInfo {
-	for k, v := range p.Config.AuthInfos {
-		if k == n {
-			return v
-		}
-	}
-	return nil
-}
-
-func (p *Proxy) getContext(n string) *api.Context {
-	for k, v := range p.Config.Contexts {
-		if k == n {
-			return v
-		}
-	}
-	return nil
-}
-
-func (p *Proxy) getOptions(n string) *Options {
-	ctx := p.getContext(n)
-	if ctx == nil {
-		return nil
-	}
-	authInfo := p.getAuthInfo(ctx.AuthInfo)
-	if authInfo == nil {
-		return nil
-	}
-	cluster := p.getCluster(ctx.Cluster)
-	if cluster == nil {
-		return nil
-	}
-	return &Options{
-		cluster,
-		authInfo,
-	}
-}
-
 // ServeHTTP routes the request to an apiserver. It determines, resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	// Make sure Subject is set
-	sub, ok := r.Context().Value("Subject").(string)
-	if !ok || sub == "" {
-		http.Error(w, SubjectUndefined, http.StatusInternalServerError)
-		return
-	}
-
-	// Make sure Context is set
-	ctx, ok := r.Context().Value("Context").(string)
-	if !ok || ctx == "" {
-		http.Error(w, ContextUndefined, http.StatusInternalServerError)
-		return
-	}
-
 	// Get a kubeconfig context
-	opts := p.getOptions(ctx)
+	opts := optsFromCtx(p.Config, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
 	}
 
+	// Setup TLS config
+	tlsConfig, err := configureTLS(opts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		panic(err)
+		return
+	}
+	p.tlsconfigs[opts.ctx] = tlsConfig
+
 	// Tunnel the connection if server sends Upgrade
 	if r.Header.Get("Upgrade") != "" {
-		p.transports[ctx].(*Transport).TLSClientConfig.NextProtos = []string{"http/1.1"}
+		p.transports[opts.ctx].(*Transport).TLSClientConfig.NextProtos = []string{"http/1.1"}
 		p.tunnel(w, r)
 		return
 	}
@@ -151,26 +94,18 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Headers(r.Header)
 
 	// Set the Impersonate header
-	req.Header("Impersonate-User", sub)
+	req.Header("Impersonate-User", opts.sub)
 	req.Header("Authorization", fmt.Sprintf("Bearer %s", opts.Token))
 
-	// Setup TLS config
-	tlsConfig, err := configureTLS(opts)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	p.tlsconfigs[ctx] = tlsConfig
-
 	// Remember the transport created by the restclient so that we can re-use the connection
-	if p.transports[ctx] == nil {
-		p.transports[ctx] = &Transport{
+	if p.transports[opts.ctx] == nil {
+		p.transports[opts.ctx] = &Transport{
 			TLSClientConfig: tlsConfig,
 		}
 	}
 
 	// Assign our transport to the request
-	req.Transport = p.transports[ctx]
+	req.Transport = p.transports[opts.ctx]
 
 	// Execute!
 	res, err := req.Do()
@@ -203,27 +138,17 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
+	p.proxiedTunnel(w, r)
+}
+
 // tunnel hijacks the client request, creates a pipe between client and backend server
 // and starts streaming data between the two connections.
-func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
+func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
-	// Make sure Context is set
-	ctx, ok := r.Context().Value("Context").(string)
-	if !ok || ctx == "" {
-		http.Error(w, ContextUndefined, http.StatusInternalServerError)
-		return
-	}
-
-	// Get a kubeconfig context
-	opts := p.getOptions(ctx)
+	opts := optsFromCtx(p.Config, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
-		return
-	}
-
-	dump, err := httputil.DumpRequest(r, true)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
@@ -233,30 +158,109 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst_conn, err := tls.Dial("tcp", u.Host, p.tlsconfigs[ctx])
+	pconn, err := net.Dial("tcp", os.Getenv("https_proxy"))
+	if err != nil {
+		panic(err)
+	}
+
+	connectedReq := &http.Request{
+		Method: "CONNECT",
+		URL: &url.URL{Opaque: u.String()},
+		Host: u.Host,
+		Header: nil,
+	}
+	connectedReq.Write(pconn)
+
+	br := bufio.NewReader(pconn)
+	resp, err := http.ReadResponse(br, connectedReq)
+	if err != nil {
+		pconn.Close()
+		panic(err)
+	}
+
+	if resp.StatusCode != 200 {
+		pconn.Close()
+		fmt.Println(resp.StatusCode)
+		return
+	}
+
+	p.tlsconfigs[opts.ctx].InsecureSkipVerify = true
+
+	dst_conn := tls.Client(pconn, p.tlsconfigs[opts.ctx])
+	err	= dst_conn.Handshake()
+	if err != nil {
+		panic(err)
+	}
+
+	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", opts.AuthInfo.Token))
+	r.Header.Set("Impersonate-User", opts.sub)
+
+	err = stream(dst_conn, w, r)
+	if err != nil {
+		panic(err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+}
+
+// tunnel hijacks the client request, creates a pipe between client and backend server
+// and starts streaming data between the two connections.
+func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
+
+	opts := optsFromCtx(p.Config, r.Context())
+	if opts == nil {
+		http.Error(w, ContextNotFound, http.StatusInternalServerError)
+		return
+	}
+
+	u, err := url.Parse(opts.Server)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 
-	dst_conn.Write(dump)
+	dst_conn, err := tls.Dial("tcp", u.Host, p.tlsconfigs[opts.ctx])
+	if err != nil {
+		panic(err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+	err = stream(dst_conn, w, r)
+	if err != nil {
+		panic(err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+
+}
+
+func stream(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
+
+	dump, err := httputil.DumpRequest(r, true)
+	if err != nil {
+		return err
+	}
+
+	conn.Write(dump)
 
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
-		return
+		return newErr("Hijacking not supported")
 	}
 
 	src_conn, _, err := hijacker.Hijack()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		return err
 	}
 
-	go transfer(dst_conn, src_conn)
-	go transfer(src_conn, dst_conn)
+	go transfer(conn, src_conn)
+	go transfer(src_conn, conn)
 
+	return nil
 }
+
 
 // transfer reads the data from src into a buffer before it writes it into dst
 func transfer(src, dst net.Conn) {
@@ -278,6 +282,7 @@ func transfer(src, dst net.Conn) {
 	}
 
 }
+
 
 // configureTLS composes a TLS configuration from the provided Options parameter.
 // This is useful when building HTTP requests (for example with the net/http package)
@@ -338,4 +343,87 @@ func parseURL(str string) *url.URL {
 		return nil
 	}
 	return u
+}
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
+
+func getAuthInfo(authinfos map[string]*api.AuthInfo, n string) *api.AuthInfo {
+	for k, v := range authinfos {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func getContext(contexts map[string]*api.Context, n string) *api.Context {
+	for k, v := range contexts {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func getCluster(clusters map[string]*api.Cluster, n string) *api.Cluster {
+	for k, v := range clusters {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func getOptions(config *api.Config, n string) *Options {
+	ctx := getContext(config.Contexts, n)
+	if ctx == nil {
+		return nil
+	}
+	authInfo := getAuthInfo(config.AuthInfos, ctx.AuthInfo)
+	if authInfo == nil {
+		return nil
+	}
+	cluster := getCluster(config.Clusters, ctx.Cluster)
+	if cluster == nil {
+		return nil
+	}
+	return &Options{
+		cluster,
+		authInfo,
+		n,
+		"",
+	}
+}
+
+func optsFromCtx(config *api.Config, ctx context.Context) *Options {
+	
+	// Make sure Subject is set
+	sub, ok := ctx.Value("Subject").(string)
+	if !ok || sub == "" {
+		return nil
+	}
+
+	// Make sure Context is set
+	cont, ok := ctx.Value("Context").(string)
+	if !ok || cont == "" {
+		return nil
+	}
+
+	// Get a kubeconfig context
+	opts := getOptions(config, cont)
+	if opts == nil {
+		return nil
+	}
+
+	opts.ctx = cont
+	opts.sub = sub
+
+	return opts
+
 }
