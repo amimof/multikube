@@ -29,14 +29,6 @@ type Proxy struct {
 	tlsconfigs map[string]*tls.Config
 }
 
-func copyHeader(dst, src http.Header) {
-	for k, vv := range src {
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
-
 // NewProxy crerates a new Proxy and initialises router and configuration
 func NewProxy() *Proxy {
 	return &Proxy{
@@ -65,60 +57,12 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 	}
 }
 
-func (p *Proxy) getCluster(n string) *api.Cluster {
-	for k, v := range p.Config.Clusters {
-		if k == n {
-			return v
-		}
-	}
-	return nil
-}
-
-func (p *Proxy) getAuthInfo(n string) *api.AuthInfo {
-	for k, v := range p.Config.AuthInfos {
-		if k == n {
-			return v
-		}
-	}
-	return nil
-}
-
-func (p *Proxy) getContext(n string) *api.Context {
-	for k, v := range p.Config.Contexts {
-		if k == n {
-			return v
-		}
-	}
-	return nil
-}
-
-func (p *Proxy) getOptions(n string) *Options {
-	ctx := p.getContext(n)
-	if ctx == nil {
-		return nil
-	}
-	authInfo := p.getAuthInfo(ctx.AuthInfo)
-	if authInfo == nil {
-		return nil
-	}
-	cluster := p.getCluster(ctx.Cluster)
-	if cluster == nil {
-		return nil
-	}
-	return &Options{
-		cluster,
-		authInfo,
-		"",
-		"",
-	}
-}
-
 // ServeHTTP routes the request to an apiserver. It determines, resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Get a kubeconfig context
-	opts := p.optsFromCtx(r.Context())
+	opts := optsFromCtx(p.Config, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
@@ -202,7 +146,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 // and starts streaming data between the two connections.
 func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
-	opts := p.optsFromCtx(r.Context())
+	opts := optsFromCtx(p.Config, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
@@ -251,7 +195,7 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", opts.AuthInfo.Token))
 	r.Header.Set("Impersonate-User", opts.sub)
 
-	err = something(dst_conn, w, r)
+	err = stream(dst_conn, w, r)
 	if err != nil {
 		panic(err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
@@ -264,7 +208,7 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 // and starts streaming data between the two connections.
 func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
-	opts := p.optsFromCtx(r.Context())
+	opts := optsFromCtx(p.Config, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
@@ -283,7 +227,7 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = something(dst_conn, w, r)
+	err = stream(dst_conn, w, r)
 	if err != nil {
 		panic(err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
@@ -292,7 +236,7 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func something(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
+func stream(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
 
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
@@ -339,32 +283,6 @@ func transfer(src, dst net.Conn) {
 
 }
 
-func (p *Proxy) optsFromCtx(ctx context.Context) *Options {
-	
-	// Make sure Subject is set
-	sub, ok := ctx.Value("Subject").(string)
-	if !ok || sub == "" {
-		return nil
-	}
-
-	// Make sure Context is set
-	cont, ok := ctx.Value("Context").(string)
-	if !ok || cont == "" {
-		return nil
-	}
-
-	// Get a kubeconfig context
-	opts := p.getOptions(cont)
-	if opts == nil {
-		return nil
-	}
-
-	opts.ctx = cont
-	opts.sub = sub
-
-	return opts
-
-}
 
 // configureTLS composes a TLS configuration from the provided Options parameter.
 // This is useful when building HTTP requests (for example with the net/http package)
@@ -425,4 +343,87 @@ func parseURL(str string) *url.URL {
 		return nil
 	}
 	return u
+}
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
+
+func getAuthInfo(authinfos map[string]*api.AuthInfo, n string) *api.AuthInfo {
+	for k, v := range authinfos {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func getContext(contexts map[string]*api.Context, n string) *api.Context {
+	for k, v := range contexts {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func getCluster(clusters map[string]*api.Cluster, n string) *api.Cluster {
+	for k, v := range clusters {
+		if k == n {
+			return v
+		}
+	}
+	return nil
+}
+
+func getOptions(config *api.Config, n string) *Options {
+	ctx := getContext(config.Contexts, n)
+	if ctx == nil {
+		return nil
+	}
+	authInfo := getAuthInfo(config.AuthInfos, ctx.AuthInfo)
+	if authInfo == nil {
+		return nil
+	}
+	cluster := getCluster(config.Clusters, ctx.Cluster)
+	if cluster == nil {
+		return nil
+	}
+	return &Options{
+		cluster,
+		authInfo,
+		n,
+		"",
+	}
+}
+
+func optsFromCtx(config *api.Config, ctx context.Context) *Options {
+	
+	// Make sure Subject is set
+	sub, ok := ctx.Value("Subject").(string)
+	if !ok || sub == "" {
+		return nil
+	}
+
+	// Make sure Context is set
+	cont, ok := ctx.Value("Context").(string)
+	if !ok || cont == "" {
+		return nil
+	}
+
+	// Get a kubeconfig context
+	opts := getOptions(config, cont)
+	if opts == nil {
+		return nil
+	}
+
+	opts.ctx = cont
+	opts.sub = sub
+
+	return opts
+
 }
