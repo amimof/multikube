@@ -6,13 +6,14 @@ import (
 	"crypto/x509"
 	"fmt"
 	"bufio"
-	"os"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"net"
+	"strings"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"golang.org/x/net/http/httpproxy"
 )
 
 const (
@@ -75,6 +76,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 		return
 	}
+
 	p.tlsconfigs[opts.ctx] = tlsConfig
 
 	// Tunnel the connection if server sends Upgrade
@@ -138,12 +140,20 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// tunnel makes use of the two methods directTunnel() and proxiedTunnel(). It chooses one of these
+// depending on the http proxy environment variables configured in the runtime environment.
 func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
-	p.proxiedTunnel(w, r)
+	if httpproxy.FromEnvironment().HTTPSProxy != "" {
+		p.proxiedTunnel(w, r)
+	} else {
+		p.directTunnel(w, r)
+	}
 }
 
-// tunnel hijacks the client request, creates a pipe between client and backend server
-// and starts streaming data between the two connections.
+// proxiedTunnel establishes a connection to an http proxy, configured in environment variables,
+// and starts streaming data between a client and the backend server through the http proxy. 
+// Makes use of http/1.1 CONNECT and reads the HTTPS_PROXY environment variable, ignoring HTTP_PROXY 
+// since connections from multikube to a kubernetes API will always be HTTPS.
 func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
 	opts := optsFromCtx(p.Config, r.Context())
@@ -158,7 +168,7 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pconn, err := net.Dial("tcp", os.Getenv("https_proxy"))
+	pconn, err := net.Dial("tcp", getHostAndPort(httpproxy.FromEnvironment().HTTPSProxy))
 	if err != nil {
 		panic(err)
 	}
@@ -204,8 +214,9 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// tunnel hijacks the client request, creates a pipe between client and backend server
-// and starts streaming data between the two connections.
+// directTunnel establishes a direct connection between multikube and a the kubernetes API
+// and starts streaming data between the two connections on behalf of the client. directTunnel will bypass 
+// http proxy environment variables. For proxied connections, use proxiedTunnel().
 func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
 	opts := optsFromCtx(p.Config, r.Context())
@@ -236,6 +247,8 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// stream hijacks the client connection and copies the data from the destination connection (conn) 
+// to the hijacked client connection. 
 func stream(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
 
 	dump, err := httputil.DumpRequest(r, true)
@@ -262,7 +275,8 @@ func stream(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
 }
 
 
-// transfer reads the data from src into a buffer before it writes it into dst
+// transfer reads data on src and copies it to dst. Data read from src is first copied into
+// a buffer before it's written to dst.
 func transfer(src, dst net.Conn) {
 	buff := make([]byte, 65535)
 
@@ -284,7 +298,7 @@ func transfer(src, dst net.Conn) {
 }
 
 
-// configureTLS composes a TLS configuration from the provided Options parameter.
+// configureTLS composes a TLS configuration (tls.Config) from the provided Options parameter.
 // This is useful when building HTTP requests (for example with the net/http package)
 // and the TLS data is configured elsewhere.
 func configureTLS(options *Options) (*tls.Config, error) {
@@ -345,6 +359,7 @@ func parseURL(str string) *url.URL {
 	return u
 }
 
+// copyHeader adds all headers from dst to src
 func copyHeader(dst, src http.Header) {
 	for k, vv := range src {
 		for _, v := range vv {
@@ -353,6 +368,7 @@ func copyHeader(dst, src http.Header) {
 	}
 }
 
+// getAuthInfo returns an api.AuthInfo in map authinfos identified by it's key n
 func getAuthInfo(authinfos map[string]*api.AuthInfo, n string) *api.AuthInfo {
 	for k, v := range authinfos {
 		if k == n {
@@ -362,6 +378,7 @@ func getAuthInfo(authinfos map[string]*api.AuthInfo, n string) *api.AuthInfo {
 	return nil
 }
 
+// getContext returns an api.Context in map contexts identified by it's key n
 func getContext(contexts map[string]*api.Context, n string) *api.Context {
 	for k, v := range contexts {
 		if k == n {
@@ -371,6 +388,7 @@ func getContext(contexts map[string]*api.Context, n string) *api.Context {
 	return nil
 }
 
+// getCluster returns an api.Cluster in map clusters identified by it's key n
 func getCluster(clusters map[string]*api.Cluster, n string) *api.Cluster {
 	for k, v := range clusters {
 		if k == n {
@@ -380,6 +398,8 @@ func getCluster(clusters map[string]*api.Cluster, n string) *api.Cluster {
 	return nil
 }
 
+// getOptions returns a new pointer to an Options instance which is constructed
+// from an api.Config object and name n. Returns a nil value if unable to find an Options that matches.
 func getOptions(config *api.Config, n string) *Options {
 	ctx := getContext(config.Contexts, n)
 	if ctx == nil {
@@ -401,6 +421,8 @@ func getOptions(config *api.Config, n string) *Options {
 	}
 }
 
+// optsFromCtx returns a pointer to an Options instance defined by context and api.Config. Returns
+// a nil value if unable to find an Options matching values in context and the given config.
 func optsFromCtx(config *api.Config, ctx context.Context) *Options {
 	
 	// Make sure Subject is set
@@ -425,5 +447,23 @@ func optsFromCtx(config *api.Config, ctx context.Context) *Options {
 	opts.sub = sub
 
 	return opts
+
+}
+
+// getHostAndPort takes a string, and returns host and port in the format host:port.
+// If uri is a url then the scheme is removed. For example https://amimof.com becomes amimof.com:80
+func getHostAndPort(uri string) string {
+
+	// Strip http scheme
+	schemeStrip := strings.Replace(uri, "http://", "", 1)
+	// Strip https scheme
+	schemeStrip = strings.Replace(schemeStrip, "https://", "", 1)
+
+	// Append default port 80 if missing
+	if !strings.Contains(schemeStrip, ":") {
+		schemeStrip = fmt.Sprintf("%s:%s", schemeStrip, "80")
+	}
+
+	return schemeStrip
 
 }
