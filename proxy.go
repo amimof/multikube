@@ -1,19 +1,19 @@
 package multikube
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"bufio"
+	"golang.org/x/net/http/httpproxy"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"net"
-	"strings"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"golang.org/x/net/http/httpproxy"
+	"strings"
 )
 
 const (
@@ -132,7 +132,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		b := buf[:n]
-		w.Write(b)
+		_, err = w.Write(b)
+		if err != nil {
+			break
+		}
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
@@ -151,8 +154,8 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 }
 
 // proxiedTunnel establishes a connection to an http proxy, configured in environment variables,
-// and starts streaming data between a client and the backend server through the http proxy. 
-// Makes use of http/1.1 CONNECT and reads the HTTPS_PROXY environment variable, ignoring HTTP_PROXY 
+// and starts streaming data between a client and the backend server through the http proxy.
+// Makes use of http/1.1 CONNECT and reads the HTTPS_PROXY environment variable, ignoring HTTP_PROXY
 // since connections from multikube to a kubernetes API will always be HTTPS.
 func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
@@ -175,8 +178,8 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
 	connectedReq := &http.Request{
 		Method: "CONNECT",
-		URL: &url.URL{Opaque: u.String()},
-		Host: u.Host,
+		URL:    &url.URL{Opaque: u.String()},
+		Host:   u.Host,
 		Header: nil,
 	}
 	connectedReq.Write(pconn)
@@ -197,7 +200,7 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 	p.tlsconfigs[opts.ctx].InsecureSkipVerify = true
 
 	dst_conn := tls.Client(pconn, p.tlsconfigs[opts.ctx])
-	err	= dst_conn.Handshake()
+	err = dst_conn.Handshake()
 	if err != nil {
 		panic(err)
 	}
@@ -215,7 +218,7 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 }
 
 // directTunnel establishes a direct connection between multikube and a the kubernetes API
-// and starts streaming data between the two connections on behalf of the client. directTunnel will bypass 
+// and starts streaming data between the two connections on behalf of the client. directTunnel will bypass
 // http proxy environment variables. For proxied connections, use proxiedTunnel().
 func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
@@ -247,8 +250,8 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// stream hijacks the client connection and copies the data from the destination connection (conn) 
-// to the hijacked client connection. 
+// stream hijacks the client connection and copies the data from the destination connection (conn)
+// to the hijacked client connection.
 func stream(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
 
 	dump, err := httputil.DumpRequest(r, true)
@@ -274,7 +277,6 @@ func stream(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-
 // transfer reads data on src and copies it to dst. Data read from src is first copied into
 // a buffer before it's written to dst.
 func transfer(src, dst net.Conn) {
@@ -296,7 +298,6 @@ func transfer(src, dst net.Conn) {
 	}
 
 }
-
 
 // configureTLS composes a TLS configuration (tls.Config) from the provided Options parameter.
 // This is useful when building HTTP requests (for example with the net/http package)
@@ -424,7 +425,7 @@ func getOptions(config *api.Config, n string) *Options {
 // optsFromCtx returns a pointer to an Options instance defined by context and api.Config. Returns
 // a nil value if unable to find an Options matching values in context and the given config.
 func optsFromCtx(config *api.Config, ctx context.Context) *Options {
-	
+
 	// Make sure Subject is set
 	sub, ok := ctx.Value("Subject").(string)
 	if !ok || sub == "" {
