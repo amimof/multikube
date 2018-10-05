@@ -1,11 +1,11 @@
-FROM golang:1.10-alpine
+FROM golang:alpine AS build-env
+RUN  apk add --no-cache git make ca-certificates
 LABEL maintaner="@amimof (amir.mofasser@gmail.com)"
-COPY . $GOPATH/src/gitlab.com/amimof/multikube
-WORKDIR $GOPATH/src/gitlab.com/amimof/multikube
-RUN set -x \
-&&  apk add --update --virtual .build-dep make git gcc \
-&&  make linux \
-&&  mv out/multikube-linux-amd64 /go/bin/multikube \
-&&  apk del .build-dep \
-&&  rm -rf /var/cache/apk
-ENTRYPOINT [ "/go/bin/multikube" ]
+COPY . /go/src/gitlab.com/amimof/multikube
+WORKDIR /go/src/gitlab.com/amimof/multikube
+RUN make linux
+
+FROM scratch
+COPY --from=build-env /go/src/gitlab.com/amimof/multikube/out/multikube-linux-amd64 /go/bin/multikube
+COPY --from=build-env /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+ENTRYPOINT ["/go/bin/multikube"]
