@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
-	"golang.org/x/net/http2"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -36,7 +35,6 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 			ExpectContinueTimeout: 1 * time.Second,
 			TLSClientConfig:       t.TLSClientConfig,
 		}
-		http2.ConfigureTransport(t.transport)
 	}
 
 	// Initialize the cache
@@ -62,14 +60,18 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 			return nil, err
 		}
 
-		resBytes, err := httputil.DumpResponse(res, true)
-		if err != nil {
-			return nil, err
-		}
+		if isCacheable(res.Request) {
 
-		// Cache the response if it's cacheable.
-		if req.Method == http.MethodGet && (res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotModified) {
-			t.Cache.Set(req.URL.String(), resBytes)
+			// Careful! DumpResponse will drain our original response and replace it with a new one
+			resBytes, err := httputil.DumpResponse(res, true)
+			if err != nil {
+				return nil, err
+			}
+
+			//Cache the response if it's cacheable.
+			if req.Method == http.MethodGet && (res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotModified) {
+				t.Cache.Set(req.URL.String(), resBytes)
+			}
 		}
 
 	}
@@ -85,4 +87,15 @@ func (t *Transport) readResponse(req *http.Request) (*http.Response, error) {
 	}
 	b := bytes.NewBuffer(item.Value)
 	return http.ReadResponse(bufio.NewReader(b), req)
+}
+
+// isCacheable determines if an http request is eligable for caching
+// by looking for watch and follow query parameters in the URL. This is very
+// Kubernetes-specific and needs a better implementation. But will do for now.
+func isCacheable(r *http.Request) bool {
+	q := r.URL.Query()
+	if q.Get("watch") == "true" || q.Get("follow") == "true" {
+		return false
+	}
+	return true
 }
