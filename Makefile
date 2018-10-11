@@ -4,7 +4,7 @@
 
 BINARY=multikube
 GOARCH=amd64
-VERSION=1.0.0-alpha.5
+VERSION=1.0.0-alpha.6
 COMMIT=$(shell git rev-parse HEAD)
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 GITHUB_USERNAME=amimof

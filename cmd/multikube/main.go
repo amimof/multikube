@@ -56,12 +56,12 @@ func init() {
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
 	pflag.StringVar(&tlsSignerCertificate, "tls-signer-certificate", "", "the certificate to use when verifying client certificates and JWT token signature")
-	pflag.StringVar(&kubeconfigPath, "kubeconfig", "~/.kube/config", "absolute path to a kubeconfig file")
-	pflag.StringSliceVar(&enabledListeners, "scheme", []string{}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
+	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
+	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
-	pflag.IntVar(&port, "port", 443, "the port to listen on for insecure connections, defaults to 443")
+	pflag.IntVar(&port, "port", 8080, "the port to listen on for insecure connections, defaults to 8080")
 	pflag.IntVar(&listenLimit, "listen-limit", 0, "limit the number of outstanding requests")
-	pflag.IntVar(&tlsPort, "tls-port", 0, "the port to listen on for secure connections, defaults to a random value")
+	pflag.IntVar(&tlsPort, "tls-port", 8443, "the port to listen on for secure connections, defaults to 8443")
 	pflag.IntVar(&tlsListenLimit, "tls-listen-limit", 0, "limit the number of outstanding requests")
 	pflag.Uint64Var(&maxHeaderSize, "max-header-size", 1000000, "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
 
