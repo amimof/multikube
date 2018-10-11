@@ -42,7 +42,7 @@ func WithLogging(next http.Handler) http.Handler {
 func WithValidate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		cert := r.Context().Value("signer").(*x509.Certificate)
+		cert := r.Context().Value("rs256PublicKey").(*x509.Certificate)
 
 		t, err := jws.ParseJWTFromRequest(r)
 		if err != nil {

@@ -34,16 +34,17 @@ var (
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 
-	tlsHost              string
-	tlsPort              int
-	tlsListenLimit       int
-	tlsKeepAlive         time.Duration
-	tlsReadTimeout       time.Duration
-	tlsWriteTimeout      time.Duration
-	tlsCertificate       string
-	tlsCertificateKey    string
-	tlsCACertificate     string
-	tlsSignerCertificate string
+	tlsHost           string
+	tlsPort           int
+	tlsListenLimit    int
+	tlsKeepAlive      time.Duration
+	tlsReadTimeout    time.Duration
+	tlsWriteTimeout   time.Duration
+	tlsCertificate    string
+	tlsCertificateKey string
+	tlsCACertificate  string
+
+	rs256PublicKey string
 
 	kubeconfigPath string
 )
@@ -55,7 +56,7 @@ func init() {
 	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
-	pflag.StringVar(&tlsSignerCertificate, "tls-signer-certificate", "", "the certificate to use when verifying client certificates and JWT token signature")
+	pflag.StringVar(&rs256PublicKey, "rs256-public-key", "", "the RS256 public key used to validate the signature of client JWT's")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
@@ -100,6 +101,11 @@ func main() {
 		return
 	}
 
+	// rs256-public-key is required
+	if rs256PublicKey == "" {
+		log.Fatalf("the required flag `--rs256-public-key` was not specified")
+	}
+
 	// Read provided kubeconfig file
 	c, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
@@ -110,8 +116,8 @@ func main() {
 	p := multikube.NewProxyFrom(c)
 
 	// Read provided signer cert file
-	if tlsSignerCertificate != "" {
-		signer, err := ioutil.ReadFile(tlsSignerCertificate)
+	if rs256PublicKey != "" {
+		signer, err := ioutil.ReadFile(rs256PublicKey)
 		if err != nil {
 			log.Fatal(err)
 		}

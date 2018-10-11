@@ -52,7 +52,7 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 			for i := len(mw) - 1; i >= 0; i-- {
 				last = mw[i](last)
 			}
-			ctx := context.WithValue(r.Context(), "signer", p.CertChain)
+			ctx := context.WithValue(r.Context(), "rs256PublicKey", p.CertChain)
 			last.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
