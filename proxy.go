@@ -77,7 +77,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.tlsconfigs[opts.ctx] = tlsConfig
+	if p.tlsconfigs[opts.ctx] == nil {
+		p.tlsconfigs[opts.ctx] = tlsConfig
+	}
 
 	// Tunnel the connection if server sends Upgrade
 	if r.Header.Get("Upgrade") != "" {
