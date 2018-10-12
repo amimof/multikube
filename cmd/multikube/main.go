@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	VERSION string
-	COMMIT  string
-	BRANCH  string
+	VERSION   string
+	COMMIT    string
+	BRANCH    string
+	GOVERSION string
 
 	enabledListeners []string
 	cleanupTimeout   time.Duration
@@ -97,7 +98,7 @@ func main() {
 
 	// Show version if requested
 	if *showver {
-		fmt.Printf("Version: %s\nCommit: %s\nBranch: %s\n", VERSION, COMMIT, BRANCH)
+		fmt.Printf("Version: %s\nCommit: %s\nBranch: %s\nGoVersion: %s\n", VERSION, COMMIT, BRANCH, GOVERSION)
 		return
 	}
 
