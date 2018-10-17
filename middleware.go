@@ -13,6 +13,18 @@ import (
 type MiddlewareFunc func(next http.HandlerFunc) http.HandlerFunc
 type Middleware func(http.Handler) http.Handler
 
+// responseWriter implements http.ResponseWriter and adds status code
+// so that WithLogging middleware can log response status codes
+type responseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *responseWriter) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
 // WithEmpty is an empty handler that does nothing
 func WithEmpty(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -33,8 +45,9 @@ func WithTracing(next http.Handler) http.Handler {
 // WithLogging applies access log style logging to the HTTP server
 func WithLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s %s %s", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto)
-		next.ServeHTTP(w, r)
+		lrw := &responseWriter{w, http.StatusOK}
+		next.ServeHTTP(lrw, r)
+		log.Printf("%s %s %s %s %s %d", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, lrw.status)
 	})
 }
 
