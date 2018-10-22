@@ -5,6 +5,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"github.com/opentracing/opentracing-go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
@@ -45,6 +46,9 @@ var (
 	tlsCertificateKey string
 	tlsCACertificate  string
 
+	metricsHost string
+	metricsPort int
+
 	rs256PublicKey string
 
 	kubeconfigPath string
@@ -52,18 +56,20 @@ var (
 
 func init() {
 	pflag.StringVar(&socketPath, "socket-path", "/var/run/multikube.sock", "the unix socket to listen on")
-	pflag.StringVar(&host, "host", "localhost", "the IP to listen on")
-	pflag.StringVar(&tlsHost, "tls-host", "localhost", "the IP to listen on")
+	pflag.StringVar(&host, "host", "localhost", "The host address on which to listen for the --port port")
+	pflag.StringVar(&tlsHost, "tls-host", "localhost", "The host address on which to listen for the --tls-port port")
 	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
 	pflag.StringVar(&rs256PublicKey, "rs256-public-key", "", "the RS256 public key used to validate the signature of client JWT's")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
+	pflag.StringVar(&metricsHost, "metrics-host", "localhost", "The host address on which to listen for the --metrics-port port")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
 	pflag.IntVar(&port, "port", 8080, "the port to listen on for insecure connections, defaults to 8080")
-	pflag.IntVar(&listenLimit, "listen-limit", 0, "limit the number of outstanding requests")
 	pflag.IntVar(&tlsPort, "tls-port", 8443, "the port to listen on for secure connections, defaults to 8443")
+	pflag.IntVar(&metricsPort, "metrics-port", 8888, "the port to listen on for Prometheus metrics, defaults to 8888")
+	pflag.IntVar(&listenLimit, "listen-limit", 0, "limit the number of outstanding requests")
 	pflag.IntVar(&tlsListenLimit, "tls-listen-limit", 0, "limit the number of outstanding requests")
 	pflag.Uint64Var(&maxHeaderSize, "max-header-size", 1000000, "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
 
@@ -74,6 +80,7 @@ func init() {
 	pflag.DurationVar(&tlsKeepAlive, "tls-keep-alive", 3*time.Minute, "sets the TCP keep-alive timeouts on accepted connections. It prunes dead TCP connections ( e.g. closing laptop mid-download)")
 	pflag.DurationVar(&tlsReadTimeout, "tls-read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
 	pflag.DurationVar(&tlsWriteTimeout, "tls-write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
+
 }
 
 func main() {
@@ -134,6 +141,7 @@ func main() {
 	m := p.Use(
 		multikube.WithEmpty,
 		multikube.WithLogging,
+		multikube.WithMetrics,
 		multikube.WithValidate,
 	)
 
@@ -161,6 +169,12 @@ func main() {
 		Handler:           m(p),
 	}
 
+	// Metrics server
+	ms := multikube.NewServer()
+	ms.Port = metricsPort
+	ms.Host = metricsHost
+	ms.Name = "metrics"
+
 	// Setup opentracing
 	cfg := config.Configuration{
 		Sampler: &config.SamplerConfig{
@@ -175,6 +189,9 @@ func main() {
 	tracer, closer, err := cfg.New("multikube", config.Logger(jaeger.StdLogger))
 	opentracing.SetGlobalTracer(tracer)
 	defer closer.Close()
+
+	ms.Handler = promhttp.Handler()
+	go ms.Serve()
 
 	// Listen and serve!
 	err = s.Serve()
