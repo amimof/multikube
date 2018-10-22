@@ -4,11 +4,35 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"time"
 )
+
+var backendHistogram = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "multikube_backend_request_duration_seconds",
+		Help:    "A histogram of request latencies to backends",
+		Buckets: prometheus.DefBuckets,
+	},
+	[]string{},
+)
+
+var backendCounter = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "multikube_backend_requests_total",
+		Help: "A counter for requests to backends.",
+	},
+	[]string{"code", "method"},
+)
+
+var backendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "multikube_backend_live_requests",
+	Help: "A gauge of live requests currently in flight to backends",
+})
 
 // Tansport is an implementation of RoundTripper and extension of http.Transport with the
 // addition of a Cache.
@@ -16,6 +40,10 @@ type Transport struct {
 	Cache           *Cache
 	TLSClientConfig *tls.Config
 	transport       *http.Transport
+}
+
+func init() {
+	prometheus.MustRegister(backendHistogram, backendCounter, backendGauge)
 }
 
 func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error) {
@@ -37,6 +65,13 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 		}
 	}
 
+	// Wrap our RoundTripper with Prometheus middleware.
+	roundTripper := promhttp.InstrumentRoundTripperCounter(backendCounter,
+		promhttp.InstrumentRoundTripperInFlight(backendGauge,
+			promhttp.InstrumentRoundTripperDuration(backendHistogram, t.transport),
+		),
+	)
+
 	// Initialize the cache
 	if t.Cache == nil {
 		t.Cache = NewCache()
@@ -55,7 +90,7 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 	} else {
 
 		// Cache miss!
-		res, err = t.transport.RoundTrip(req)
+		res, err = roundTripper.RoundTrip(req)
 		if err != nil {
 			return nil, err
 		}

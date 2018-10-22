@@ -43,7 +43,7 @@ windows: dep
 	CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-windows-${GOARCH}.exe cmd/multikube/main.go
 
 docker_build:
-	docker run --rm -v "${PWD}":/go/src/gitlab.com/amimof/multikube -w /go/src/gitlab.com/amimof/multikube golang:${GOVERSION} make fmt test linux
+	docker run --rm -v "${PWD}":/go/src/gitlab.com/amimof/multikube -w /go/src/gitlab.com/amimof/multikube golang:${GOVERSION} make fmt test
 	docker build -t registry.gitlab.com/amimof/multikube:${VERSION} .
 	docker tag registry.gitlab.com/amimof/multikube:${VERSION} registry.gitlab.com/amimof/multikube:latest
 
