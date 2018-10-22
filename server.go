@@ -34,6 +34,7 @@ type Server struct {
 	TLSCertificateKey string
 	TLSCACertificate  string
 	SocketPath        string
+	Name              string
 	KeepAlive         time.Duration
 	ReadTimeout       time.Duration
 	WriteTimeout      time.Duration
@@ -180,6 +181,10 @@ func (s *Server) Serve() error {
 		}
 	}
 
+	if s.Name == "" {
+		s.Name = "multikube"
+	}
+
 	var wg sync.WaitGroup
 
 	if s.hasScheme(schemeUnix) {
@@ -192,13 +197,13 @@ func (s *Server) Serve() error {
 		domainSocket.Handler = s.Handler
 
 		wg.Add(2)
-		log.Printf("Serving multikube at unix://%s", s.SocketPath)
+		log.Printf("Serving %s at unix://%s", s.Name, s.SocketPath)
 		go func(l net.Listener) {
 			defer wg.Done()
 			if err := domainSocket.Serve(l); err != nil {
 				log.Fatalf("%v", err)
 			}
-			log.Printf("Stopped serving multikube at unix://%s", s.SocketPath)
+			log.Printf("Stopped serving %s at unix://%s", s.Name, s.SocketPath)
 		}(s.domainSocketL)
 		go s.handleShutdown(&wg, domainSocket)
 	}
@@ -221,13 +226,13 @@ func (s *Server) Serve() error {
 		httpServer.Handler = s.Handler
 
 		wg.Add(2)
-		log.Printf("Serving multikube at http://%s", s.httpServerL.Addr())
+		log.Printf("Serving %s at http://%s", s.Name, s.httpServerL.Addr())
 		go func(l net.Listener) {
 			defer wg.Done()
 			if err := httpServer.Serve(l); err != nil {
 				log.Printf("%v", err)
 			}
-			log.Printf("Stopped serving multikube at http://%s", l.Addr())
+			log.Printf("Stopped serving %s at http://%s", s.Name, l.Addr())
 		}(s.httpServerL)
 		go s.handleShutdown(&wg, httpServer)
 	}
@@ -307,13 +312,13 @@ func (s *Server) Serve() error {
 		}
 
 		wg.Add(2)
-		log.Printf("Serving multikube at https://%s", s.httpsServerL.Addr())
+		log.Printf("Serving %s at https://%s", s.Name, s.httpsServerL.Addr())
 		go func(l net.Listener) {
 			defer wg.Done()
 			if err := httpsServer.Serve(l); err != nil {
 				log.Fatalf("%v", err)
 			}
-			log.Printf("Stopped serving multikube at https://%s", l.Addr())
+			log.Printf("Stopped serving %s at https://%s", s.Name, l.Addr())
 		}(tls.NewListener(s.httpsServerL, httpsServer.TLSConfig))
 		go s.handleShutdown(&wg, httpsServer)
 	}

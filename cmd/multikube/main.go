@@ -46,8 +46,8 @@ var (
 	tlsCertificateKey string
 	tlsCACertificate  string
 
-	metricsHost				string
-	metricsPort				int
+	metricsHost string
+	metricsPort int
 
 	rs256PublicKey string
 
@@ -173,6 +173,7 @@ func main() {
 	ms := multikube.NewServer()
 	ms.Port = metricsPort
 	ms.Host = metricsHost
+	ms.Name = "metrics"
 
 	// Setup opentracing
 	cfg := config.Configuration{
