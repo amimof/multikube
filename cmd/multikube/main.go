@@ -143,6 +143,7 @@ func main() {
 		multikube.WithLogging,
 		multikube.WithMetrics,
 		multikube.WithValidate,
+		multikube.WithHeader,
 	)
 
 	// Create the server
