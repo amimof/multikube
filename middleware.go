@@ -149,3 +149,16 @@ func WithValidate(next http.Handler) http.Handler {
 
 	})
 }
+
+// WithValidate validates JWT tokens in the request. For example Bearer-tokens
+func WithHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := r
+		header := r.Header.Get("Multikube-Context")
+		if header != "" {
+			ctx := context.WithValue(r.Context(), "Context", header)
+			req = r.WithContext(ctx)
+		}
+		next.ServeHTTP(w, req)
+	})
+}
