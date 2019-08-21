@@ -24,7 +24,8 @@ const (
 
 type Proxy struct {
 	CertChain  *x509.Certificate
-	Config     *api.Config
+	Config   	 *Config
+	KubeConfig *api.Config
 	mw         http.Handler
 	transports map[string]http.RoundTripper
 	tlsconfigs map[string]*tls.Config
@@ -38,22 +39,23 @@ func NewProxy() *Proxy {
 	}
 }
 
-func NewProxyFrom(c *api.Config) *Proxy {
+func NewProxyFrom(c *Config, kc *api.Config) *Proxy {
 	p := NewProxy()
 	p.Config = c
+	p.KubeConfig = kc
+
 	return p
 }
 
 // Use chains all middlewares and applies a context to the request flow
 func (p *Proxy) Use(mw ...Middleware) Middleware {
-	return func(final http.Handler) http.Handler {
+	return func(c *Config, final http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			last := final
 			for i := len(mw) - 1; i >= 0; i-- {
-				last = mw[i](last)
+				last = mw[i](p.Config, last)
 			}
-			ctx := context.WithValue(r.Context(), "rs256PublicKey", p.CertChain)
-			last.ServeHTTP(w, r.WithContext(ctx))
+			last.ServeHTTP(w, r)
 		})
 	}
 }
@@ -63,7 +65,7 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Get a kubeconfig context
-	opts := optsFromCtx(p.Config, r.Context())
+	opts := optsFromCtx(p.KubeConfig, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
@@ -161,7 +163,7 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 // since connections from multikube to a kubernetes API will always be HTTPS.
 func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
-	opts := optsFromCtx(p.Config, r.Context())
+	opts := optsFromCtx(p.KubeConfig, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return
@@ -224,7 +226,7 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 // http proxy environment variables. For proxied connections, use proxiedTunnel().
 func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
-	opts := optsFromCtx(p.Config, r.Context())
+	opts := optsFromCtx(p.KubeConfig, r.Context())
 	if opts == nil {
 		http.Error(w, ContextNotFound, http.StatusInternalServerError)
 		return

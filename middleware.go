@@ -2,13 +2,16 @@ package multikube
 
 import (
 	"context"
-	"crypto/x509"
+	"crypto/rsa"
+	"encoding/base64"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/square/go-jose.v2/jwt"
 	"log"
+	"math/big"
 	"net/http"
 )
 
@@ -46,7 +49,7 @@ var responseSize = prometheus.NewHistogramVec(
 )
 
 type MiddlewareFunc func(next http.HandlerFunc) http.HandlerFunc
-type Middleware func(http.Handler) http.Handler
+type Middleware func(*Config, http.Handler) http.Handler
 
 // responseWriter implements http.ResponseWriter and adds status code
 // so that WithLogging middleware can log response status codes
@@ -67,14 +70,14 @@ func (r *responseWriter) WriteHeader(statusCode int) {
 }
 
 // WithEmpty is an empty handler that does nothing
-func WithEmpty(next http.Handler) http.Handler {
+func WithEmpty(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 	})
 }
 
 // WithEmpty is an empty handler that does nothing
-func WithMetrics(next http.Handler) http.Handler {
+func WithMetrics(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pushChain := promhttp.InstrumentHandlerInFlight(frontendGauge,
 			promhttp.InstrumentHandlerDuration(frontendHistogram.MustCurryWith(prometheus.Labels{"handler": "push"}),
@@ -88,7 +91,7 @@ func WithMetrics(next http.Handler) http.Handler {
 }
 
 // WithEmpty is a middleware that starts a new span and populates the context
-func WithTracing(next http.Handler) http.Handler {
+func WithTracing(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		span := opentracing.GlobalTracer().StartSpan("hello")
 		ctx := opentracing.ContextWithSpan(r.Context(), span)
@@ -98,7 +101,7 @@ func WithTracing(next http.Handler) http.Handler {
 }
 
 // WithLogging applies access log style logging to the HTTP server
-func WithLogging(next http.Handler) http.Handler {
+func WithLogging(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lrw := &responseWriter{w, http.StatusOK}
 		next.ServeHTTP(w, r)
@@ -107,14 +110,13 @@ func WithLogging(next http.Handler) http.Handler {
 }
 
 // WithValidate validates JWT tokens in the request. For example Bearer-tokens
-func WithValidate(next http.Handler) http.Handler {
+// TODO: Fix doc!
+func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		cert := r.Context().Value("rs256PublicKey").(*x509.Certificate)
 
 		t, err := jws.ParseJWTFromRequest(r)
 		if err != nil {
-			log.Printf("ERROR token: %s", err)
+			log.Printf("ERROR parsing JWT from request: %s", err)
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -125,7 +127,7 @@ func WithValidate(next http.Handler) http.Handler {
 			return
 		}
 
-		err = t.Validate(cert.PublicKey, crypto.SigningMethodRS256)
+		err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
 		if err != nil {
 			log.Printf("ERROR validate: %s", err.Error())
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -150,8 +152,82 @@ func WithValidate(next http.Handler) http.Handler {
 	})
 }
 
+// WithJWKValidation
+// TODO: Fix doc!
+func WithJWKValidation(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		t, err := jws.ParseJWTFromRequest(r)
+		if err != nil {
+			log.Printf("ERROR parsing JWT from request: %s", err)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		raw := string(getTokenFromRequest(r))
+		tok, err := jwt.ParseSigned(raw)
+		if err != nil {
+			log.Printf("ERROR parsing JWS from request : %s", err)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// Try to find a JWK using the kid
+		kid := tok.Headers[0].KeyID
+		jwk := c.JWKS.Find(kid)
+		if jwk == nil {
+			log.Printf("%s", "ERROR: Key ID mismatch parsing JWS from request : %s")
+			http.Error(w, "", http.StatusUnauthorized)
+			return
+		}
+		if jwk.Kty != "RSA" {
+			log.Printf("ERROR: Invalid key type. Expected 'RSA' got '%s'", jwk.Kty)
+			http.Error(w, "", http.StatusUnauthorized)
+			return
+		}
+
+		// decode the base64 bytes for n
+		nb, err := base64.RawURLEncoding.DecodeString(jwk.N)
+		if err != nil {
+			log.Printf("ERROR decoding N : %s", err)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// Check if E is big-endian int
+		if jwk.E != "AQAB" && jwk.E != "AAEAAQ" {
+			log.Printf("%s %s %s", "ERROR: Expected E to be a big-endian int", jwk.E)
+			http.Error(w, "", http.StatusUnauthorized)
+			return
+		}
+
+		pk := &rsa.PublicKey{
+			N: new(big.Int).SetBytes(nb),
+			E: 65537,
+		}
+
+		err = t.Validate(pk, crypto.SigningMethodRS256)
+		if err != nil {
+			log.Printf("ERROR validate: %s", err.Error())
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		s, ok := t.Claims().Get("sub").(string)
+		if !ok {
+			s = ""
+		}
+
+		ctx := context.WithValue(r.Context(), "Context", "kladdis")
+		ctx = context.WithValue(ctx, "Subject", s)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+
+	})
+}
+
 // WithValidate validates JWT tokens in the request. For example Bearer-tokens
-func WithHeader(next http.Handler) http.Handler {
+func WithHeader(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := r
 		header := r.Header.Get("Multikube-Context")
