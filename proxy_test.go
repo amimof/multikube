@@ -12,21 +12,26 @@ var (
 	defToken  string = "aGVsbG93b3JsZA=="
 )
 
-var conf *api.Config = &api.Config{
+var config *multikube.Config = &multikube.Config{
+	OIDCIssuerURL:  "http://localhost:5556/dex",
+	RS256PublicKey: nil,
+}
+
+var kubeConf *api.Config = &api.Config{
 	APIVersion: "v1",
 	Kind:       "Config",
 	Clusters: map[string]*api.Cluster{
-		name: &api.Cluster{
+		name: {
 			Server: defServer,
 		},
 	},
 	AuthInfos: map[string]*api.AuthInfo{
-		name: &api.AuthInfo{
+		name: {
 			Token: defToken,
 		},
 	},
 	Contexts: map[string]*api.Context{
-		name: &api.Context{
+		name: {
 			Cluster:  name,
 			AuthInfo: name,
 		},
@@ -36,20 +41,20 @@ var conf *api.Config = &api.Config{
 
 // Just creates a new proxy instance
 func TestProxyNewProxy(t *testing.T) {
-	p := multikube.NewProxyFrom(conf)
-	server := p.Config.Clusters[name].Server
+	p := multikube.NewProxyFrom(config, kubeConf)
+	server := p.KubeConfig.Clusters[name].Server
 	if server != defServer {
 		t.Fatalf("Expected config cluster to be %s, got %s", defServer, server)
 	}
-	token := p.Config.AuthInfos[name].Token
+	token := p.KubeConfig.AuthInfos[name].Token
 	if token != defToken {
 		t.Fatalf("Expected config token to be %s, got %s", defToken, token)
 	}
-	context := p.Config.Contexts[name]
+	context := p.KubeConfig.Contexts[name]
 	if context.Cluster != name && context.AuthInfo != name {
 		t.Fatalf("Expected config context cluster & authinfo to be %s, got cluster: %s authinfo: %s", name, context.Cluster, context.AuthInfo)
 	}
-	currcontext := p.Config.CurrentContext
+	currcontext := p.KubeConfig.CurrentContext
 	if currcontext != name {
 		t.Fatalf("Expected config current-context to be %s, got %s", name, currcontext)
 	}

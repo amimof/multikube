@@ -34,7 +34,7 @@ func TestMiddleware(t *testing.T) {
 
 // Test the logging middleware. Should print output to the console
 func TestMiddlewareWithLogging(t *testing.T) {
-	handler := multikube.WithLogging(http.HandlerFunc(testHandler))
+	handler := multikube.WithLogging(nil, http.HandlerFunc(testHandler))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/", nil)
 	w := httptest.NewRecorder()
@@ -55,7 +55,7 @@ func TestMiddlewareWithLogging(t *testing.T) {
 
 // Test the empty middleware. Shouldn't do anything
 func TestMiddlewareWithEmpty(t *testing.T) {
-	handler := multikube.WithEmpty(http.HandlerFunc(testHandler))
+	handler := multikube.WithEmpty(nil, http.HandlerFunc(testHandler))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/", nil)
 	w := httptest.NewRecorder()

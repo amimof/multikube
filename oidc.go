@@ -2,10 +2,10 @@ package multikube
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
-	"fmt"
 )
 
 type JWKS struct {
@@ -34,7 +34,7 @@ func getTokenFromRequest(req *http.Request) []byte {
 	return nil
 }
 
-// dials an url which returns an array of Json Web Keys. The URL is typically 
+// dials an url which returns an array of Json Web Keys. The URL is typically
 // an OpenID Connect .well-formed URL as per https://openid.net/specs/openid-connect-discovery-1_0.html
 // Unmarshals it's json content into JWKS and returns it
 func getKeys(u string) (*JWKS, error) {
@@ -53,6 +53,9 @@ func getKeys(u string) (*JWKS, error) {
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	var jwks *JWKS
 	err = json.Unmarshal(body, &jwks)
@@ -82,6 +85,9 @@ func getWellKnown(u string) (*OpenIDConfiguration, error) {
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
 	var c *OpenIDConfiguration
 	err = json.Unmarshal(body, &c)

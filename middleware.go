@@ -196,7 +196,7 @@ func WithJWKValidation(c *Config, next http.Handler) http.Handler {
 
 		// Check if E is big-endian int
 		if jwk.E != "AQAB" && jwk.E != "AAEAAQ" {
-			log.Printf("%s %s %s", "ERROR: Expected E to be a big-endian int", jwk.E)
+			log.Printf("ERROR: Expected E to be one of 'AQAB' and 'AAEAAQ' but got '%s'", jwk.E)
 			http.Error(w, "", http.StatusUnauthorized)
 			return
 		}

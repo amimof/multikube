@@ -124,7 +124,7 @@ func (t *Transport) readResponse(req *http.Request) (*http.Response, error) {
 	return http.ReadResponse(bufio.NewReader(b), req)
 }
 
-// isCacheable determines if an http request is eligable for caching
+// isCacheable determines if an http request is eligible for caching
 // by looking for watch and follow query parameters in the URL. This is very
 // Kubernetes-specific and needs a better implementation. But will do for now.
 func isCacheable(r *http.Request) bool {
