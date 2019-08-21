@@ -36,6 +36,7 @@ var (
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 
+	oidcIssuerUrl     string
 	tlsHost           string
 	tlsPort           int
 	tlsListenLimit    int
@@ -64,6 +65,7 @@ func init() {
 	pflag.StringVar(&rs256PublicKey, "rs256-public-key", "", "the RS256 public key used to validate the signature of client JWT's")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
 	pflag.StringVar(&metricsHost, "metrics-host", "localhost", "The host address on which to listen for the --metrics-port port")
+	pflag.StringVar(&oidcIssuerUrl, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
 	pflag.IntVar(&port, "port", 8080, "the port to listen on for insecure connections, defaults to 8080")
@@ -109,9 +111,10 @@ func main() {
 		return
 	}
 
-	// rs256-public-key is required
-	if rs256PublicKey == "" {
-		log.Fatalf("the required flag `--rs256-public-key` was not specified")
+	// At least one of rs256-public-key and/or oidc-issuer-url must be set
+	if rs256PublicKey == "" && oidcIssuerUrl == "" {
+		//log.Fatalf("the required flag `--rs256-public-key` was not specified")
+		log.Fatalf("Both flags `--rs256-public-key` and `--oidc-issuer-url` cannot be empty, please set one or both")
 	}
 
 	// Read provided kubeconfig file
@@ -120,10 +123,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Create the proxy
-	p := multikube.NewProxyFrom(c)
-
 	// Read provided signer cert file
+	var certChain *x509.Certificate
 	if rs256PublicKey != "" {
 		signer, err := ioutil.ReadFile(rs256PublicKey)
 		if err != nil {
@@ -134,15 +135,32 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		p.CertChain = cert
+		certChain = cert
 	}
+
+	// Compose multikube config
+	mwconfig := &multikube.Config{
+		OIDCIssuerURL:  oidcIssuerUrl,
+		RS256PublicKey: certChain,
+	}
+
+	// Get stuff from oidc thing
+	jwks, err := multikube.GetJWKSFromURL(mwconfig.OIDCIssuerURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	mwconfig.JWKS = jwks
+
+	// Create the proxy
+	p := multikube.NewProxyFrom(mwconfig, c)
 
 	// Setup middlewares
 	m := p.Use(
 		multikube.WithEmpty,
 		multikube.WithLogging,
 		multikube.WithMetrics,
-		multikube.WithValidate,
+		//multikube.WithRS256Validation,
+		multikube.WithJWKValidation,
 		multikube.WithHeader,
 	)
 
@@ -167,7 +185,7 @@ func main() {
 		TLSKeepAlive:      tlsKeepAlive,
 		TLSReadTimeout:    tlsReadTimeout,
 		TLSWriteTimeout:   tlsWriteTimeout,
-		Handler:           m(p),
+		Handler:           m(nil, p),
 	}
 
 	// Metrics server

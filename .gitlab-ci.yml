@@ -1,5 +1,5 @@
 # This file is a template, and might need editing before it works on your project.
-image: golang:1.11
+image: golang:1.12
 
 variables:
   # Please edit to your GitLab project
@@ -12,9 +12,11 @@ variables:
 # repository in /go/src/gitlab.com/namespace/project
 # Thus, making a symbolic link corrects this.
 before_script:
-  - mkdir -p $GOPATH/src/$(dirname $REPO_NAME)
-  - ln -svf $CI_PROJECT_DIR $GOPATH/src/$REPO_NAME
-  - cd $GOPATH/src/$REPO_NAME
+  # - mkdir -p $GOPATH/src/$(dirname $REPO_NAME)
+  # - ln -svf $CI_PROJECT_DIR $GOPATH/src/$REPO_NAME
+  # - cd $GOPATH/src/$REPO_NAME
+  - mkdir -p .cache
+  - export GOPATH="$CI_PROJECT_DIR/.cache"
 
 stages:
     - test

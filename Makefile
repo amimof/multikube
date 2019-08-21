@@ -28,19 +28,19 @@ fmt:
 	cd - >/dev/null
 
 dep:
-	go get -v -d ./cmd/multikube/... ;
+	GO111MODULES=on go get -v -d ./cmd/multikube/... ;
 
 linux: dep
-	CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-linux-${GOARCH} cmd/multikube/main.go
+	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-linux-${GOARCH} ./cmd/multikube/...
 
 rpi: dep
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-linux-arm cmd/multikube/main.go
+	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-linux-arm ./cmd/multikube/...
 
 darwin: dep
-	CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-darwin-${GOARCH} cmd/multikube/main.go
+	GO111MODULES=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-darwin-${GOARCH} ./cmd/multikube/...
 
 windows: dep
-	CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-windows-${GOARCH}.exe cmd/multikube/main.go
+	GO111MODULES=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ${BUILD_DIR}/out/${BINARY}-windows-${GOARCH}.exe ./cmd/multikube/...
 
 docker_build:
 	docker run --rm -v "${PWD}":/go/src/gitlab.com/amimof/multikube -w /go/src/gitlab.com/amimof/multikube golang:${GOVERSION} make fmt test
