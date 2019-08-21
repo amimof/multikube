@@ -16,7 +16,7 @@ Features
 
 In it's core, Multikube is a special type of HTTP router capable of routing requests based on the `HTTP authorization header`. Multikube expects clients to send special *"multikube-friendly"* access tokens when they wish to leverage the routing capabilities of Multikube. These special access tokens are JWT's ([JSON Web Tokens](https://jwt.io/)), much like those in Kubernetes, but with additional metadata that tells Multikube which kube-apiserver to route the request to.
 
-A typical Multikube JWT header might look like this. The following shows a token with two important fields that are necessary in order for multikube to succesfully route the request to the correct Kubernetes API. In this case a cluster named *minikube*. These fields are `sub` and `ctx`. 
+A typical Multikube JWT header might look like this. The following shows a token with two important fields that are necessary in order for multikube to successfully route the request to the correct Kubernetes API. In this case a cluster named *minikube*. These fields are `sub` and `ctx`. 
 ```json
 {
   "sub": "developer",
@@ -57,7 +57,7 @@ kubectl config set-context minikube \
   --kubeconfig=/etc/multikube/multikube.kubeconfig
 ```
 
-With this kubeconfig file, clients having a JWT where the `ctx` field in the header is set to minikube will be routed to the cluster minikube. Ofcourse the kubeconfig file may contain as many contextes as you like. Note that we haven't set the `current-context` (kubectl config use-context) because Multikube never uses that field. It just compares the `ctx` field of client JWT's with the list of contextes in the provided kubeconfig file and tries to find a match.  
+With this kubeconfig file, clients having a JWT where the `ctx` field in the header is set to minikube will be routed to the cluster minikube. Ofcourse the kubeconfig file may contain as many contexts as you like. Note that we haven't set the `current-context` (kubectl config use-context) because Multikube never uses that field. It just compares the `ctx` field of client JWT's with the list of contexts in the provided kubeconfig file and tries to find a match.  
 
 ## TLS example (recommended)
 

@@ -24,7 +24,7 @@ const (
 
 type Proxy struct {
 	CertChain  *x509.Certificate
-	Config   	 *Config
+	Config     *Config
 	KubeConfig *api.Config
 	mw         http.Handler
 	transports map[string]http.RoundTripper
@@ -76,7 +76,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		panic(err)
-		return
+		//return
 	}
 
 	if p.tlsconfigs[opts.ctx] == nil {
@@ -214,9 +214,8 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
 	err = stream(dst_conn, w, r)
 	if err != nil {
-		panic(err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		panic(err)
 	}
 
 }
@@ -240,16 +239,14 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
 	dst_conn, err := tls.Dial("tcp", u.Host, p.tlsconfigs[opts.ctx])
 	if err != nil {
-		panic(err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		panic(err)
 	}
 
 	err = stream(dst_conn, w, r)
 	if err != nil {
-		panic(err)
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		panic(err)
 	}
 
 }

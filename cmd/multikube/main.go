@@ -206,6 +206,9 @@ func main() {
 		},
 	}
 	tracer, closer, err := cfg.New("multikube", config.Logger(jaeger.StdLogger))
+	if err != nil {
+		log.Fatal(err)
+	}
 	opentracing.SetGlobalTracer(tracer)
 	defer closer.Close()
 

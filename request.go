@@ -118,7 +118,7 @@ func (r *Request) Query(q string) *Request {
 	return r
 }
 
-// Body sets the request body of the request beeing made.
+// Body sets the request body of the request being made.
 func (r *Request) Body(b io.Reader) *Request {
 	r.body = b
 	return r
