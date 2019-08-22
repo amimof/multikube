@@ -17,11 +17,13 @@ import (
 )
 
 const (
-	SubjectUndefined string = "No route: subject undefined"
-	ContextUndefined string = "No route: context undefined"
-	ContextNotFound  string = "No route: context not found"
+	// SubjectUndefined is a general messages indicating that
+	subjectUndefined string = "No route: subject undefined"
+	contextUndefined string = "No route: context undefined"
+	contextNotFound  string = "No route: context not found"
 )
 
+// Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
 type Proxy struct {
 	CertChain  *x509.Certificate
 	Config     *Config
@@ -39,6 +41,7 @@ func NewProxy() *Proxy {
 	}
 }
 
+// NewProxyFrom creates an instance of Proxy
 func NewProxyFrom(c *Config, kc *api.Config) *Proxy {
 	p := NewProxy()
 	p.Config = c
@@ -65,9 +68,9 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Get a kubeconfig context
-	opts := optsFromCtx(p.KubeConfig, r.Context())
+	opts := optsFromCtx(r.Context(), p.KubeConfig)
 	if opts == nil {
-		http.Error(w, ContextNotFound, http.StatusInternalServerError)
+		http.Error(w, contextNotFound, http.StatusInternalServerError)
 		return
 	}
 
@@ -163,9 +166,9 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request) {
 // since connections from multikube to a kubernetes API will always be HTTPS.
 func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
-	opts := optsFromCtx(p.KubeConfig, r.Context())
+	opts := optsFromCtx(r.Context(), p.KubeConfig)
 	if opts == nil {
-		http.Error(w, ContextNotFound, http.StatusInternalServerError)
+		http.Error(w, contextNotFound, http.StatusInternalServerError)
 		return
 	}
 
@@ -203,8 +206,8 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 
 	p.tlsconfigs[opts.ctx].InsecureSkipVerify = true
 
-	dst_conn := tls.Client(pconn, p.tlsconfigs[opts.ctx])
-	err = dst_conn.Handshake()
+	dstConn := tls.Client(pconn, p.tlsconfigs[opts.ctx])
+	err = dstConn.Handshake()
 	if err != nil {
 		panic(err)
 	}
@@ -212,7 +215,7 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", opts.AuthInfo.Token))
 	r.Header.Set("Impersonate-User", opts.sub)
 
-	err = stream(dst_conn, w, r)
+	err = stream(dstConn, w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		panic(err)
@@ -225,9 +228,9 @@ func (p *Proxy) proxiedTunnel(w http.ResponseWriter, r *http.Request) {
 // http proxy environment variables. For proxied connections, use proxiedTunnel().
 func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 
-	opts := optsFromCtx(p.KubeConfig, r.Context())
+	opts := optsFromCtx(r.Context(), p.KubeConfig)
 	if opts == nil {
-		http.Error(w, ContextNotFound, http.StatusInternalServerError)
+		http.Error(w, contextNotFound, http.StatusInternalServerError)
 		return
 	}
 
@@ -237,13 +240,13 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst_conn, err := tls.Dial("tcp", u.Host, p.tlsconfigs[opts.ctx])
+	dstConn, err := tls.Dial("tcp", u.Host, p.tlsconfigs[opts.ctx])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		panic(err)
 	}
 
-	err = stream(dst_conn, w, r)
+	err = stream(dstConn, w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		panic(err)
@@ -267,13 +270,13 @@ func stream(conn net.Conn, w http.ResponseWriter, r *http.Request) error {
 		return newErr("Hijacking not supported")
 	}
 
-	src_conn, _, err := hijacker.Hijack()
+	srcConn, _, err := hijacker.Hijack()
 	if err != nil {
 		return err
 	}
 
-	go transfer(conn, src_conn)
-	go transfer(src_conn, conn)
+	go transfer(conn, srcConn)
+	go transfer(srcConn, conn)
 
 	return nil
 }
@@ -425,7 +428,7 @@ func getOptions(config *api.Config, n string) *Options {
 
 // optsFromCtx returns a pointer to an Options instance defined by context and api.Config. Returns
 // a nil value if unable to find an Options matching values in context and the given config.
-func optsFromCtx(config *api.Config, ctx context.Context) *Options {
+func optsFromCtx(ctx context.Context, config *api.Config) *Options {
 
 	// Make sure Subject is set
 	sub, ok := ctx.Value("Subject").(string)

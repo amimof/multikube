@@ -5,7 +5,10 @@ import (
 	"time"
 )
 
-// Root cache object
+// Cache is a simple key value store where the value is always a []byte.
+// It is mostly used in Multikube to store http responses in-memory in order to
+// cache requests and serve content to clients to decrease number of http calls
+// made to upstream servers.
 type Cache struct {
 	Store map[string]*Item
 	TTL   time.Duration
@@ -116,7 +119,7 @@ func (i *Item) ExpiresAt() time.Time {
 	return i.expires
 }
 
-// Byte returns the number of bytes of i. Shorthand for len(i.Value)
+// Bytes returns the number of bytes of i. Shorthand for len(i.Value)
 func (i *Item) Bytes() int {
 	return len(i.Value)
 }
