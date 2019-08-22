@@ -1,14 +1,15 @@
 
 image: golang:1.12
 
-# cache:
-#   key: ${CI_COMMIT_REF_SLUG}
-#   paths:
-#   - /go/src
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+  - .cache
 
-# before_script: 
-#   - export GOPATH=/go/
-#   - mkdir -p $GOPATH
+before_script: 
+  - mkdir -p .cache
+  - export GOPATH="$CI_PROJECT_DIR/.cache"
+  - make dep
 
 stages:
   - test
@@ -17,6 +18,7 @@ stages:
 test:
   stage: test
   script:
+    - make checkfmt
     - make fmt  
     - make vet 
     - make gocyclo

@@ -15,7 +15,7 @@ func handleResponse(m *v1.Status) error {
 }
 
 func newErrf(s string, f ...interface{}) error {
-	return errors.New(fmt.Sprintf(s, f...))
+	return fmt.Errorf(s, f...)
 }
 
 func newErr(s string) error {

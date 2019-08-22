@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// Config holds a top-level configuration of an instance of Multikube. It is used to
+// pass around configuration used by different packages within the project.
 type Config struct {
 	OIDCIssuerURL    string
 	OIDCPollInterval time.Duration
@@ -18,10 +20,12 @@ type Config struct {
 	JWKS             *JWKS
 }
 
+// JWKS is a representation of Json Web Key Store. It holds multiple JWK's in an array
 type JWKS struct {
 	Keys []JSONWebKey `json:"keys"`
 }
 
+// JSONWebKey is a representation of a Json Web Key
 type JSONWebKey struct {
 	Kty string   `json:"kty"`
 	Kid string   `json:"kid"`
@@ -31,9 +35,11 @@ type JSONWebKey struct {
 	X5c []string `json:"x5c"`
 }
 
+// openIDConfiguration is an internal type used to marshal/unmarshal openid connect configuration
+// from the provider.
 type openIDConfiguration struct {
 	Issuer  string `json:"issuer"`
-	JwksUri string `json:"jwks_uri"`
+	JwksURI string `json:"jwks_uri"`
 }
 
 // getTokenFromRequest returns a []byte representation of JWT from an HTTP Authorization Bearer header
@@ -81,8 +87,8 @@ func getKeys(u string) (*JWKS, error) {
 func getWellKnown(u string) (*openIDConfiguration, error) {
 
 	client := &http.Client{}
-	wellKnownUrl := fmt.Sprintf("%s/%s", u, "/.well-known/openid-configuration")
-	req, err := http.NewRequest("GET", wellKnownUrl, nil)
+	wellKnownURL := fmt.Sprintf("%s/%s", u, "/.well-known/openid-configuration")
+	req, err := http.NewRequest("GET", wellKnownURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +136,7 @@ func (c *Config) GetJWKSFromURL() func() {
 					continue
 				}
 				// Get content of jwks_keys field
-				j, err := getKeys(w.JwksUri)
+				j, err := getKeys(w.JwksURI)
 				if err != nil {
 					log.Printf("ERROR retrieving JWKS from provider: %s", err)
 					continue

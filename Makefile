@@ -10,6 +10,8 @@ BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 GOVERSION=$(shell go version | awk -F\go '{print $$3}' | awk '{print $$1}')
 GITHUB_USERNAME=amimof
 PKG_LIST=$$(go list ./... | grep -v /vendor/)
+SRC_FILES=find . -name "*.go" -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
+PROJ_FILES=find . -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
 # Setup the -ldflags option for go build here, interpolate the variable values
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}"
 
@@ -17,37 +19,43 @@ LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.
 all: build
 
 dep:
-	GO111MODULES=on go get -v -d ./cmd/multikube/... ;
+	GO111MODULES=on go get -v -d ./cmd/multikube/... ; \
+	go get -u github.com/fzipp/gocyclo; \
+	go get -u golang.org/x/lint/golint; \
+	go get github.com/gordonklaus/ineffassign; \
+	go get -u github.com/client9/misspell/cmd/misspell; \
 
 fmt:
-	gofmt -s -e -d -w .; \
+	$(SRC_FILES) gofmt -s -e -d -w; \
 
 vet:
 	go vet ${PKG_LIST}; \
 
-gocyclo:
-	go get -u github.com/fzipp/gocyclo; \
-	${GOPATH}/bin/gocyclo .; \
+race:
+	go test -race -short ${PKG_LIST}; \
+
+msan:
+	go test -msan -short ${PKG_LIST}; \
 
 golint:
-	go get -u golang.org/x/lint/golint; \
-	${GOPATH}/bin/golint ${PKG_LIST}; \
+	${GOPATH}/bin/golint -set_exit_status ${PKG_LIST}; \
+
+gocyclo:
+	$(SRC_FILES) ${GOPATH}/bin/gocyclo -over 30; \
 
 ineffassign:
-	go get github.com/gordonklaus/ineffassign; \
-	${GOPATH}/bin/ineffassign .; \
+	$(SRC_FILES) ${GOPATH}/bin/ineffassign; \
 
 misspell:
-	go get -u github.com/client9/misspell/cmd/misspell; \
-	find . -type f -not -path "./vendor/*" -not -path "./.git/*" -print0 | xargs -0 ${GOPATH}/bin/misspell; \
+	$(PROJ_FILES) ${GOPATH}/bin/misspell; \
 
 checkfmt:
-	if [ "`gofmt -l .`" != "" ]; then \
+	if [ "`$(SRC_FILES) gofmt -l`" != "" ]; then \
 		echo "Code not formatted, please run 'make fmt'"; \
 		exit 1; \
 	fi
 
-ci: fmt vet gocyclo golint ineffassign misspell 
+ci: fmt vet race msan gocyclo golint ineffassign misspell 
 
 test:
 	go test ; \

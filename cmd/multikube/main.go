@@ -18,9 +18,13 @@ import (
 )
 
 var (
-	VERSION   string
-	COMMIT    string
-	BRANCH    string
+	// VERSION of the app. Is set when project is built and should never be set manually
+	VERSION string
+	// COMMIT is the Git commit currently used when compiling. Is set when project is built and should never be set manually
+	COMMIT string
+	// BRANCH is the Git branch currently used when compiling. Is set when project is built and should never be set manually
+	BRANCH string
+	// GOVERSION used to compile. Is set when project is built and should never be set manually
 	GOVERSION string
 
 	enabledListeners []string
@@ -37,7 +41,7 @@ var (
 	writeTimeout time.Duration
 
 	oidcPollInterval  time.Duration
-	oidcIssuerUrl     string
+	oidcIssuerURL     string
 	tlsHost           string
 	tlsPort           int
 	tlsListenLimit    int
@@ -66,7 +70,7 @@ func init() {
 	pflag.StringVar(&rs256PublicKey, "rs256-public-key", "", "the RS256 public key used to validate the signature of client JWT's")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
 	pflag.StringVar(&metricsHost, "metrics-host", "localhost", "The host address on which to listen for the --metrics-port port")
-	pflag.StringVar(&oidcIssuerUrl, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
+	pflag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
 	pflag.IntVar(&port, "port", 8080, "the port to listen on for insecure connections, defaults to 8080")
@@ -114,7 +118,7 @@ func main() {
 	}
 
 	// At least one of rs256-public-key and/or oidc-issuer-url must be set
-	if rs256PublicKey == "" && oidcIssuerUrl == "" {
+	if rs256PublicKey == "" && oidcIssuerURL == "" {
 		//log.Fatalf("the required flag `--rs256-public-key` was not specified")
 		log.Fatalf("Both flags `--rs256-public-key` and `--oidc-issuer-url` cannot be empty, please set one or both")
 	}
@@ -142,7 +146,7 @@ func main() {
 
 	// Compose multikube config
 	mwconfig := &multikube.Config{
-		OIDCIssuerURL:    oidcIssuerUrl,
+		OIDCIssuerURL:    oidcIssuerURL,
 		OIDCPollInterval: oidcPollInterval,
 		RS256PublicKey:   certChain,
 	}

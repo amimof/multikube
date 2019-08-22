@@ -34,7 +34,7 @@ var backendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "A gauge of live requests currently in flight to backends",
 })
 
-// Tansport is an implementation of RoundTripper and extension of http.Transport with the
+// Transport is an implementation of RoundTripper and extension of http.Transport with the
 // addition of a Cache.
 type Transport struct {
 	Cache           *Cache
@@ -46,6 +46,7 @@ func init() {
 	prometheus.MustRegister(backendHistogram, backendCounter, backendGauge)
 }
 
+// RoundTrip implements http.Transport
 func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error) {
 
 	// Use default transport with http2 if not told otherwise

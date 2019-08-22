@@ -15,6 +15,13 @@ import (
 	"net/http"
 )
 
+type key string
+
+const (
+	ctxName key = "Context"
+	subName key = "Subject"
+)
+
 var frontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: "multikube_frontend_live_requests",
 	Help: "A gauge of live requests currently in flight from clients",
@@ -48,7 +55,7 @@ var responseSize = prometheus.NewHistogramVec(
 	[]string{},
 )
 
-type MiddlewareFunc func(next http.HandlerFunc) http.HandlerFunc
+// Middleware represents a multikube middleware
 type Middleware func(*Config, http.Handler) http.Handler
 
 // responseWriter implements http.ResponseWriter and adds status code
@@ -76,7 +83,7 @@ func WithEmpty(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-// WithEmpty is an empty handler that does nothing
+// WithMetrics is an empty handler that does nothing
 func WithMetrics(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pushChain := promhttp.InstrumentHandlerInFlight(frontendGauge,
@@ -90,7 +97,7 @@ func WithMetrics(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-// WithEmpty is a middleware that starts a new span and populates the context
+// WithTracing is a middleware that starts a new span and populates the context
 func WithTracing(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		span := opentracing.GlobalTracer().StartSpan("hello")
@@ -109,8 +116,8 @@ func WithLogging(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-// WithValidate validates JWT tokens in the request. For example Bearer-tokens
-// TODO: Fix doc!
+// WithRS256Validation validates an http request by parsing it and extracting a JWT from it.
+// It then validates it using an RS256 public key, provided through Config.RS256PublicKey.
 func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -144,16 +151,16 @@ func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 			s = ""
 		}
 
-		ctx := context.WithValue(r.Context(), "Context", c)
-		ctx = context.WithValue(ctx, "Subject", s)
+		ctx := context.WithValue(r.Context(), ctxName, c)
+		ctx = context.WithValue(ctx, subName, s)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 
 	})
 }
 
-// WithJWKValidation
-// TODO: Fix doc!
+// WithJWKValidation validates an http request by parsing it and extracting a JWT from it.
+// It then validates it using a Json Web Key, provided through Config.JWKS.
 func WithJWKValidation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -218,21 +225,21 @@ func WithJWKValidation(c *Config, next http.Handler) http.Handler {
 			s = ""
 		}
 
-		ctx := context.WithValue(r.Context(), "Context", "kladdis")
-		ctx = context.WithValue(ctx, "Subject", s)
+		ctx := context.WithValue(r.Context(), ctxName, "kladdis")
+		ctx = context.WithValue(ctx, subName, s)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 
 	})
 }
 
-// WithValidate validates JWT tokens in the request. For example Bearer-tokens
+// WithHeader validates JWT tokens in the request. For example Bearer-tokens
 func WithHeader(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := r
 		header := r.Header.Get("Multikube-Context")
 		if header != "" {
-			ctx := context.WithValue(r.Context(), "Context", header)
+			ctx := context.WithValue(r.Context(), ctxName, header)
 			req = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, req)

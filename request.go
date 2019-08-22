@@ -93,9 +93,9 @@ func (r *Request) Namespace(ns string) *Request {
 	return r
 }
 
-// ApiVer sets the api version to be used when building the URI for the request.
+// APIVer sets the api version to be used when building the URI for the request.
 // Defaults to 'v1' if not set.
-func (r *Request) ApiVer(v string) *Request {
+func (r *Request) APIVer(v string) *Request {
 	r.apiVersion = v
 	return r
 }
