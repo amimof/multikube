@@ -36,6 +36,7 @@ var (
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 
+	oidcPollInterval  time.Duration
 	oidcIssuerUrl     string
 	tlsHost           string
 	tlsPort           int
@@ -82,6 +83,7 @@ func init() {
 	pflag.DurationVar(&tlsKeepAlive, "tls-keep-alive", 3*time.Minute, "sets the TCP keep-alive timeouts on accepted connections. It prunes dead TCP connections ( e.g. closing laptop mid-download)")
 	pflag.DurationVar(&tlsReadTimeout, "tls-read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
 	pflag.DurationVar(&tlsWriteTimeout, "tls-write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
+	pflag.DurationVar(&oidcPollInterval, "oidc-poll-interval", 2*time.Second, "maximum duration between intervals in which the oidc issuer url (--oidc-issuer-url) is polled")
 
 }
 
@@ -140,16 +142,14 @@ func main() {
 
 	// Compose multikube config
 	mwconfig := &multikube.Config{
-		OIDCIssuerURL:  oidcIssuerUrl,
-		RS256PublicKey: certChain,
+		OIDCIssuerURL:    oidcIssuerUrl,
+		OIDCPollInterval: oidcPollInterval,
+		RS256PublicKey:   certChain,
 	}
 
-	// Get stuff from oidc thing
-	jwks, err := multikube.GetJWKSFromURL(mwconfig.OIDCIssuerURL)
-	if err != nil {
-		log.Fatal(err)
-	}
-	mwconfig.JWKS = jwks
+	// Start polling OIDC Provider
+	stop := mwconfig.GetJWKSFromURL()
+	defer stop()
 
 	// Create the proxy
 	p := multikube.NewProxyFrom(mwconfig, c)
