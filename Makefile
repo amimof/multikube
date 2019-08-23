@@ -2,18 +2,21 @@
 # https://github.com/silven/go-example/blob/master/Makefile
 # https://vic.demuzere.be/articles/golang-makefile-crosscompile/
 
-BINARY=multikube
+PROJECT=multikube
 GOARCH=amd64
-VERSION=1.0.0-alpha.7
+VERSION=$(shell git describe --tags --abbrev=0)
 COMMIT=$(shell git rev-parse HEAD)
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 GOVERSION=$(shell go version | awk -F\go '{print $$3}' | awk '{print $$1}')
 GITHUB_USERNAME=amimof
+REPO=gitlab.com/${GITHUB_USERNAME}/${PROJECT}
 PKG_LIST=$$(go list ./... | grep -v /vendor/)
 SRC_FILES=find . -name "*.go" -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
 PROJ_FILES=find . -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
 # Setup the -ldflags option for go build here, interpolate the variable values
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}"
+DOCKER_REGISTRY=registry.gitlab.com
+DOCKER_REPO=${DOCKER_REGISTRY}/${GITHUB_USERNAME}/${PROJECT}
 
 # Build the project
 all: build
@@ -60,31 +63,29 @@ ci: fmt vet race msan gocyclo golint ineffassign misspell
 test:
 	go test ; \
 
-
 linux: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${BINARY}-linux-${GOARCH} ./cmd/multikube/...
+	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-${GOARCH} ./cmd/multikube/...
 
 rpi: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${BINARY}-linux-arm ./cmd/multikube/...
+	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-arm ./cmd/multikube/...
 
 darwin: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${BINARY}-darwin-${GOARCH} ./cmd/multikube/...
+	GO111MODULES=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-darwin-${GOARCH} ./cmd/multikube/...
 
 windows: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${BINARY}-windows-${GOARCH}.exe ./cmd/multikube/...
+	GO111MODULES=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-windows-${GOARCH}.exe ./cmd/multikube/...
 
 docker_build:
-	docker run --rm -v "${PWD}":/go/src/gitlab.com/amimof/multikube -w /go/src/gitlab.com/amimof/multikube golang:${GOVERSION} make fmt test
-	docker build -t registry.gitlab.com/amimof/multikube:${VERSION} .
-	docker tag registry.gitlab.com/amimof/multikube:${VERSION} registry.gitlab.com/amimof/multikube:latest
+	docker build -t ${DOCKER_REPO}:${VERSION} .
+	docker tag ${DOCKER_REPO}:${VERSION} ${DOCKER_REPO}:latest
 
 docker_push:
-	docker push registry.gitlab.com/amimof/multikube:${VERSION}
-	docker push registry.gitlab.com/amimof/multikube:latest
+	docker push ${DOCKER_REPO}:${VERSION}
+	docker push ${DOCKER_REPO}:latest
 
 docker: docker_build docker_push
 
