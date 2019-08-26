@@ -17,12 +17,13 @@ PROJ_FILES=find . -type f -not -path "./vendor/*" -not -path "./.git/*" -not -pa
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}"
 DOCKER_REGISTRY=registry.gitlab.com
 DOCKER_REPO=${DOCKER_REGISTRY}/${GITHUB_USERNAME}/${PROJECT}
+COVERAGE_DIR=coverage
 
 # Build the project
 all: build
 
 dep:
-	GO111MODULES=on go get -v -d ./cmd/multikube/... ; \
+	GO111MODULE=on go get -v -d ./cmd/multikube/... ; \
 	go get -u github.com/fzipp/gocyclo; \
 	go get -u golang.org/x/lint/golint; \
 	go get github.com/gordonklaus/ineffassign; \
@@ -61,23 +62,25 @@ checkfmt:
 ci: fmt vet race msan gocyclo golint ineffassign misspell 
 
 test:
-	go test ; \
+	mkdir -p ./coverage; \
+	go test ${PKG_LIST} -coverprofile ${COVERAGE_DIR}/coverage.cov; \
+	go tool cover -html="${COVERAGE_DIR}/coverage.cov" -o ${COVERAGE_DIR}/coverage.html
 
 linux: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-${GOARCH} ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-${GOARCH} ./cmd/multikube/...
 
 rpi: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-arm ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-arm ./cmd/multikube/...
 
 darwin: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-darwin-${GOARCH} ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-darwin-${GOARCH} ./cmd/multikube/...
 
 windows: dep
 	mkdir -p ./bin/; \
-	GO111MODULES=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-windows-${GOARCH}.exe ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-windows-${GOARCH}.exe ./cmd/multikube/...
 
 docker_build:
 	docker build -t ${DOCKER_REPO}:${VERSION} .
@@ -92,6 +95,6 @@ docker: docker_build docker_push
 build: linux darwin rpi windows
 
 clean:
-	-rm -rf ./bin/
+	-rm -rf ./bin/ ./${COVERAGE_DIR}/
 
 .PHONY: linux darwin windows test fmt clean
