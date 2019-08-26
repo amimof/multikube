@@ -6,6 +6,6 @@ WORKDIR /go/src/gitlab.com/amimof/multikube
 RUN make linux
 
 FROM scratch
-COPY --from=build-env /go/src/gitlab.com/amimof/multikube/out/multikube-linux-amd64 /go/bin/multikube
+COPY --from=build-env /go/src/gitlab.com/amimof/multikube/bin/multikube-linux-amd64 /go/bin/multikube
 COPY --from=build-env /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 ENTRYPOINT ["/go/bin/multikube"]

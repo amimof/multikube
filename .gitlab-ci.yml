@@ -1,6 +1,9 @@
 
 image: golang:1.12
 
+services:
+  - docker:dind
+
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
@@ -16,41 +19,49 @@ stages:
   - build
   - release
 
-verify:
-  stage: test
-  script:
-    - make checkfmt
-    - make fmt  
-    - make vet 
-    - make race
-    #- make msan
-    - make gocyclo
-    - make golint 
-    - make ineffassign
-    - make misspell
+# verify:
+#   stage: test
+#   script:
+#     - make checkfmt
+#     - make fmt  
+#     - make vet 
+#     - make race
+#     #- make msan
+#     - make gocyclo
+#     - make golint 
+#     - make ineffassign
+#     - make misspell
 
-unit_test:
-  stage: test
-  script:
-    - make test
+# unit_test:
+#   stage: test
+#   script:
+#     - make test
+#   artifacts:
+#     paths:
+#       - coverage/
 
-compile:
-  stage: build
-  script:
-    - make
-  artifacts:
-    paths:
-      - bin/multikube-linux-amd64
-      - bin/multikube-linux-arm
-      - bin/multikube-darwin-amd64
-      - bin/multikube-windows-amd64.exe
+# compile:
+#   stage: build
+#   script:
+#     - make
+#   artifacts:
+#     paths:
+#       - bin/multikube-linux-amd64
+#       - bin/multikube-linux-arm
+#       - bin/multikube-darwin-amd64
+#       - bin/multikube-windows-amd64.exe
 
 docker_hub:
+  image: docker:18
   stage: release
+  before_script:
+    - ''
   script:
+    - apk add --update make git
+    - echo -n $CI_JOB_TOKEN | docker login -u gitlab-ci-token --password-stdin $CI_REGISTRY
     - make docker_build
     - make docker_push
-  only:
-    - tags
-  except:
-    - branches
+  # only:
+  #   - tags
+  # except:
+  #   - branches
