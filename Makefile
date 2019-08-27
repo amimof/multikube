@@ -23,7 +23,7 @@ COVERAGE_DIR=coverage
 all: build
 
 dep:
-	GO111MODULE=on go get -v -d ./cmd/multikube/... ; \
+	GO111MODULE=on go get -v -d ./cmd/${PROJECT}/... ; \
 	go get -u github.com/fzipp/gocyclo; \
 	go get -u golang.org/x/lint/golint; \
 	go get github.com/gordonklaus/ineffassign; \
@@ -68,19 +68,19 @@ test:
 
 linux: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-${GOARCH} ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-${GOARCH} ./cmd/${PROJECT}/...
 
 rpi: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-arm ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-arm ./cmd/${PROJECT}/...
 
 darwin: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-darwin-${GOARCH} ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-darwin-${GOARCH} ./cmd/${PROJECT}/...
 
 windows: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-windows-${GOARCH}.exe ./cmd/multikube/...
+	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-windows-${GOARCH}.exe ./cmd/${PROJECT}/...
 
 docker_build:
 	docker build -t ${DOCKER_REPO}:${VERSION} .
