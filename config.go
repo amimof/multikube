@@ -120,6 +120,12 @@ func getWellKnown(u string) (*openIDConfiguration, error) {
 // The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
 func (c *Config) GetJWKSFromURL() func() {
 
+	// Make sure config has non-nil fields
+	c.JWKS = &JWKS{
+		Keys: []JSONWebKey{},
+	}
+
+	// Run a function in a go routine that continuously fetches from remote oidc provider
 	quit := make(chan int)
 	go func() {
 		for {
