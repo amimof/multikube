@@ -4,22 +4,24 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
+	"fmt"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
+	"github.com/SermoDigital/jose/jwt"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gopkg.in/square/go-jose.v2/jwt"
+	jwtv2 "gopkg.in/square/go-jose.v2/jwt"
 	"log"
 	"math/big"
 	"net/http"
 )
 
-type key string
+type ctxKey string
 
-const (
-	ctxName key = "Context"
-	subName key = "Subject"
+var (
+	ctxName = ctxKey("Context")
+	subName = ctxKey("Subject")
 )
 
 var frontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -116,29 +118,98 @@ func WithLogging(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-// WithRS256Validation validates an http request by parsing it and extracting a JWT from it.
-// It then validates it using an RS256 public key, provided through Config.RS256PublicKey.
+func isValidWithX509Cert(c *Config, r *http.Request) (jwt.JWT, error) {
+
+	t, err := jws.ParseJWTFromRequest(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if t == nil {
+		return nil, fmt.Errorf("No token in request")
+	}
+
+	err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
+	if err != nil {
+		return nil, err
+	}
+
+	return t, nil
+
+}
+
+func isValidWithJWK(c *Config, r *http.Request) (jwt.JWT, error) {
+
+	t, err := jws.ParseJWTFromRequest(r)
+	if err != nil {
+		return nil, err
+	}
+
+	raw := string(getTokenFromRequest(r))
+	tok, err := jwtv2.ParseSigned(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	// Try to find a JWK using the kid
+	kid := tok.Headers[0].KeyID
+	jwk := c.JWKS.Find(kid)
+	if jwk == nil {
+		return nil, fmt.Errorf("%s", "Key ID invalid")
+	}
+	if jwk.Kty != "RSA" {
+		return nil, fmt.Errorf("Invalid key type. Expected 'RSA' got '%s'", jwk.Kty)
+	}
+
+	// decode the base64 bytes for n
+	nb, err := base64.RawURLEncoding.DecodeString(jwk.N)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if E is big-endian int
+	if jwk.E != "AQAB" && jwk.E != "AAEAAQ" {
+		return nil, fmt.Errorf("Expected E to be one of 'AQAB' and 'AAEAAQ' but got '%s'", jwk.E)
+	}
+
+	pk := &rsa.PublicKey{
+		N: new(big.Int).SetBytes(nb),
+		E: 65537,
+	}
+
+	err = t.Validate(pk, crypto.SigningMethodRS256)
+	if err != nil {
+		return nil, err
+	}
+
+	return t, nil
+
+}
+
+// WithRS256Validation validates a JWT token in the http request by parsing using RS256 signing method.
+// It will validate the JWT using a x509 public key or using Json Web Key from an OpenID Connect provider.
+// WithRS256Validation will validate the request only if one of the two methods considers the request to be valid.
+// If both fail, a 401 is returned to the client. If both methods validates successfully, x509 signed JWT's takes priority.
 func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		t, err := jws.ParseJWTFromRequest(r)
-		if err != nil {
-			log.Printf("ERROR parsing JWT from request: %s", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+		// Validate the JWT in the request using both JWK's and x509 public certiticate
+		jwkJwt, jwkErr := isValidWithJWK(c, r)
+		x509Jwt, x509Err := isValidWithX509Cert(c, r)
+
+		// Request is unauthorized if both return errors
+		if jwkErr != nil && x509Err != nil {
+			http.Error(w, fmt.Sprintf("%s, %s", jwkErr, x509Err), http.StatusUnauthorized)
 			return
 		}
 
-		if t == nil {
-			log.Printf("ERROR token: No token")
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
+		// Use one of the two JWT's, if valid. A valid x509 will have priority here
+		var t jwt.JWT
+		if jwkJwt != nil {
+			t = jwkJwt
 		}
-
-		err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
-		if err != nil {
-			log.Printf("ERROR validate: %s", err.Error())
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
+		if x509Jwt != nil {
+			t = x509Jwt
 		}
 
 		c, ok := t.Claims().Get("ctx").(string)
@@ -152,80 +223,6 @@ func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 		}
 
 		ctx := context.WithValue(r.Context(), ctxName, c)
-		ctx = context.WithValue(ctx, subName, s)
-
-		next.ServeHTTP(w, r.WithContext(ctx))
-
-	})
-}
-
-// WithJWKValidation validates an http request by parsing it and extracting a JWT from it.
-// It then validates it using a Json Web Key, provided through Config.JWKS.
-func WithJWKValidation(c *Config, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		t, err := jws.ParseJWTFromRequest(r)
-		if err != nil {
-			log.Printf("ERROR parsing JWT from request: %s", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		raw := string(getTokenFromRequest(r))
-		tok, err := jwt.ParseSigned(raw)
-		if err != nil {
-			log.Printf("ERROR parsing JWS from request : %s", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		// Try to find a JWK using the kid
-		kid := tok.Headers[0].KeyID
-		jwk := c.JWKS.Find(kid)
-		if jwk == nil {
-			log.Printf("%s", "ERROR: Key ID mismatch parsing JWS from request : %s")
-			http.Error(w, "", http.StatusUnauthorized)
-			return
-		}
-		if jwk.Kty != "RSA" {
-			log.Printf("ERROR: Invalid key type. Expected 'RSA' got '%s'", jwk.Kty)
-			http.Error(w, "", http.StatusUnauthorized)
-			return
-		}
-
-		// decode the base64 bytes for n
-		nb, err := base64.RawURLEncoding.DecodeString(jwk.N)
-		if err != nil {
-			log.Printf("ERROR decoding N : %s", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		// Check if E is big-endian int
-		if jwk.E != "AQAB" && jwk.E != "AAEAAQ" {
-			log.Printf("ERROR: Expected E to be one of 'AQAB' and 'AAEAAQ' but got '%s'", jwk.E)
-			http.Error(w, "", http.StatusUnauthorized)
-			return
-		}
-
-		pk := &rsa.PublicKey{
-			N: new(big.Int).SetBytes(nb),
-			E: 65537,
-		}
-
-		err = t.Validate(pk, crypto.SigningMethodRS256)
-		if err != nil {
-			log.Printf("ERROR validate: %s", err.Error())
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		s, ok := t.Claims().Get("sub").(string)
-		if !ok {
-			s = ""
-		}
-
-		ctx := context.WithValue(r.Context(), ctxName, "kladdis")
 		ctx = context.WithValue(ctx, subName, s)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
