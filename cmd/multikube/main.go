@@ -163,8 +163,7 @@ func main() {
 		multikube.WithEmpty,
 		multikube.WithLogging,
 		multikube.WithMetrics,
-		//multikube.WithRS256Validation,
-		multikube.WithJWKValidation,
+		multikube.WithRS256Validation,
 		multikube.WithHeader,
 	)
 

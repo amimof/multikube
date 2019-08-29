@@ -431,13 +431,13 @@ func getOptions(config *api.Config, n string) *Options {
 func optsFromCtx(ctx context.Context, config *api.Config) *Options {
 
 	// Make sure Subject is set
-	sub, ok := ctx.Value("Subject").(string)
+	sub, ok := ctx.Value(subName).(string)
 	if !ok || sub == "" {
 		return nil
 	}
 
 	// Make sure Context is set
-	cont, ok := ctx.Value("Context").(string)
+	cont, ok := ctx.Value(ctxName).(string)
 	if !ok || cont == "" {
 		return nil
 	}
