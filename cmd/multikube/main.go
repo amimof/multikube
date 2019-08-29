@@ -42,6 +42,7 @@ var (
 
 	oidcPollInterval  time.Duration
 	oidcIssuerURL     string
+	oidcUsernameClaim string
 	tlsHost           string
 	tlsPort           int
 	tlsListenLimit    int
@@ -71,6 +72,7 @@ func init() {
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
 	pflag.StringVar(&metricsHost, "metrics-host", "localhost", "The host address on which to listen for the --metrics-port port")
 	pflag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
+	pflag.StringVar(&oidcUsernameClaim, "oidc-username-claim", "sub", " The OpenID claim to use as the user name. Note that claims other than the default is not guaranteed to be unique and immutable")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
 	pflag.IntVar(&port, "port", 8080, "the port to listen on for insecure connections, defaults to 8080")
@@ -146,9 +148,10 @@ func main() {
 
 	// Compose multikube config
 	mwconfig := &multikube.Config{
-		OIDCIssuerURL:    oidcIssuerURL,
-		OIDCPollInterval: oidcPollInterval,
-		RS256PublicKey:   certChain,
+		OIDCIssuerURL:     oidcIssuerURL,
+		OIDCPollInterval:  oidcPollInterval,
+		OIDCUsernameClaim: oidcUsernameClaim,
+		RS256PublicKey:    certChain,
 	}
 
 	// Start polling OIDC Provider

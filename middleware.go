@@ -233,18 +233,18 @@ func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 			t = x509Jwt
 		}
 
-		c, ok := t.Claims().Get("ctx").(string)
+		contxt, ok := t.Claims().Get("ctx").(string)
 		if !ok {
-			c = ""
+			contxt = ""
 		}
 
-		s, ok := t.Claims().Get("sub").(string)
+		username, ok := t.Claims().Get(c.OIDCUsernameClaim).(string)
 		if !ok {
-			s = ""
+			username = ""
 		}
 
-		ctx := context.WithValue(r.Context(), ctxName, c)
-		ctx = context.WithValue(ctx, subName, s)
+		ctx := context.WithValue(r.Context(), ctxName, contxt)
+		ctx = context.WithValue(ctx, subName, username)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 

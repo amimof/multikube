@@ -14,10 +14,11 @@ import (
 // Config holds a top-level configuration of an instance of Multikube. It is used to
 // pass around configuration used by different packages within the project.
 type Config struct {
-	OIDCIssuerURL    string
-	OIDCPollInterval time.Duration
-	RS256PublicKey   *x509.Certificate
-	JWKS             *JWKS
+	OIDCIssuerURL     string
+	OIDCUsernameClaim string
+	OIDCPollInterval  time.Duration
+	RS256PublicKey    *x509.Certificate
+	JWKS              *JWKS
 }
 
 // JWKS is a representation of Json Web Key Store. It holds multiple JWK's in an array
