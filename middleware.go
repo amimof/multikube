@@ -16,6 +16,8 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 type ctxKey string
@@ -233,25 +235,20 @@ func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 			t = x509Jwt
 		}
 
-		contxt, ok := t.Claims().Get("ctx").(string)
-		if !ok {
-			contxt = ""
-		}
-
 		username, ok := t.Claims().Get(c.OIDCUsernameClaim).(string)
 		if !ok {
 			username = ""
 		}
 
-		ctx := context.WithValue(r.Context(), ctxName, contxt)
-		ctx = context.WithValue(ctx, subName, username)
+		ctx := context.WithValue(r.Context(), subName, username)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 
 	})
 }
 
-// WithHeader validates JWT tokens in the request. For example Bearer-tokens
+// WithHeader is a middleware that reads the value of the HTTP header "Multikube-Context"
+// in the request and, if found, sets it's value in the request context.
 func WithHeader(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := r
@@ -262,4 +259,35 @@ func WithHeader(c *Config, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, req)
 	})
+}
+
+// WithCtxRoot is a middleware that reads the url path params in the request and
+// tries to determine which kubeconfig context to use for upstream api server requests.
+// If a context is found in the URL path params, the request-context is populated with the value
+// so that other handlers and middlewares may use the information
+func WithCtxRoot(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := r
+		c, rem := getCtxFromURL(r.URL)
+		if c != "" {
+			ctx := context.WithValue(r.Context(), ctxName, c)
+			req = r.WithContext(ctx)
+			if rem != "" {
+				req.URL.Path = rem
+			}
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
+// getCtxFromURL reads path params from u and returns the kubeconfig context
+// as well as the path params used for upstream communication
+func getCtxFromURL(u *url.URL) (string, string) {
+	val := ""
+	rem := []string{}
+	if vals := strings.Split(u.Path, "/"); len(vals) > 1 && strings.EqualFold(vals[1], "api") == false {
+		val = vals[1]
+		rem = vals[2:]
+	}
+	return val, fmt.Sprintf("/%s", strings.Join(rem, "/"))
 }

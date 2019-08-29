@@ -17,9 +17,7 @@ import (
 )
 
 const (
-	// SubjectUndefined is a general messages indicating that
 	subjectUndefined string = "No route: subject undefined"
-	contextUndefined string = "No route: context undefined"
 	contextNotFound  string = "No route: context not found"
 )
 

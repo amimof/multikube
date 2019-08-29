@@ -168,6 +168,7 @@ func main() {
 		multikube.WithMetrics,
 		multikube.WithRS256Validation,
 		multikube.WithHeader,
+		multikube.WithCtxRoot,
 	)
 
 	// Create the server
