@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
@@ -67,55 +68,28 @@ type responseWriter struct {
 	status int
 }
 
+// responseError satisfies the error interface
+type responseError struct {
+	Status int      `json:"status"`
+	Errs   []string `json:"errors"`
+}
+
 func init() {
 	prometheus.MustRegister(frontendGauge, frontendCounter, frontendHistogram, responseSize)
 }
 
-// WriteHeader sends and sets an HTTP response header with the provided
-// status code.
-func (r *responseWriter) WriteHeader(statusCode int) {
-	r.status = statusCode
-	r.ResponseWriter.WriteHeader(statusCode)
-}
-
-// WithEmpty is an empty handler that does nothing
-func WithEmpty(c *Config, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r)
-	})
-}
-
-// WithMetrics is an empty handler that does nothing
-func WithMetrics(c *Config, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pushChain := promhttp.InstrumentHandlerInFlight(frontendGauge,
-			promhttp.InstrumentHandlerDuration(frontendHistogram.MustCurryWith(prometheus.Labels{"handler": "push"}),
-				promhttp.InstrumentHandlerCounter(frontendCounter,
-					promhttp.InstrumentHandlerResponseSize(responseSize, next),
-				),
-			),
-		)
-		pushChain.ServeHTTP(w, r)
-	})
-}
-
-// WithTracing is a middleware that starts a new span and populates the context
-func WithTracing(c *Config, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		span := opentracing.GlobalTracer().StartSpan("hello")
-		ctx := opentracing.ContextWithSpan(r.Context(), span)
-		defer span.Finish()
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// WithLogging applies access log style logging to the HTTP server
-func WithLogging(c *Config, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lrw := &responseWriter{w, http.StatusOK}
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s %s %s %d", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, lrw.status)
-	})
+// newErrResponse marshals a string array into a json and writes to the provided responsewriter
+func newErrResponse(w http.ResponseWriter, s int, e ...string) {
+	resp := &responseError{
+		Status: s,
+		Errs:   e,
+	}
+	b, err := json.Marshal(resp)
+	if err != nil {
+		b = []byte{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	http.Error(w, string(b), s)
 }
 
 func isValidWithX509Cert(c *Config, r *http.Request) (jwt.JWT, error) {
@@ -186,6 +160,53 @@ func isValidWithJWK(c *Config, r *http.Request) (jwt.JWT, error) {
 
 }
 
+// WriteHeader sends and sets an HTTP response header with the provided
+// status code.
+func (r *responseWriter) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+// WithEmpty is an empty handler that does nothing
+func WithEmpty(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+	})
+}
+
+// WithMetrics is an empty handler that does nothing
+func WithMetrics(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		pushChain := promhttp.InstrumentHandlerInFlight(frontendGauge,
+			promhttp.InstrumentHandlerDuration(frontendHistogram.MustCurryWith(prometheus.Labels{"handler": "push"}),
+				promhttp.InstrumentHandlerCounter(frontendCounter,
+					promhttp.InstrumentHandlerResponseSize(responseSize, next),
+				),
+			),
+		)
+		pushChain.ServeHTTP(w, r)
+	})
+}
+
+// WithTracing is a middleware that starts a new span and populates the context
+func WithTracing(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		span := opentracing.GlobalTracer().StartSpan("hello")
+		ctx := opentracing.ContextWithSpan(r.Context(), span)
+		defer span.Finish()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// WithLogging applies access log style logging to the HTTP server
+func WithLogging(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lrw := &responseWriter{w, http.StatusOK}
+		next.ServeHTTP(w, r)
+		log.Printf("%s %s %s %s %s %d", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, lrw.status)
+	})
+}
+
 // WithRS256Validation validates a JWT token in the http request by parsing using RS256 signing method.
 // It will validate the JWT using a x509 public key or using Json Web Key from an OpenID Connect provider.
 // WithRS256Validation will validate the request only if one of the two methods considers the request to be valid.
@@ -199,7 +220,7 @@ func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 
 		// Request is unauthorized if both return errors
 		if jwkErr != nil && x509Err != nil {
-			http.Error(w, fmt.Sprintf("%s, %s", jwkErr, x509Err), http.StatusUnauthorized)
+			newErrResponse(w, http.StatusUnauthorized, jwkErr.Error(), x509Err.Error())
 			return
 		}
 
