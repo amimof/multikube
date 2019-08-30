@@ -1,4 +1,4 @@
-package multikube
+package cache
 
 import (
 	"sync"
@@ -124,8 +124,8 @@ func (i *Item) Bytes() int {
 	return len(i.Value)
 }
 
-// NewCache return a new empty cache
-func NewCache() *Cache {
+// New return a new empty cache instance
+func New() *Cache {
 	return &Cache{
 		Store: make(map[string]*Item),
 		TTL:   time.Second * 1,

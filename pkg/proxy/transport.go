@@ -1,4 +1,4 @@
-package multikube
+package proxy
 
 import (
 	"bufio"
@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gitlab.com/amimof/multikube/pkg/cache"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -37,7 +38,7 @@ var backendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 // Transport is an implementation of RoundTripper and extension of http.Transport with the
 // addition of a Cache.
 type Transport struct {
-	Cache           *Cache
+	Cache           *cache.Cache
 	TLSClientConfig *tls.Config
 	transport       *http.Transport
 }
@@ -75,7 +76,7 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 
 	// Initialize the cache
 	if t.Cache == nil {
-		t.Cache = NewCache()
+		t.Cache = cache.New()
 	}
 
 	// Either return a response from the cache or from a real request

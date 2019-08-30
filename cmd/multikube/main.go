@@ -9,7 +9,8 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
-	"gitlab.com/amimof/multikube"
+	"gitlab.com/amimof/multikube/pkg/proxy"
+	"gitlab.com/amimof/multikube/pkg/server"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
@@ -147,7 +148,7 @@ func main() {
 	}
 
 	// Compose multikube config
-	mwconfig := &multikube.Config{
+	mwconfig := &proxy.Config{
 		OIDCIssuerURL:     oidcIssuerURL,
 		OIDCPollInterval:  oidcPollInterval,
 		OIDCUsernameClaim: oidcUsernameClaim,
@@ -159,20 +160,20 @@ func main() {
 	defer stop()
 
 	// Create the proxy
-	p := multikube.NewProxyFrom(mwconfig, c)
+	p := proxy.NewProxyFrom(mwconfig, c)
 
 	// Setup middlewares
 	m := p.Use(
-		multikube.WithEmpty,
-		multikube.WithLogging,
-		multikube.WithMetrics,
-		multikube.WithRS256Validation,
-		multikube.WithHeader,
-		multikube.WithCtxRoot,
+		proxy.WithEmpty,
+		proxy.WithLogging,
+		proxy.WithMetrics,
+		proxy.WithRS256Validation,
+		proxy.WithHeader,
+		proxy.WithCtxRoot,
 	)
 
 	// Create the server
-	s := &multikube.Server{
+	s := &server.Server{
 		EnabledListeners:  enabledListeners,
 		CleanupTimeout:    cleanupTimeout,
 		MaxHeaderSize:     maxHeaderSize,
@@ -196,7 +197,7 @@ func main() {
 	}
 
 	// Metrics server
-	ms := multikube.NewServer()
+	ms := server.NewServer()
 	ms.Port = metricsPort
 	ms.Host = metricsHost
 	ms.Name = "metrics"

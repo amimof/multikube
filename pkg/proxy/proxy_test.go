@@ -1,18 +1,17 @@
-package multikube_test
+package proxy
 
 import (
-	"gitlab.com/amimof/multikube"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"testing"
 )
 
 var (
-	name      string = "minikube"
-	defServer string = "https://127.0.0.1:8443"
-	defToken  string = "aGVsbG93b3JsZA=="
+	name      = "minikube"
+	defServer = "https://127.0.0.1:8443"
+	defToken  = "aGVsbG93b3JsZA=="
 )
 
-var config *multikube.Config = &multikube.Config{
+var config = &Config{
 	OIDCIssuerURL:  "http://localhost:5556/dex",
 	RS256PublicKey: nil,
 }
@@ -41,7 +40,7 @@ var kubeConf *api.Config = &api.Config{
 
 // Just creates a new proxy instance
 func TestProxyNewProxy(t *testing.T) {
-	p := multikube.NewProxyFrom(config, kubeConf)
+	p := NewProxyFrom(config, kubeConf)
 	server := p.KubeConfig.Clusters[name].Server
 	if server != defServer {
 		t.Fatalf("Expected config cluster to be %s, got %s", defServer, server)

@@ -1,4 +1,4 @@
-package multikube_test
+package proxy
 
 import (
 	"testing"

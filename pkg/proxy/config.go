@@ -1,4 +1,4 @@
-package multikube
+package proxy
 
 import (
 	"crypto/x509"
@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -41,14 +40,6 @@ type JSONWebKey struct {
 type openIDConfiguration struct {
 	Issuer  string `json:"issuer"`
 	JwksURI string `json:"jwks_uri"`
-}
-
-// getTokenFromRequest returns a []byte representation of JWT from an HTTP Authorization Bearer header
-func getTokenFromRequest(req *http.Request) []byte {
-	if ah := req.Header.Get("Authorization"); len(ah) > 7 && strings.EqualFold(ah[0:7], "BEARER ") {
-		return []byte(ah[7:])
-	}
-	return nil
 }
 
 // dials an url which returns an array of Json Web Keys. The URL is typically

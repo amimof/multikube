@@ -1,10 +1,11 @@
-package multikube
+package proxy
 
 import (
 	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"golang.org/x/net/http/httpproxy"
 	"io/ioutil"
@@ -17,8 +18,7 @@ import (
 )
 
 const (
-	subjectUndefined string = "No route: subject undefined"
-	contextNotFound  string = "No route: context not found"
+	contextNotFound string = "No route: context not found"
 )
 
 // Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
@@ -429,13 +429,13 @@ func getOptions(config *api.Config, n string) *Options {
 func optsFromCtx(ctx context.Context, config *api.Config) *Options {
 
 	// Make sure Subject is set
-	sub, ok := ctx.Value(subName).(string)
+	sub, ok := ctx.Value(subjectKey).(string)
 	if !ok || sub == "" {
 		return nil
 	}
 
 	// Make sure Context is set
-	cont, ok := ctx.Value(ctxName).(string)
+	cont, ok := ctx.Value(contextKey).(string)
 	if !ok || cont == "" {
 		return nil
 	}
@@ -469,4 +469,12 @@ func getHostAndPort(uri string) string {
 
 	return schemeStrip
 
+}
+
+func newErrf(s string, f ...interface{}) error {
+	return fmt.Errorf(s, f...)
+}
+
+func newErr(s string) error {
+	return errors.New(s)
 }
