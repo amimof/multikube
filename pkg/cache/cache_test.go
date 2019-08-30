@@ -1,12 +1,11 @@
-package multikube_test
+package cache
 
 import (
-	"gitlab.com/amimof/multikube"
 	"testing"
 )
 
-var key string = "somekey"
-var val string = "hello world"
+var key = "somekey"
+var val = "hello world"
 
 func contains(s []string, e string) bool {
 	for _, a := range s {
@@ -18,7 +17,7 @@ func contains(s []string, e string) bool {
 }
 
 func TestCacheGetNilItem(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	item := cache.Get(key)
 	if item != nil {
 		t.Fatalf("Item with key %s should be nil", key)
@@ -26,7 +25,7 @@ func TestCacheGetNilItem(t *testing.T) {
 }
 
 func TestCacheSetItem(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	item := cache.Set(key, []byte(val))
 	if item.Key != key {
 		t.Fatalf("Item key is not %s", key)
@@ -37,7 +36,7 @@ func TestCacheSetItem(t *testing.T) {
 }
 
 func TestCacheSetGetItem(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	cache.Set(key, []byte(val))
 	item := cache.Get(key)
 	if item.Key != key {
@@ -49,7 +48,7 @@ func TestCacheSetGetItem(t *testing.T) {
 }
 
 func TestCacheDeleteItem(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	item := cache.Set(key, []byte(val))
 
 	cache.Delete(item.Key)
@@ -60,7 +59,7 @@ func TestCacheDeleteItem(t *testing.T) {
 }
 
 func TestCacheListKeys(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	items := []string{"/namespaces/", "/namespaces/pods", "/namespaces/pods/pod-1"}
 
 	cache.Set(items[0], []byte{'a'})
@@ -76,7 +75,7 @@ func TestCacheListKeys(t *testing.T) {
 }
 
 func TestCacheSize(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	cache.Set(key, []byte("a"))
 	if cache.Size() != 1 {
 		t.Fatalf("Expected cache size to be %d but got %d", 1, cache.Size())
@@ -84,7 +83,7 @@ func TestCacheSize(t *testing.T) {
 }
 
 func TestCacheItemBytes(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	cache.Set("A", []byte("a"))
 	cache.Set("B", []byte("b"))
 	cache.Set("C", []byte("c"))
@@ -93,7 +92,7 @@ func TestCacheItemBytes(t *testing.T) {
 	b := cache.Get("B")
 	c := cache.Get("C")
 
-	items := []*multikube.Item{a, b, c}
+	items := []*Item{a, b, c}
 
 	for _, item := range items {
 		if item.Bytes() != 1 {
@@ -104,7 +103,7 @@ func TestCacheItemBytes(t *testing.T) {
 }
 
 func TestCacheLen(t *testing.T) {
-	cache := multikube.NewCache()
+	cache := New()
 	cache.Set("A", []byte("alpha"))
 	cache.Set("B", []byte("bravo"))
 	cache.Set("C", []byte("charlie"))

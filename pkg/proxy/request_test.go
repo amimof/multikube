@@ -1,9 +1,9 @@
-package multikube_test
+package proxy
 
 import (
 	"testing"
 )
 
-func TestServer(t *testing.T) {
+func TestRestClient(t *testing.T) {
 	t.Logf("Tests not implemented")
 }

@@ -1,4 +1,4 @@
-package multikube
+package proxy
 
 import (
 	"context"

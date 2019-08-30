@@ -1,4 +1,4 @@
-package multikube
+package proxy
 
 import (
 	"context"
@@ -24,8 +24,8 @@ import (
 type ctxKey string
 
 var (
-	ctxName = ctxKey("Context")
-	subName = ctxKey("Subject")
+	contextKey = ctxKey("Context")
+	subjectKey = ctxKey("Subject")
 )
 
 var frontendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -167,6 +167,14 @@ func isValidWithJWK(c *Config, r *http.Request) (jwt.JWT, error) {
 
 }
 
+// getTokenFromRequest returns a []byte representation of JWT from an HTTP Authorization Bearer header
+func getTokenFromRequest(req *http.Request) []byte {
+	if ah := req.Header.Get("Authorization"); len(ah) > 7 && strings.EqualFold(ah[0:7], "BEARER ") {
+		return []byte(ah[7:])
+	}
+	return nil
+}
+
 // WriteHeader sends and sets an HTTP response header with the provided
 // status code.
 func (r *responseWriter) WriteHeader(statusCode int) {
@@ -245,7 +253,7 @@ func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 			username = ""
 		}
 
-		ctx := context.WithValue(r.Context(), subName, username)
+		ctx := context.WithValue(r.Context(), subjectKey, username)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 
@@ -259,7 +267,7 @@ func WithHeader(c *Config, next http.Handler) http.Handler {
 		req := r
 		header := r.Header.Get("Multikube-Context")
 		if header != "" {
-			ctx := context.WithValue(r.Context(), ctxName, header)
+			ctx := context.WithValue(r.Context(), contextKey, header)
 			req = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, req)
@@ -275,7 +283,7 @@ func WithCtxRoot(c *Config, next http.Handler) http.Handler {
 		req := r
 		c, rem := getCtxFromURL(r.URL)
 		if c != "" {
-			ctx := context.WithValue(r.Context(), ctxName, c)
+			ctx := context.WithValue(r.Context(), contextKey, c)
 			req = r.WithContext(ctx)
 			if rem != "" {
 				req.URL.Path = rem

@@ -1,4 +1,4 @@
-package multikube
+package server
 
 import (
 	"crypto/tls"
