@@ -3,6 +3,7 @@ package multikube
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -103,6 +104,10 @@ func isValidWithX509Cert(c *Config, r *http.Request) (jwt.JWT, error) {
 
 	if t == nil {
 		return nil, fmt.Errorf("No token in request")
+	}
+
+	if c.RS256PublicKey == nil {
+		c.RS256PublicKey = &x509.Certificate{}
 	}
 
 	err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
