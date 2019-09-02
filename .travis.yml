@@ -5,13 +5,13 @@ language: go
 go:
   - "1.12"
 
+env:
+- GO111MODULE=on
+
 stages:
 - test
 - build
 - deploy
-
-before_install:
-- make dep
 
 jobs:
   include:
