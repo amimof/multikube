@@ -9,13 +9,13 @@ COMMIT=$(shell git rev-parse HEAD)
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 GOVERSION=$(shell go version | awk -F\go '{print $$3}' | awk '{print $$1}')
 GITHUB_USERNAME=amimof
-REPO=gitlab.com/${GITHUB_USERNAME}/${PROJECT}
+REPO=github.com/${GITHUB_USERNAME}/${PROJECT}
 PKG_LIST=$$(go list ./... | grep -v /vendor/)
 SRC_FILES=find . -name "*.go" -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
 PROJ_FILES=find . -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
 # Setup the -ldflags option for go build here, interpolate the variable values
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}"
-DOCKER_REGISTRY=registry.gitlab.com
+DOCKER_REGISTRY=docker.io
 DOCKER_REPO=${DOCKER_REGISTRY}/${GITHUB_USERNAME}/${PROJECT}
 COVERAGE_DIR=coverage
 
@@ -23,7 +23,7 @@ COVERAGE_DIR=coverage
 all: build
 
 dep:
-	GO111MODULE=on go get -v -d ./cmd/${PROJECT}/... ; \
+	go get -v -d ./cmd/${PROJECT}/... ; \
 	go get -u github.com/fzipp/gocyclo; \
 	go get -u golang.org/x/lint/golint; \
 	go get github.com/gordonklaus/ineffassign; \
@@ -68,19 +68,19 @@ test:
 
 linux: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-${GOARCH} ./cmd/${PROJECT}/...
+	CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-${GOARCH} ./cmd/${PROJECT}/...
 
 rpi: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-arm ./cmd/${PROJECT}/...
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm go build ${LDFLAGS} -o ./bin/${PROJECT}-linux-arm ./cmd/${PROJECT}/...
 
 darwin: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-darwin-${GOARCH} ./cmd/${PROJECT}/...
+	CGO_ENABLED=0 GOOS=darwin GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-darwin-${GOARCH} ./cmd/${PROJECT}/...
 
 windows: dep
 	mkdir -p ./bin/; \
-	GO111MODULE=on CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-windows-${GOARCH}.exe ./cmd/${PROJECT}/...
+	CGO_ENABLED=0 GOOS=windows GOARCH=${GOARCH} go build ${LDFLAGS} -o ./bin/${PROJECT}-windows-${GOARCH}.exe ./cmd/${PROJECT}/...
 
 docker_build:
 	docker build -t ${DOCKER_REPO}:${VERSION} .
