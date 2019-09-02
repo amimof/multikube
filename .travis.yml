@@ -1,0 +1,54 @@
+sudo: false
+dist: stretch
+language: go
+
+go:
+  - "1.12"
+
+stages:
+- test
+- build
+- deploy
+
+before_install:
+- make dep
+
+jobs:
+  include:
+  - stage: test
+    name: "Verify"
+    script: 
+    - make checkfmt
+    - make fmt  
+    - make vet 
+    - make race
+    - make gocyclo
+    - make golint 
+    - make ineffassign
+    - make misspell
+
+  - name: "Unit Test"
+    script:
+    - make test
+
+  - name: "Compile"
+    stage: build
+    script: 
+    - make
+
+  - stage: deploy
+    name: "GitHub Releases"
+    script:
+    - make build
+    deploy:
+      provider: releases
+      api_key: ${GITHUB_API_KEY}
+      file: 
+      - bin/multikube-linux-amd64
+      - bin/multikube-darwin-amd64
+      - bin/multikube-linux-arm
+      - bin/multikube-windows-amd64.exe
+      skip_cleanup: true
+      draft: true
+      on:
+        tags: true
