@@ -9,13 +9,13 @@ COMMIT=$(shell git rev-parse HEAD)
 BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 GOVERSION=$(shell go version | awk -F\go '{print $$3}' | awk '{print $$1}')
 GITHUB_USERNAME=amimof
-REPO=gitlab.com/${GITHUB_USERNAME}/${PROJECT}
+REPO=github.com/${GITHUB_USERNAME}/${PROJECT}
 PKG_LIST=$$(go list ./... | grep -v /vendor/)
 SRC_FILES=find . -name "*.go" -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
 PROJ_FILES=find . -type f -not -path "./vendor/*" -not -path "./.git/*" -not -path "./.cache/*" -print0 | xargs -0 
 # Setup the -ldflags option for go build here, interpolate the variable values
 LDFLAGS = -ldflags "-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}"
-DOCKER_REGISTRY=registry.gitlab.com
+DOCKER_REGISTRY=docker.io
 DOCKER_REPO=${DOCKER_REGISTRY}/${GITHUB_USERNAME}/${PROJECT}
 COVERAGE_DIR=coverage
 

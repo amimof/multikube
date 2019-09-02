@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"gitlab.com/amimof/multikube/pkg/cache"
+	"github.com/amimof/multikube/pkg/cache"
 	"net"
 	"net/http"
 	"net/http/httputil"

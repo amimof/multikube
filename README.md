@@ -1,5 +1,5 @@
 # multikube
-[![pipeline status](https://gitlab.com/amimof/multikube/badges/master/pipeline.svg)](https://gitlab.com/amimof/multikube/commits/master)
+[![Build Status](https://travis-ci.org/amimof/multikube.svg?branch=master)](https://travis-ci.org/amimof/multikube)
 
 Multikube is a multi-cluster API router for [Kubernetes](http://kubernetes.io/). It is responsible of routing requests to one or more Kubernetes API's (`kube-apiserver`) based on client tokens. Multikube acts as a proxy sitting between clients, such as `kubectl`, `curl`, web apps etc, and Kubernetes kube-apiserver thus separating the network into two security domains.
 

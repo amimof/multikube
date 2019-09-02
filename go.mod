@@ -1,4 +1,4 @@
-module gitlab.com/amimof/multikube
+module github.com/amimof/multikube
 
 go 1.12
 
