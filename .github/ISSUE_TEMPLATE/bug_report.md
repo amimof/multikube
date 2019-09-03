@@ -1,3 +1,8 @@
+---
+name: Bug Report
+about: Create a report to help us improve
+
+---
 <!--
 If you are reporting a new issue, make sure that we do not have any duplicates
 already open. You can ensure this by searching the issue list for this
@@ -9,12 +14,12 @@ as it takes time for someone else to understand your problem if little and uncle
 information is provided.
 -->
 
-**Description**
-
 <!--
 Describe the problem you are having in a few paragraphs. Try to describe the problem
 as clearly and accurately as possible. 
 -->
+**Description**
+
 
 <!--
 If possible. Provide a step-by-step instruction of how to reproduce the problem.
@@ -35,7 +40,10 @@ troubleshooting.
 **Describe the results you expected:**
 
 
-**Additional information you deem important (e.g. issue happens only occasionally):**
+<!--
+Optional
+-->
+**Additional information:**
 
 
 **Output of `multikube --version`:**
@@ -44,4 +52,8 @@ troubleshooting.
 (paste your output here)
 ```
 
-**Additional environment details (AWS, VirtualBox, physical, etc.):**
+<!--
+Optional
+Information about the environment in which the problem occurs. Such as OS, architecture, AWS etc
+-->
+**Additional environment details:**
