@@ -21,7 +21,7 @@ A client, wether it is kubectl, cURL or a browser, may make requests to Multikub
 
 Multikube communicates with Kubernetes clusters over separate TCP connections than those established from clients to Multikube. This means that connections can be re-used, shared and cached for better performance. It also means that client connections are never used to communicate with the Kubernetes API. 
 
-As an example, `kubectl` uses a context that is configured to use the server `https://127.0.0.1:6443/k8s-dev-cluster` which happens to be Multikube running locally. Note the leading path in the URL which is the context name. Multikube will try to match that path with a context in it's kubeconfig. All traffic from kubectl will be routed through Multikube to the apiserver k8s-dev-cluster. 
+As an example, kubectl uses a context that is configured to use the server `https://127.0.0.1:6443/k8s-dev-cluster` which happens to be Multikube running locally. Note the leading path in the URL which is the context name. Multikube will try to match that path with a context in it's kubeconfig. All traffic from kubectl will be routed through Multikube to the apiserver k8s-dev-cluster. 
 
 ## Getting started
 
@@ -41,8 +41,8 @@ You configure Multikube on the command line. There is no configuration file. How
 
 ## Examples
 
-Examples are found under [docs/examples](https://github.com/amimof/multikube/blob/master/docs/examples/dex-example.md)
+Examples are found under [docs/examples](https://github.com/amimof/multikube/blob/master/docs/examples)
 
 ## Contributing
 
-All help in any form is highly appreciated and your are welcome participate in developing together. To contribute submit a Pull Request. If you want to provide feedback, open up a Github Issue or contact me personally.
+Multikube has not yet exited alpha. It is still under heavy development. All help in any form is highly appreciated and your are welcome participate in developing together. To contribute submit a Pull Request. If you want to provide feedback, open up a Github Issue or contact me personally.
