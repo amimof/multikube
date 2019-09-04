@@ -13,8 +13,8 @@ Please provide the following information:
 
 **- How to verify it**
 
-**- Description for the CHANGELOG**
 <!--
 Write a short (one line) summary that describes the changes in this
 pull request for inclusion in the CHANGELOG:
 -->
+**- Description for the CHANGELOG**

@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
-	"github.com/SermoDigital/jose/jwt"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	jwtv2 "gopkg.in/square/go-jose.v2/jwt"
+	"gopkg.in/square/go-jose.v2/jwt"
 	"log"
 	"math/big"
 	"net/http"
@@ -79,88 +78,6 @@ func init() {
 	prometheus.MustRegister(frontendGauge, frontendCounter, frontendHistogram, responseSize)
 }
 
-// newErrResponse marshals a string array into a json and writes to the provided responsewriter
-// func newErrResponse(w http.ResponseWriter, s int, e ...string) {
-// 	resp := &responseError{
-// 		Status: s,
-// 		Errs:   e,
-// 	}
-// 	b, err := json.Marshal(resp)
-// 	if err != nil {
-// 		b = []byte{}
-// 	}
-// 	w.Header().Set("Content-Type", "application/json")
-// 	http.Error(w, string(b), s)
-// }
-
-// func isValidWithX509Cert(c *Config, r *http.Request) (jwt.JWT, error) {
-
-// 	t, err := jws.ParseJWTFromRequest(r)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	if t == nil {
-// 		return nil, fmt.Errorf("No token in request")
-// 	}
-
-// 	err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return t, nil
-
-// }
-
-func isValidWithJWK(c *Config, r *http.Request) (jwt.JWT, error) {
-
-	t, err := jws.ParseJWTFromRequest(r)
-	if err != nil {
-		return nil, err
-	}
-
-	raw := string(getTokenFromRequest(r))
-	tok, err := jwtv2.ParseSigned(raw)
-	if err != nil {
-		return nil, err
-	}
-
-	// Try to find a JWK using the kid
-	kid := tok.Headers[0].KeyID
-	jwk := c.JWKS.Find(kid)
-	if jwk == nil {
-		return nil, fmt.Errorf("%s", "Key ID invalid")
-	}
-	if jwk.Kty != "RSA" {
-		return nil, fmt.Errorf("Invalid key type. Expected 'RSA' got '%s'", jwk.Kty)
-	}
-
-	// decode the base64 bytes for n
-	nb, err := base64.RawURLEncoding.DecodeString(jwk.N)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if E is big-endian int
-	if jwk.E != "AQAB" && jwk.E != "AAEAAQ" {
-		return nil, fmt.Errorf("Expected E to be one of 'AQAB' and 'AAEAAQ' but got '%s'", jwk.E)
-	}
-
-	pk := &rsa.PublicKey{
-		N: new(big.Int).SetBytes(nb),
-		E: 65537,
-	}
-
-	err = t.Validate(pk, crypto.SigningMethodRS256)
-	if err != nil {
-		return nil, err
-	}
-
-	return t, nil
-
-}
-
 // getTokenFromRequest returns a []byte representation of JWT from an HTTP Authorization Bearer header
 func getTokenFromRequest(req *http.Request) []byte {
 	if ah := req.Header.Get("Authorization"); len(ah) > 7 && strings.EqualFold(ah[0:7], "BEARER ") {
@@ -216,7 +133,8 @@ func WithLogging(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-//
+// WithJWT is a middleware that parses a JWT token from the requests and propagates 
+// the request context with a claim value.
 func WithJWT(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -246,6 +164,8 @@ func WithJWT(c *Config, next http.Handler) http.Handler {
 	})
 }
 
+// WithX509Validation is a middleware that validates a JWT token in the http request using RS256 signing method.
+// It will do so using a x509 certificate provided in c
 func WithX509Validation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -279,23 +199,65 @@ func WithX509Validation(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-// WithRS256Validation validates a JWT token in the http request by parsing using RS256 signing method.
-// It will validate the JWT using a x509 public key or using Json Web Key from an OpenID Connect provider.
-// WithRS256Validation will validate the request only if one of the two methods considers the request to be valid.
-// If both fail, a 401 is returned to the client. If both methods validates successfully, x509 signed JWT's takes priority.
+// WithJWKValidation is a middleware that validates a JWT token in the http request using RS256 signing method.
+// It will do so using a JWK (Json Web Key) provided in c
 func WithJWKValidation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// Validate the JWT in the request using both JWK's and x509 public certiticate
-		t, err := isValidWithJWK(c, r)
-
-		// Request is unauthorized if both return errors
+		t, err := jws.ParseJWTFromRequest(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
-		// Set context
+		raw := string(getTokenFromRequest(r))
+		tok, err := jwt.ParseSigned(raw)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// Try to find a JWK using the kid
+		kid := tok.Headers[0].KeyID
+		jwk := c.JWKS.Find(kid)
+		if jwk == nil {
+			http.Error(w, "key id invalid", http.StatusUnauthorized)
+			return
+		}
+		if jwk.Kty != "RSA" {
+			http.Error(w, fmt.Sprintf("Invalid key type. Expected 'RSA' got '%s'", jwk.Kty), http.StatusUnauthorized)
+			return
+		}
+
+		// decode the base64 bytes for n
+		nb, err := base64.RawURLEncoding.DecodeString(jwk.N)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// Check if E is big-endian int
+		if jwk.E != "AQAB" && jwk.E != "AAEAAQ" {
+			http.Error(w, fmt.Sprintf("Expected E to be one of 'AQAB' and 'AAEAAQ' but got '%s'", jwk.E), http.StatusUnauthorized)
+			return
+		}
+
+		pk := &rsa.PublicKey{
+			N: new(big.Int).SetBytes(nb),
+			E: 65537,
+		}
+
+		err = t.Validate(pk, crypto.SigningMethodRS256)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
 		username, ok := t.Claims().Get(c.OIDCUsernameClaim).(string)
 		if !ok {
 			username = ""
