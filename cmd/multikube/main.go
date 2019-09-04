@@ -120,10 +120,9 @@ func main() {
 		return
 	}
 
-	// At least one of rs256-public-key and/or oidc-issuer-url must be set
-	if rs256PublicKey == "" && oidcIssuerURL == "" {
-		//log.Fatalf("the required flag `--rs256-public-key` was not specified")
-		log.Fatalf("Both flags `--rs256-public-key` and `--oidc-issuer-url` cannot be empty, please set one or both")
+	// Only allow one of the flags rs256-public-key and oidc-issuer-url
+	if rs256PublicKey != "" && oidcIssuerURL != "" {
+		log.Fatalf("Both flags `--rs256-public-key` and `--oidc-issue-url` cannot be set")
 	}
 
 	// Read provided kubeconfig file
@@ -132,8 +131,31 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Read provided signer cert file
-	var certChain *x509.Certificate
+	// Create the proxy
+	p := proxy.NewProxyFrom(c)
+
+	// Setup default middlewares
+	middlewares := []proxy.Middleware{
+		proxy.WithEmpty,
+		proxy.WithLogging,
+		proxy.WithMetrics,
+		proxy.WithJWT,
+		proxy.WithHeader,
+		proxy.WithCtxRoot,
+	}
+
+	// Add JWK validation middleware if issuer url is provided on cmd line
+	if oidcIssuerURL != "" {
+		p.Config.OIDCIssuerURL = oidcIssuerURL
+		p.Config.OIDCPollInterval = oidcPollInterval
+		p.Config.OIDCUsernameClaim = oidcUsernameClaim
+		// Start polling OIDC Provider
+		stop := p.Config.GetJWKSFromURL()
+		defer stop()
+		middlewares = append(middlewares, proxy.WithJWKValidation)
+	}
+
+	// // Add x509 public key validation if cert provided on cmd line
 	if rs256PublicKey != "" {
 		signer, err := ioutil.ReadFile(rs256PublicKey)
 		if err != nil {
@@ -144,33 +166,13 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		certChain = cert
+		p.Config.RS256PublicKey = cert
+		p.Config.OIDCUsernameClaim = oidcUsernameClaim
+		middlewares = append(middlewares, proxy.WithX509Validation)
 	}
 
-	// Compose multikube config
-	mwconfig := &proxy.Config{
-		OIDCIssuerURL:     oidcIssuerURL,
-		OIDCPollInterval:  oidcPollInterval,
-		OIDCUsernameClaim: oidcUsernameClaim,
-		RS256PublicKey:    certChain,
-	}
-
-	// Start polling OIDC Provider
-	stop := mwconfig.GetJWKSFromURL()
-	defer stop()
-
-	// Create the proxy
-	p := proxy.NewProxyFrom(mwconfig, c)
-
-	// Setup middlewares
-	m := p.Use(
-		proxy.WithEmpty,
-		proxy.WithLogging,
-		proxy.WithMetrics,
-		proxy.WithRS256Validation,
-		proxy.WithHeader,
-		proxy.WithCtxRoot,
-	)
+	// Create middleware
+	m := p.Use(middlewares...)
 
 	// Create the server
 	s := &server.Server{

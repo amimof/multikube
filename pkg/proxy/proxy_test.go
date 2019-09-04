@@ -40,7 +40,7 @@ var kubeConf *api.Config = &api.Config{
 
 // Just creates a new proxy instance
 func TestProxyNewProxy(t *testing.T) {
-	p := NewProxyFrom(config, kubeConf)
+	p := NewProxyFrom(kubeConf)
 	server := p.KubeConfig.Clusters[name].Server
 	if server != defServer {
 		t.Fatalf("Expected config cluster to be %s, got %s", defServer, server)
