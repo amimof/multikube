@@ -133,7 +133,7 @@ func WithLogging(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-// WithJWT is a middleware that parses a JWT token from the requests and propagates 
+// WithJWT is a middleware that parses a JWT token from the requests and propagates
 // the request context with a claim value.
 func WithJWT(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
