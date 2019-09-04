@@ -140,8 +140,8 @@ func main() {
 		proxy.WithLogging,
 		proxy.WithMetrics,
 		proxy.WithJWT,
-		proxy.WithHeader,
 		proxy.WithCtxRoot,
+		proxy.WithHeader,
 	}
 
 	// Add JWK validation middleware if issuer url is provided on cmd line
