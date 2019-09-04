@@ -3,9 +3,7 @@ package proxy
 import (
 	"context"
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
@@ -82,42 +80,38 @@ func init() {
 }
 
 // newErrResponse marshals a string array into a json and writes to the provided responsewriter
-func newErrResponse(w http.ResponseWriter, s int, e ...string) {
-	resp := &responseError{
-		Status: s,
-		Errs:   e,
-	}
-	b, err := json.Marshal(resp)
-	if err != nil {
-		b = []byte{}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	http.Error(w, string(b), s)
-}
+// func newErrResponse(w http.ResponseWriter, s int, e ...string) {
+// 	resp := &responseError{
+// 		Status: s,
+// 		Errs:   e,
+// 	}
+// 	b, err := json.Marshal(resp)
+// 	if err != nil {
+// 		b = []byte{}
+// 	}
+// 	w.Header().Set("Content-Type", "application/json")
+// 	http.Error(w, string(b), s)
+// }
 
-func isValidWithX509Cert(c *Config, r *http.Request) (jwt.JWT, error) {
+// func isValidWithX509Cert(c *Config, r *http.Request) (jwt.JWT, error) {
 
-	t, err := jws.ParseJWTFromRequest(r)
-	if err != nil {
-		return nil, err
-	}
+// 	t, err := jws.ParseJWTFromRequest(r)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	if t == nil {
-		return nil, fmt.Errorf("No token in request")
-	}
+// 	if t == nil {
+// 		return nil, fmt.Errorf("No token in request")
+// 	}
 
-	if c.RS256PublicKey == nil {
-		c.RS256PublicKey = &x509.Certificate{}
-	}
+// 	err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
-	if err != nil {
-		return nil, err
-	}
+// 	return t, nil
 
-	return t, nil
-
-}
+// }
 
 func isValidWithJWK(c *Config, r *http.Request) (jwt.JWT, error) {
 
@@ -222,32 +216,86 @@ func WithLogging(c *Config, next http.Handler) http.Handler {
 	})
 }
 
+//
+func WithJWT(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		// Get the JWT from the request
+		t, err := jws.ParseJWTFromRequest(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// Check if request has empty credentials
+		if t == nil {
+			http.Error(w, "No valid access token", http.StatusUnauthorized)
+			return
+		}
+
+		// Set context
+		username, ok := t.Claims().Get(c.OIDCUsernameClaim).(string)
+		if !ok {
+			username = ""
+		}
+
+		ctx := context.WithValue(r.Context(), subjectKey, username)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+
+	})
+}
+
+func WithX509Validation(c *Config, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		t, err := jws.ParseJWTFromRequest(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		if t == nil {
+			http.Error(w, "No token in request", http.StatusUnauthorized)
+			return
+		}
+
+		err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		// Set context
+		username, ok := t.Claims().Get(c.OIDCUsernameClaim).(string)
+		if !ok {
+			username = ""
+		}
+
+		ctx := context.WithValue(r.Context(), subjectKey, username)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+
+	})
+}
+
 // WithRS256Validation validates a JWT token in the http request by parsing using RS256 signing method.
 // It will validate the JWT using a x509 public key or using Json Web Key from an OpenID Connect provider.
 // WithRS256Validation will validate the request only if one of the two methods considers the request to be valid.
 // If both fail, a 401 is returned to the client. If both methods validates successfully, x509 signed JWT's takes priority.
-func WithRS256Validation(c *Config, next http.Handler) http.Handler {
+func WithJWKValidation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// Validate the JWT in the request using both JWK's and x509 public certiticate
-		jwkJwt, jwkErr := isValidWithJWK(c, r)
-		x509Jwt, x509Err := isValidWithX509Cert(c, r)
+		t, err := isValidWithJWK(c, r)
 
 		// Request is unauthorized if both return errors
-		if jwkErr != nil && x509Err != nil {
-			newErrResponse(w, http.StatusUnauthorized, jwkErr.Error(), x509Err.Error())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
-		// Use one of the two JWT's, if valid. A valid x509 will have priority here
-		var t jwt.JWT
-		if jwkJwt != nil {
-			t = jwkJwt
-		}
-		if x509Jwt != nil {
-			t = x509Jwt
-		}
-
+		// Set context
 		username, ok := t.Claims().Get(c.OIDCUsernameClaim).(string)
 		if !ok {
 			username = ""

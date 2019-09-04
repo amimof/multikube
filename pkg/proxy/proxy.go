@@ -15,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const (
@@ -31,7 +32,7 @@ type Proxy struct {
 	tlsconfigs map[string]*tls.Config
 }
 
-// NewProxy crerates a new Proxy and initialises router and configuration
+// NewProxy creates a new Proxy and initialises router and configuration
 func NewProxy() *Proxy {
 	return &Proxy{
 		transports: make(map[string]http.RoundTripper),
@@ -40,11 +41,16 @@ func NewProxy() *Proxy {
 }
 
 // NewProxyFrom creates an instance of Proxy
-func NewProxyFrom(c *Config, kc *api.Config) *Proxy {
+func NewProxyFrom(kc *api.Config) *Proxy {
 	p := NewProxy()
-	p.Config = c
 	p.KubeConfig = kc
-
+	p.Config = &Config{
+		OIDCIssuerURL:     "",
+		OIDCPollInterval:  time.Second * 2,
+		OIDCUsernameClaim: "sub",
+		RS256PublicKey:    &x509.Certificate{},
+		JWKS:              &JWKS{},
+	}
 	return p
 }
 
