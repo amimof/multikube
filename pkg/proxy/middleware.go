@@ -308,7 +308,7 @@ func WithCtxRoot(c *Config, next http.Handler) http.Handler {
 func getCtxFromURL(u *url.URL) (string, string) {
 	val := ""
 	rem := []string{}
-	if vals := strings.Split(u.Path, "/"); len(vals) > 1 && strings.EqualFold(vals[1], "api") == false {
+	if vals := strings.Split(u.Path, "/"); len(vals) > 1 {
 		val = vals[1]
 		rem = vals[2:]
 	}
