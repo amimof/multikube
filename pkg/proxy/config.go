@@ -1,8 +1,10 @@
 package proxy
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,11 +15,13 @@ import (
 // Config holds a top-level configuration of an instance of Multikube. It is used to
 // pass around configuration used by different packages within the project.
 type Config struct {
-	OIDCIssuerURL     string
-	OIDCUsernameClaim string
-	OIDCPollInterval  time.Duration
-	RS256PublicKey    *x509.Certificate
-	JWKS              *JWKS
+	OIDCIssuerURL          string
+	OIDCUsernameClaim      string
+	OIDCPollInterval       time.Duration
+	OIDCInsecureSkipVerify bool
+	OIDCCa                 *x509.Certificate
+	RS256PublicKey         *x509.Certificate
+	JWKS                   *JWKS
 }
 
 // JWKS is a representation of Json Web Key Store. It holds multiple JWK's in an array
@@ -45,15 +49,14 @@ type openIDConfiguration struct {
 // dials an url which returns an array of Json Web Keys. The URL is typically
 // an OpenID Connect .well-formed URL as per https://openid.net/specs/openid-connect-discovery-1_0.html
 // Unmarshals it's json content into JWKS and returns it
-func getKeys(u string) (*JWKS, error) {
+func getKeys(u string, ca *x509.Certificate, i bool) (*JWKS, error) {
 
-	client := &http.Client{}
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := tlsClient(ca, i).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -75,17 +78,17 @@ func getKeys(u string) (*JWKS, error) {
 }
 
 // dials the .well-known url and unmarshals it's json content into an OpenIDConfiguration
-// see https://openid.net/specs/openid-connect-discovery-1_0.html
-func getWellKnown(u string) (*openIDConfiguration, error) {
+// see https://openid.net/specs/openid-connect-discovery-1_0.html.
+// Accepts a trusted CA certificate as well as a bool to skip tls verification
+func getWellKnown(u string, ca *x509.Certificate, i bool) (*openIDConfiguration, error) {
 
-	client := &http.Client{}
 	wellKnownURL := fmt.Sprintf("%s/%s", u, "/.well-known/openid-configuration")
 	req, err := http.NewRequest("GET", wellKnownURL, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.Do(req)
+	resp, err := tlsClient(ca, i).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +107,32 @@ func getWellKnown(u string) (*openIDConfiguration, error) {
 	}
 
 	return c, nil
+
+}
+
+// Creates an http client with TLS configuration. If ca is nil then client without TLS configuration is returned instead
+// Set i to true to skip tls verification for this client
+func tlsClient(ca *x509.Certificate, i bool) *http.Client {
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+
+	// Add tls config to client if ca isn't nil
+	if ca != nil {
+		caPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.Raw})
+		rootCAs, _ := x509.SystemCertPool()
+		if rootCAs == nil {
+			rootCAs = x509.NewCertPool()
+		}
+		rootCAs.AppendCertsFromPEM(caPem)
+		tlsConfig.RootCAs = rootCAs
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
 
 }
 
@@ -128,13 +157,13 @@ func (c *Config) GetJWKSFromURL() func() {
 				return
 			default:
 				// Make a request and fetch content of .well-known url (http://some-url/.well-known/openid-configuration)
-				w, err := getWellKnown(c.OIDCIssuerURL)
+				w, err := getWellKnown(c.OIDCIssuerURL, c.OIDCCa, c.OIDCInsecureSkipVerify)
 				if err != nil {
 					log.Printf("ERROR retrieving openid-configuration: %s", err)
 					continue
 				}
 				// Get content of jwks_keys field
-				j, err := getKeys(w.JwksURI)
+				j, err := getKeys(w.JwksURI, c.OIDCCa, c.OIDCInsecureSkipVerify)
 				if err != nil {
 					log.Printf("ERROR retrieving JWKS from provider: %s", err)
 					continue

@@ -41,18 +41,20 @@ var (
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 
-	oidcPollInterval  time.Duration
-	oidcIssuerURL     string
-	oidcUsernameClaim string
-	tlsHost           string
-	tlsPort           int
-	tlsListenLimit    int
-	tlsKeepAlive      time.Duration
-	tlsReadTimeout    time.Duration
-	tlsWriteTimeout   time.Duration
-	tlsCertificate    string
-	tlsCertificateKey string
-	tlsCACertificate  string
+	oidcPollInterval       time.Duration
+	oidcIssuerURL          string
+	oidcUsernameClaim      string
+	oidcCaFile             string
+	oidcInsecureSkipVerify bool
+	tlsHost                string
+	tlsPort                int
+	tlsListenLimit         int
+	tlsKeepAlive           time.Duration
+	tlsReadTimeout         time.Duration
+	tlsWriteTimeout        time.Duration
+	tlsCertificate         string
+	tlsCertificateKey      string
+	tlsCACertificate       string
 
 	metricsHost string
 	metricsPort int
@@ -74,6 +76,7 @@ func init() {
 	pflag.StringVar(&metricsHost, "metrics-host", "localhost", "The host address on which to listen for the --metrics-port port")
 	pflag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
 	pflag.StringVar(&oidcUsernameClaim, "oidc-username-claim", "sub", " The OpenID claim to use as the user name. Note that claims other than the default is not guaranteed to be unique and immutable")
+	pflag.StringVar(&oidcCaFile, "oidc-ca-file", "", "the certificate authority file to be used for verifyign the OpenID server")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
 	pflag.IntVar(&port, "port", 8080, "the port to listen on for insecure connections, defaults to 8080")
@@ -92,6 +95,7 @@ func init() {
 	pflag.DurationVar(&tlsWriteTimeout, "tls-write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
 	pflag.DurationVar(&oidcPollInterval, "oidc-poll-interval", 2*time.Second, "maximum duration between intervals in which the oidc issuer url (--oidc-issuer-url) is polled")
 
+	pflag.BoolVar(&oidcInsecureSkipVerify, "oidc-insecure-skip-verify", false, "")
 }
 
 func main() {
@@ -149,6 +153,10 @@ func main() {
 		p.Config.OIDCIssuerURL = oidcIssuerURL
 		p.Config.OIDCPollInterval = oidcPollInterval
 		p.Config.OIDCUsernameClaim = oidcUsernameClaim
+		p.Config.OIDCInsecureSkipVerify = oidcInsecureSkipVerify
+		if oidcCaFile != "" {
+			p.Config.OIDCCa = readCert(oidcCaFile)
+		}
 		// Start polling OIDC Provider
 		stop := p.Config.GetJWKSFromURL()
 		defer stop()
@@ -157,16 +165,7 @@ func main() {
 
 	// // Add x509 public key validation if cert provided on cmd line
 	if rs256PublicKey != "" {
-		signer, err := ioutil.ReadFile(rs256PublicKey)
-		if err != nil {
-			log.Fatal(err)
-		}
-		block, _ := pem.Decode(signer)
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			log.Fatal(err)
-		}
-		p.Config.RS256PublicKey = cert
+		p.Config.RS256PublicKey = readCert(rs256PublicKey)
 		p.Config.OIDCUsernameClaim = oidcUsernameClaim
 		middlewares = append(middlewares, proxy.WithX509Validation)
 	}
@@ -231,4 +230,18 @@ func main() {
 		log.Fatal(err)
 	}
 
+}
+
+// Reads an x509 certificate from the filesystem and returns an instance of x509.Certiticate. Returns nil on errors
+func readCert(p string) *x509.Certificate {
+	signer, err := ioutil.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	block, _ := pem.Decode(signer)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil
+	}
+	return cert
 }
