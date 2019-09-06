@@ -5,10 +5,11 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"time"
 )
 
@@ -82,8 +83,15 @@ func getKeys(u string, ca *x509.Certificate, i bool) (*JWKS, error) {
 // Accepts a trusted CA certificate as well as a bool to skip tls verification
 func getWellKnown(u string, ca *x509.Certificate, i bool) (*openIDConfiguration, error) {
 
-	wellKnownURL := fmt.Sprintf("%s/%s", u, "/.well-known/openid-configuration")
-	req, err := http.NewRequest("GET", wellKnownURL, nil)
+	ul, err := url.Parse(u)
+	if err != nil {
+		return nil, err
+	}
+
+	ul.Path = path.Join(ul.Path, ".well-known/openid-configuration")
+
+	//wellKnownURL := fmt.Sprintf("%s/%s", u, "/.well-known/openid-configuration")
+	req, err := http.NewRequest("GET", ul.String(), nil)
 	if err != nil {
 		return nil, err
 	}
