@@ -7,7 +7,6 @@ A request from a client with the URL path `/k8s-dev-cluster/api/v1/namespaces` w
 ## Create a kubeconfig for Multikube
 
 Create a cluster
-
 ```
 kubeconfig config set-cluster k8s-dev-cluster \
   --server=https://k8s-dev.domain.com:8443 \
