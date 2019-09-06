@@ -1,0 +1,75 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: multikube
+  name: multikube
+  namespace: multikube
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multikube
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: multikube
+    spec:
+      containers:
+      - args:
+        - --scheme=http
+        - --host=0.0.0.0
+        - --kubeconfig=/etc/multikube/config
+        image: amimof/multikube:latest
+        imagePullPolicy: Always
+        name: multikube
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /etc/multikube
+          name: kubeconfig
+          readOnly: true
+      volumes:
+      - name: kubeconfig
+        secret:
+          defaultMode: 420
+          secretName: kubeconfig
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multikube
+  namespace: multikube
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: multikube
+  name: multikube
+  namespace: multikube
+spec:
+  type: ClusterIP
+  selector:
+    app: multikube
+  ports:
+  - name: http-8080
+    port: 8080
+    protocol: TCP
+    targetPort: http
