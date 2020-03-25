@@ -1,75 +1,141 @@
 ---
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  labels:
-    app: multikube
-  name: multikube
-  namespace: multikube
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: multikube
-  strategy:
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-    type: RollingUpdate
-  template:
-    metadata:
-      creationTimestamp: null
-      labels:
-        app: multikube
-    spec:
-      containers:
-      - args:
-        - --scheme=http
-        - --host=0.0.0.0
-        - --kubeconfig=/etc/multikube/config
-        image: amimof/multikube:latest
-        imagePullPolicy: Always
-        name: multikube
-        ports:
-        - containerPort: 8080
-          name: http
-          protocol: TCP
-        resources:
-          limits:
-            cpu: 100m
-            memory: 128Mi
-          requests:
-            cpu: 100m
-            memory: 128Mi
-        volumeMounts:
-        - mountPath: /etc/multikube
-          name: kubeconfig
-          readOnly: true
-      volumes:
-      - name: kubeconfig
-        secret:
-          defaultMode: 420
-          secretName: kubeconfig
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: multikube
   namespace: multikube
+  labels:
+    app: multikube
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  labels:
-    app: multikube
   name: multikube
   namespace: multikube
+  labels:
+    app: multikube
 spec:
-  type: ClusterIP
+  ports:
+  - name: https-8443
+    port: 8443
+    protocol: TCP
+    targetPort: https
+  - name: metrics
+    port: 8888
+    protocol: TCP
+    targetPort: metrics
   selector:
     app: multikube
-  ports:
-  - name: http-8080
-    port: 8080
-    protocol: TCP
-    targetPort: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/tls
+metadata:
+  name: multikube-tls
+  namespace: multikube
+  labels:
+    app: multikube
+data:
+  tls.crt: >-
+    LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURZakNDQWtvQ0NRQ2d1aDdsNVdBUnB6QU5CZ2txaGtpRzl3MEJBUXNGQURCek1Rc3dDUVlEVlFRR0V3SlQKUlRFU01CQUdBMVVFQ0F3SlJYSnBhM05pWlhKbk1STXdFUVlEVlFRSERBcEhiM1JvWlc1aWRYSm5NUTh3RFFZRApWUVFLREFaaGJXbHRiMll4RWpBUUJnTlZCQXNNQ1cxMWJIUnBhM1ZpWlRFV01CUUdBMVVFQXd3TktpNWxlR0Z0CmNHeGxMbU52YlRBZUZ3MHlNREF6TWpVeE5ETTRNekphRncweU5UQXpNalV4TkRNNE16SmFNSE14Q3pBSkJnTlYKQkFZVEFsTkZNUkl3RUFZRFZRUUlEQWxGY21scmMySmxjbWN4RXpBUkJnTlZCQWNNQ2tkdmRHaGxibUoxY21jeApEekFOQmdOVkJBb01CbUZ0YVcxdlpqRVNNQkFHQTFVRUN3d0piWFZzZEdscmRXSmxNUll3RkFZRFZRUUREQTBxCkxtVjRZVzF3YkdVdVkyOXRNSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTVwb2sKN1ZuUkJBUTlxbkNOSzNMOEZLM2p4MGVyaTFhcmY1SmNMa3g1UmpOL0gxUUVuRFFFUFg5MUtxWkNFUXVtUmFFOQoxYzVKMGtNVFJJcHBXNHRUdXhMMk1RNWxzWmI4MDE2YUR5dnVGbCtyZ2tMVE1OaXkyOWwxTlhaZzJhV1RhRE1ZCmlWZVZod1B3bU1jR3dnVmtEeXhZcTduYVNwWUdTU3RBQ3dMbUk0Sjk4U2E2WGpxUmV2YmlYOGxYY1QxWDhqVkMKK1FFU0xEYWs4d1ptN0Y2UGJKY2JUWTZkaTlaZFhtbThIYTZwKzRSYlRqQUJXa0wxVU1aSFFETUlmaFFBMWh3VwpuWVk5SmM1ZXZUcTJxT3ZQNWl3Z0VadEJneU1uT2JzelB5ZG04ZjNydUMzbUM3cWVaSWNvUlpQeDRLbmg4eFJOCjAzb1p4MWozQ1RvVy9zb0hyUUlEQVFBQk1BMEdDU3FHU0liM0RRRUJDd1VBQTRJQkFRQWdXSDBPUDJFOXNtT3kKK3gwQlJMZFlGbC90a1NXTkVFd3k1aStOQ0NFYmRtOFlzWkJ3Vi9ZWFFaMWdwYTR3OUF3c3RrSHNDRnltbGZSaApEWWkrVEtrY2hRTndWKysybGJHTUN5NjdmMENabGQvcFUzTG5Bd2FNWFZrRkx4OXFCSXkrSWlJd1grQUxySTV5CisxWUxKdmEvVWFRa2JEc21LQkU1bzFKWmpKMUxCRGNIUGVkMWpsU2VXVlhTNTB6OThjSDFPYmdVVm12Y2xEcmcKOUQ1dG56RGVuS21iK29pT3p2Zlc0d2QrcWF4WHBQN3VYaUJLcUNueWVnRzJuRGc0blhEMjdTUUZDNGhPbllHdApVSVYybzl4SGdLQXErRGlsNnZ4S2NmK041NDVhdGtLNWx6TXY0RmJ5dGhkWTFoOHFlV0RobFR4YURsaEZKYWgrCldodXBMa2t6Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: >-
+    LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcEFJQkFBS0NBUUVBNXBvazdWblJCQVE5cW5DTkszTDhGSzNqeDBlcmkxYXJmNUpjTGt4NVJqTi9IMVFFCm5EUUVQWDkxS3FaQ0VRdW1SYUU5MWM1SjBrTVRSSXBwVzR0VHV4TDJNUTVsc1piODAxNmFEeXZ1RmwrcmdrTFQKTU5peTI5bDFOWFpnMmFXVGFETVlpVmVWaHdQd21NY0d3Z1ZrRHl4WXE3bmFTcFlHU1N0QUN3TG1JNEo5OFNhNgpYanFSZXZiaVg4bFhjVDFYOGpWQytRRVNMRGFrOHdabTdGNlBiSmNiVFk2ZGk5WmRYbW04SGE2cCs0UmJUakFCCldrTDFVTVpIUURNSWZoUUExaHdXbllZOUpjNWV2VHEycU92UDVpd2dFWnRCZ3lNbk9ic3pQeWRtOGYzcnVDM20KQzdxZVpJY29SWlB4NEtuaDh4Uk4wM29aeDFqM0NUb1cvc29IclFJREFRQUJBb0lCQUQ5SWMvUFMzeUpNQzZRMwphUFpRZ3M4bC9VbFY2TVMvVHljZVFqL09hc1dTSWtPMXFlSTRBQ1hrVVlJWHlDK25VOFR0LytzcHhtWjJVOVpPCmFhVmVzZWEzeUdvaitsSm5EaER2ZURYTHAzWHFZVVhKRXUzbnVnWE5RblllZTJ1Zkhibk5zK0VVOFFyeFVOaU0KWGRWbTUxT21wdHJSa1E5QTVvNnoyTXBzekQxWDc5akZoLzBlWjdUejJoWTlURDB0NlY4NSt2UDJ6MHVERzJ3MQpzVDhSbjFlOXJZUXhsR0c4R1Z1YzBiYlRacHFYbXpHWEJ1bGZGbllHR0pER1pycUxVaXJiY1pHWS9OSmJFVWZiCjN6RGtxZzByOU53ZDBoM0NpaG1oYkduVTQyZ1lodzgxMjFIOWJTSGZ4Y2prZWwwaS9ja1Y0T21uclhxM0REeGMKR0kyNzBWMENnWUVBOTV1M3hkSnNUeVJCL1NqZzc3YnJacHFnVnloeXpDdi9Vck0yaWlueDR0dXBqbVNQT2x4cQp5aFBYbDIxM242N1lXNmJab2J1YzNvb1FBWk5iTCtzYmVGSGNkQzZRb05yNnNBTzl6SW0wMmF6QWEyVldpZDlCCnh6dFBleTV6b2FGSUd4V2tzdUxObXFnNC9xTFRFOEpIb3drSTh5OXAwTlhEVndpQkxHT0M5ajhDZ1lFQTdtcmcKK1VNNGNxaUh5WGlRYm9aZ3RicFJqSFlaL2RSWFJ4bDJ0VEV1aVZUalpkcUl6ekJobkRTNEVvOGx5RXZRbVBkWQpFeEFxWmF5Vm82YUNhNHF6TzB0TnRMbEEzOWVsY085NXhLSDRscjZROUxZRitGNVdhTnYzZ3VXMkJDLzhxNGZHCjdPNWJMMFg2am5YbDVxM0pnRHU5RVE2cklyZzJyekx6SHU3My94TUNnWUVBdUJZWlp3V3VhSmg0UnhNaFNKY2kKSkVKSmV3TWpkaEF2M3ZoR1VDb25INVpZVlBrR1UwbHFTNXE4Nm1RRVQ3L2FNeW0xRzcwMFAyODl2eTRpMlZsZQpMdklOaUlNbUc3RXlON0pRWmNUcm8vbi9oTmp1b2NwT1NTVWJUbVdXcWxBU0g3RFRwZnRoQ042UW9SL0U5aWUyCndzdHd6L3dzRzRzUms1OUxDZ2xoMEZrQ2dZRUFzM3l1NWJpZmRHSS81NExtYU82dE8rS0twZzM3UDBadWRrNUwKT2RsT3lZQ291UE11YjV4aXY3QklxMkFzOTM5c0NOeWM1NjBSM2YxeG9nUW14ME5oNzArZnJtQ1E0SE4rVDJsWgo2Smh2aHp6cjcrNWd6RHhwSFFRTWIvVHpkRytUN3FhSE1iTzMzZnoyeGUwb0tPUElnTXQ0YUxEOFVXVVJkaEFMClM4eG4weFVDZ1lCb0ZvdmpYSTZNOWt0ZjRzdnhGUTVjRUQ3NWdDL2dndmQvcHZYWE9lbk96Z2hEQXZCN1RtVVUKVWRLWWRLNFEvVk5UK0w2bUViNWprY0pZSndpVlJpRUxQcVlrTkg5bko5OXBvN1V3UkxuK1dLbUxNbTRwUlZQYgpTOXRKZVEyaDk4WnFSNmo4Y1dRKytGc0toNDZkWWtnZ3ZXUFBod1NqWHNDR25sQ21nc25wRUE9PQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
+---
+kind: ConfigMap
+apiVersion: v1
+data:
+  kubeconfig: |
+    apiVersion: v1
+    kind: Config
+    clusters: []
+    contexts: []
+    current-context: ''
+    preferences: {}
+    users: []
+metadata:
+  name: multikube
+  namespace: multikube
+  labels:
+    app: multikube
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multikube
+  namespace: multikube
+  labels:
+    app: multikube
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multikube
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: multikube
+      annotations:
+        prometheus.io/port: '8888'
+        prometheus.io/scrape: 'true'
+    spec:
+      volumes:
+        - name: multikube-tls
+          secret:
+            secretName: multikube-tls
+            defaultMode: 420
+        - name: multikube-kubeconfig
+          configMap:
+            name: multikube-kubeconfig
+            defaultMode: 420
+      containers:
+        - name: multikube
+          image: 'amimof/multikube:latest'
+          args:
+            - '--tls-certificate=/etc/multikube/tls/tls.crt'
+            - '--tls-key=/etc/multikube/tls/tls.key'
+            - '--tls-host=0.0.0.0'
+            - '--metrics-host=0.0.0.0'
+            - '--kubeconfig=/etc/multikube/config/kubeconfig'
+          ports:
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+          resources:
+            limits:
+              cpu: 250m
+              memory: 256Mi
+            requests:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: multikube-tls
+              readOnly: true
+              mountPath: /etc/multikube/tls
+            - name: multikube-kubeconfig
+              readOnly: true
+              mountPath: /etc/multikube/config
+          imagePullPolicy: Always
+      serviceAccount: multikube
+      serviceAccountName: multikube
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: multikube
+  namespace: multikube
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-passthrough: 'true'
+spec:
+  rules:
+    - host: multikube.apps.mdlwr.se
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: multikube
+              servicePort: https-8443

@@ -18,7 +18,8 @@ kubectl create secret generic kubeconfig --from-file ~/.kube/config -n multikube
 
 Deploy kubernetes manifest
 ```
-kubectl appyl -f https://raw.githubusercontent.com/amimof/multikube/master/deploy/k8s.yaml
+kubectl create namespace multikube
+kubectl apply -f https://raw.githubusercontent.com/amimof/multikube/master/deploy/k8s.yaml
 ```
 
 Port-forward 8080 to test it locally. You can of course create an ingress as well

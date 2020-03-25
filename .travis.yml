@@ -3,22 +3,12 @@ dist: xenial
 language: go
 
 go:
-  - "1.12"
-
-cache:
-  directories:
-    - $GOPATH/pkg/mod
-
-env:
-- GO111MODULE=on
-
+  - "1.13"
+  
 stages:
 - test
 - build
 - deploy
-
-before_install:
-- make dep
 
 jobs:
   include:
@@ -37,6 +27,8 @@ jobs:
   - name: "Unit Test"
     script:
     - make test
+    - make benchmark
+    - make coverage
 
   - name: "Compile"
     stage: build
@@ -46,15 +38,20 @@ jobs:
   - stage: deploy
     name: "GitHub Releases"
     script:
-    - make build
+    - GOOS=linux GOARCH=amd64 BUILDPATH=./bin/multikube-linux-amd64 make
+    - GOOS=linux GOARCH=arm BUILDPATH=./bin/multikube-linux-arm make
+    - GOOS=linux GOARCH=arm64 BUILDPATH=./bin/multikube-linux-arm64 make
+    - GOOS=windows GOARCH=amd64 BUILDPATH=./bin/multikube-windows-amd64.exe make
+    - GOOS=darwin GOARCH=amd64 BUILDPATH=./bin/multikube-darwin-amd64 make
     deploy:
       provider: releases
       api_key: ${GITHUB_API_KEY}
-      file: 
+      file:
       - bin/multikube-linux-amd64
-      - bin/multikube-darwin-amd64
       - bin/multikube-linux-arm
+      - bin/multikube-linux-arm64
       - bin/multikube-windows-amd64.exe
+      - bin/multikube-darwin-amd64
       skip_cleanup: true
       draft: true
       on:
