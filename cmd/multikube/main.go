@@ -163,7 +163,7 @@ func main() {
 		middlewares = append(middlewares, proxy.WithJWKValidation)
 	}
 
-	// // Add x509 public key validation if cert provided on cmd line
+	// // Add x509 public key validation middleware if cert provided on cmd line
 	if rs256PublicKey != "" {
 		p.Config.RS256PublicKey = readCert(rs256PublicKey)
 		p.Config.OIDCUsernameClaim = oidcUsernameClaim
@@ -202,9 +202,13 @@ func main() {
 	ms.Port = metricsPort
 	ms.Host = metricsHost
 	ms.Name = "metrics"
+	ms.Handler = promhttp.Handler()
+	go ms.Serve()
 
 	// Setup opentracing
 	cfg := config.Configuration{
+		ServiceName: "multikube",
+
 		Sampler: &config.SamplerConfig{
 			Type:  "const",
 			Param: 1,
@@ -220,9 +224,6 @@ func main() {
 	}
 	opentracing.SetGlobalTracer(tracer)
 	defer closer.Close()
-
-	ms.Handler = promhttp.Handler()
-	go ms.Serve()
 
 	// Listen and serve!
 	err = s.Serve()
