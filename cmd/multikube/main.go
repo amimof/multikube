@@ -1,9 +1,11 @@
 package main
 
 import (
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"github.com/SermoDigital/jose/crypto"
 	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/opentracing/opentracing-go"
@@ -165,9 +167,9 @@ func main() {
 
 	// // Add x509 public key validation middleware if cert provided on cmd line
 	if rs256PublicKey != "" {
-		p.Config.RS256PublicKey = readCert(rs256PublicKey)
+		p.Config.RS256PublicKey = readPublicKey(rs256PublicKey)
 		p.Config.OIDCUsernameClaim = oidcUsernameClaim
-		middlewares = append(middlewares, proxy.WithX509Validation)
+		middlewares = append(middlewares, proxy.WithRS256Validation)
 	}
 
 	// Create middleware
@@ -245,4 +247,18 @@ func readCert(p string) *x509.Certificate {
 		return nil
 	}
 	return cert
+}
+
+// Reads a RSA public key file from the filesystem and parses it into an instance of rsa.PublicKey
+func readPublicKey(p string) *rsa.PublicKey {
+	f, err := ioutil.ReadFile(p)
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
+	if err != nil {
+		return nil
+	}
+	return pubkey
 }

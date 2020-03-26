@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"context"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -48,7 +49,7 @@ func NewProxyFrom(kc *api.Config) *Proxy {
 		OIDCIssuerURL:     "",
 		OIDCPollInterval:  time.Second * 2,
 		OIDCUsernameClaim: "sub",
-		RS256PublicKey:    &x509.Certificate{},
+		RS256PublicKey:    &rsa.PublicKey{},
 		JWKS:              &JWKS{},
 	}
 	return p

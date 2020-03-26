@@ -2,6 +2,7 @@
 
 These are some examples of how to configure and run Multikube based on the use-case. More content is added here regularly. Please create an issue or open a PR if you feel that something is missing or can be improved.
 
+* [JWT RS256 Authentication](https://github.com/amimof/multikube/blob/master/docs/examples/jwt-auth-example.md)
 * [Dex OIDC configuration](https://github.com/amimof/multikube/blob/master/docs/examples/dex-example.md)
 * [TLS configuration](https://github.com/amimof/multikube/blob/master/docs/examples/tls-example.md)
 * [Non-TLS configuration](https://github.com/amimof/multikube/blob/master/docs/examples/non-tls-example.md)

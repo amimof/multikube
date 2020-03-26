@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -21,7 +22,7 @@ type Config struct {
 	OIDCPollInterval       time.Duration
 	OIDCInsecureSkipVerify bool
 	OIDCCa                 *x509.Certificate
-	RS256PublicKey         *x509.Certificate
+	RS256PublicKey         *rsa.PublicKey
 	JWKS                   *JWKS
 }
 

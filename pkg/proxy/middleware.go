@@ -164,9 +164,9 @@ func WithJWT(c *Config, next http.Handler) http.Handler {
 	})
 }
 
-// WithX509Validation is a middleware that validates a JWT token in the http request using RS256 signing method.
-// It will do so using a x509 certificate provided in c
-func WithX509Validation(c *Config, next http.Handler) http.Handler {
+// WithRS256Validation is a middleware that validates a JWT token in the http request using RS256 signing method.
+// It will do so using a rsa public key provided in Config
+func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		t, err := jws.ParseJWTFromRequest(r)
@@ -180,7 +180,7 @@ func WithX509Validation(c *Config, next http.Handler) http.Handler {
 			return
 		}
 
-		err = t.Validate(c.RS256PublicKey.PublicKey, crypto.SigningMethodRS256)
+		err = t.Validate(c.RS256PublicKey, crypto.SigningMethodRS256)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
