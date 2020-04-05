@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type ctxKey string
@@ -61,11 +62,12 @@ var responseSize = prometheus.NewHistogramVec(
 // Middleware represents a multikube middleware
 type Middleware func(*Config, http.Handler) http.Handler
 
-// responseWriter implements http.ResponseWriter and adds status code
+// responseWriter implements http.ResponseWriter and adds status code and response length bytes
 // so that WithLogging middleware can log response status codes
 type responseWriter struct {
 	http.ResponseWriter
 	status int
+	length int
 }
 
 // responseError satisfies the error interface
@@ -91,6 +93,16 @@ func getTokenFromRequest(req *http.Request) []byte {
 func (r *responseWriter) WriteHeader(statusCode int) {
 	r.status = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Write
+func (r *responseWriter) Write(b []byte) (int, error) {
+	if r.status == 0 {
+		r.status = 200
+	}
+	n, err := r.ResponseWriter.Write(b)
+	r.length += n
+	return n, err
 }
 
 // WithEmpty is an empty handler that does nothing
@@ -127,9 +139,15 @@ func WithTracing(c *Config, next http.Handler) http.Handler {
 // WithLogging applies access log style logging to the HTTP server
 func WithLogging(c *Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lrw := &responseWriter{w, http.StatusOK}
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s %s %s %d", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, lrw.status)
+		start := time.Now()
+		lrw := &responseWriter{ResponseWriter: w}
+		next.ServeHTTP(lrw, r)
+		var isResCached bool
+		if lrw.Header().Get("Multikube-Cache") != "" {
+			isResCached = true
+		}
+		duration := time.Now().Sub(start)
+		log.Printf("%s %s %s %s %s %d %d %s %t", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, lrw.status, lrw.length, duration.String(), isResCached)
 	})
 }
 

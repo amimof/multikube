@@ -74,11 +74,6 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 		),
 	)
 
-	// Initialize the cache
-	if t.Cache == nil {
-		t.Cache = cache.New()
-	}
-
 	// Either return a response from the cache or from a real request
 	item := t.Cache.Get(req.URL.String())
 	if item != nil && req.Method == http.MethodGet {
@@ -88,6 +83,9 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 		if err != nil {
 			return nil, err
 		}
+
+		// Set header to inform about the cached response
+		res.Header.Set("Multikube-Cache", item.Age().String())
 
 	} else {
 

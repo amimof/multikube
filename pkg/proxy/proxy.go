@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/amimof/multikube/pkg/cache"
 	"golang.org/x/net/http/httpproxy"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -84,7 +85,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		panic(err)
-		//return
 	}
 
 	if p.tlsconfigs[opts.ctx] == nil {
@@ -115,6 +115,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if p.transports[opts.ctx] == nil {
 		p.transports[opts.ctx] = &Transport{
 			TLSClientConfig: tlsConfig,
+			Cache:           cache.New(),
 		}
 	}
 
