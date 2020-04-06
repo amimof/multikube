@@ -38,6 +38,8 @@ var (
 
 	host         string
 	port         int
+	metricsHost  string
+	metricsPort  int
 	listenLimit  int
 	keepAlive    time.Duration
 	readTimeout  time.Duration
@@ -58,12 +60,9 @@ var (
 	tlsCertificateKey      string
 	tlsCACertificate       string
 
-	metricsHost string
-	metricsPort int
-
 	rs256PublicKey string
-
 	kubeconfigPath string
+	cacheTTL       time.Duration
 )
 
 func init() {
@@ -96,6 +95,7 @@ func init() {
 	pflag.DurationVar(&tlsReadTimeout, "tls-read-timeout", 30*time.Second, "maximum duration before timing out read of the request")
 	pflag.DurationVar(&tlsWriteTimeout, "tls-write-timeout", 30*time.Second, "maximum duration before timing out write of the response")
 	pflag.DurationVar(&oidcPollInterval, "oidc-poll-interval", 2*time.Second, "maximum duration between intervals in which the oidc issuer url (--oidc-issuer-url) is polled")
+	pflag.DurationVar(&cacheTTL, "cache-ttl", 1*time.Second, "maximum duration before cached responses are invalidated. Set this value to 0s to disable the cache")
 
 	pflag.BoolVar(&oidcInsecureSkipVerify, "oidc-insecure-skip-verify", false, "")
 }
@@ -138,7 +138,9 @@ func main() {
 	}
 
 	// Create the proxy
-	p := proxy.NewProxyFrom(c)
+	p := proxy.New()
+	p.KubeConfig = c
+	p.CacheTTL = cacheTTL
 
 	// Setup default middlewares
 	middlewares := []proxy.Middleware{
@@ -152,23 +154,23 @@ func main() {
 
 	// Add JWK validation middleware if issuer url is provided on cmd line
 	if oidcIssuerURL != "" {
-		p.Config.OIDCIssuerURL = oidcIssuerURL
-		p.Config.OIDCPollInterval = oidcPollInterval
-		p.Config.OIDCUsernameClaim = oidcUsernameClaim
-		p.Config.OIDCInsecureSkipVerify = oidcInsecureSkipVerify
+		p.OIDCIssuerURL = oidcIssuerURL
+		p.OIDCPollInterval = oidcPollInterval
+		p.OIDCUsernameClaim = oidcUsernameClaim
+		p.OIDCInsecureSkipVerify = oidcInsecureSkipVerify
 		if oidcCaFile != "" {
-			p.Config.OIDCCa = readCert(oidcCaFile)
+			p.OIDCCa = readCert(oidcCaFile)
 		}
 		// Start polling OIDC Provider
-		stop := p.Config.GetJWKSFromURL()
+		stop := p.GetJWKSFromURL()
 		defer stop()
 		middlewares = append(middlewares, proxy.WithJWKValidation)
 	}
 
 	// // Add x509 public key validation middleware if cert provided on cmd line
 	if rs256PublicKey != "" {
-		p.Config.RS256PublicKey = readPublicKey(rs256PublicKey)
-		p.Config.OIDCUsernameClaim = oidcUsernameClaim
+		p.RS256PublicKey = readPublicKey(rs256PublicKey)
+		p.OIDCUsernameClaim = oidcUsernameClaim
 		middlewares = append(middlewares, proxy.WithRS256Validation)
 	}
 

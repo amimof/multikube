@@ -60,7 +60,7 @@ var responseSize = prometheus.NewHistogramVec(
 )
 
 // Middleware represents a multikube middleware
-type Middleware func(*Config, http.Handler) http.Handler
+type Middleware func(*Proxy, http.Handler) http.Handler
 
 // responseWriter implements http.ResponseWriter and adds status code and response length bytes
 // so that WithLogging middleware can log response status codes
@@ -106,14 +106,14 @@ func (r *responseWriter) Write(b []byte) (int, error) {
 }
 
 // WithEmpty is an empty handler that does nothing
-func WithEmpty(c *Config, next http.Handler) http.Handler {
+func WithEmpty(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
 	})
 }
 
 // WithMetrics is an empty handler that does nothing
-func WithMetrics(c *Config, next http.Handler) http.Handler {
+func WithMetrics(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pushChain := promhttp.InstrumentHandlerInFlight(frontendGauge,
 			promhttp.InstrumentHandlerDuration(frontendHistogram.MustCurryWith(prometheus.Labels{"handler": "push"}),
@@ -127,7 +127,7 @@ func WithMetrics(c *Config, next http.Handler) http.Handler {
 }
 
 // WithTracing is a middleware that starts a new span and populates the context
-func WithTracing(c *Config, next http.Handler) http.Handler {
+func WithTracing(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		span := opentracing.GlobalTracer().StartSpan("hello")
 		ctx := opentracing.ContextWithSpan(r.Context(), span)
@@ -137,13 +137,13 @@ func WithTracing(c *Config, next http.Handler) http.Handler {
 }
 
 // WithLogging applies access log style logging to the HTTP server
-func WithLogging(c *Config, next http.Handler) http.Handler {
+func WithLogging(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		lrw := &responseWriter{ResponseWriter: w}
 		next.ServeHTTP(lrw, r)
 		var isResCached bool
-		if lrw.Header().Get("Multikube-Cache") != "" {
+		if lrw.Header().Get("Multikube-Cache-Age") != "" {
 			isResCached = true
 		}
 		duration := time.Now().Sub(start)
@@ -153,7 +153,7 @@ func WithLogging(c *Config, next http.Handler) http.Handler {
 
 // WithJWT is a middleware that parses a JWT token from the requests and propagates
 // the request context with a claim value.
-func WithJWT(c *Config, next http.Handler) http.Handler {
+func WithJWT(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		// Get the JWT from the request
@@ -184,7 +184,7 @@ func WithJWT(c *Config, next http.Handler) http.Handler {
 
 // WithRS256Validation is a middleware that validates a JWT token in the http request using RS256 signing method.
 // It will do so using a rsa public key provided in Config
-func WithRS256Validation(c *Config, next http.Handler) http.Handler {
+func WithRS256Validation(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		t, err := jws.ParseJWTFromRequest(r)
@@ -219,7 +219,7 @@ func WithRS256Validation(c *Config, next http.Handler) http.Handler {
 
 // WithJWKValidation is a middleware that validates a JWT token in the http request using RS256 signing method.
 // It will do so using a JWK (Json Web Key) provided in c
-func WithJWKValidation(c *Config, next http.Handler) http.Handler {
+func WithJWKValidation(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		t, err := jws.ParseJWTFromRequest(r)
@@ -290,7 +290,7 @@ func WithJWKValidation(c *Config, next http.Handler) http.Handler {
 
 // WithHeader is a middleware that reads the value of the HTTP header "Multikube-Context"
 // in the request and, if found, sets it's value in the request context.
-func WithHeader(c *Config, next http.Handler) http.Handler {
+func WithHeader(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := r
 		header := r.Header.Get("Multikube-Context")
@@ -306,7 +306,7 @@ func WithHeader(c *Config, next http.Handler) http.Handler {
 // tries to determine which kubeconfig context to use for upstream api server requests.
 // If a context is found in the URL path params, the request-context is populated with the value
 // so that other handlers and middlewares may use the information
-func WithCtxRoot(c *Config, next http.Handler) http.Handler {
+func WithCtxRoot(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		req := r
 		c, rem := getCtxFromURL(r.URL)

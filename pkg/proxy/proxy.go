@@ -26,43 +26,53 @@ const (
 
 // Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
 type Proxy struct {
-	CertChain  *x509.Certificate
-	Config     *Config
-	KubeConfig *api.Config
-	mw         http.Handler
-	transports map[string]http.RoundTripper
-	tlsconfigs map[string]*tls.Config
+	KubeConfig             *api.Config
+	OIDCIssuerURL          string
+	OIDCUsernameClaim      string
+	OIDCPollInterval       time.Duration
+	OIDCInsecureSkipVerify bool
+	OIDCCa                 *x509.Certificate
+	RS256PublicKey         *rsa.PublicKey
+	CacheTTL               time.Duration
+	JWKS                   *JWKS
+	mw                     http.Handler
+	transports             map[string]http.RoundTripper
+	tlsconfigs             map[string]*tls.Config
 }
 
-// NewProxy creates a new Proxy and initialises router and configuration
-func NewProxy() *Proxy {
+// New creates a new Proxy instance
+func New() *Proxy {
 	return &Proxy{
-		transports: make(map[string]http.RoundTripper),
-		tlsconfigs: make(map[string]*tls.Config),
+		transports:        make(map[string]http.RoundTripper),
+		tlsconfigs:        make(map[string]*tls.Config),
+		OIDCUsernameClaim: "sub",
+		OIDCPollInterval:  time.Second * 2,
+		RS256PublicKey:    &rsa.PublicKey{},
+		JWKS:              &JWKS{},
 	}
 }
 
 // NewProxyFrom creates an instance of Proxy
-func NewProxyFrom(kc *api.Config) *Proxy {
-	p := NewProxy()
-	p.KubeConfig = kc
-	p.Config = &Config{
-		OIDCIssuerURL:     "",
-		OIDCPollInterval:  time.Second * 2,
-		OIDCUsernameClaim: "sub",
-		RS256PublicKey:    &rsa.PublicKey{},
-		JWKS:              &JWKS{},
-	}
-	return p
-}
+// func NewProxyFrom(kc *api.Config) *Proxy {
+// 	p := NewProxy()
+// 	p.KubeConfig = kc
+// 	p.Config = &Config{
+// 		OIDCIssuerURL:     "",
+// 		OIDCPollInterval:  time.Second * 2,
+// 		OIDCUsernameClaim: "sub",
+// 		RS256PublicKey:    &rsa.PublicKey{},
+// 		JWKS:              &JWKS{},
+// 	}
+// 	return p
+// }
 
 // Use chains all middlewares and applies a context to the request flow
 func (p *Proxy) Use(mw ...Middleware) Middleware {
-	return func(c *Config, final http.Handler) http.Handler {
+	return func(c *Proxy, final http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			last := final
 			for i := len(mw) - 1; i >= 0; i-- {
-				last = mw[i](p.Config, last)
+				last = mw[i](p, last)
 			}
 			last.ServeHTTP(w, r)
 		})
@@ -111,11 +121,18 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.Header("Impersonate-User", opts.sub)
 	req.Header("Authorization", fmt.Sprintf("Bearer %s", opts.Token))
 
+	// Don't use transport cache if ttl is set to 0s
+	resCache := cache.New()
+	resCache.TTL = p.CacheTTL
+	if p.CacheTTL.String() == "0s" {
+		resCache = nil
+	}
+
 	// Remember the transport created by the restclient so that we can re-use the connection
 	if p.transports[opts.ctx] == nil {
 		p.transports[opts.ctx] = &Transport{
 			TLSClientConfig: tlsConfig,
-			Cache:           cache.New(),
+			Cache:           resCache,
 		}
 	}
 

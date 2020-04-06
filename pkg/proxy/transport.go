@@ -74,45 +74,65 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 		),
 	)
 
-	// Either return a response from the cache or from a real request
-	item := t.Cache.Get(req.URL.String())
-	if item != nil && req.Method == http.MethodGet {
-
-		// Cache hit!
-		res, err = t.readResponse(req)
-		if err != nil {
-			return nil, err
-		}
-
-		// Set header to inform about the cached response
-		res.Header.Set("Multikube-Cache", item.Age().String())
-
-	} else {
-
-		// Cache miss!
+	// If no cache exists then carry out the request as usual
+	if t.Cache == nil {
 		res, err = roundTripper.RoundTrip(req)
 		if err != nil {
 			return nil, err
 		}
+		return res, nil
+	}
 
-		if isCacheable(res.Request) {
-
-			// Careful! DumpResponse will drain our original response and replace it with a new one
-			resBytes, err := httputil.DumpResponse(res, true)
-			if err != nil {
-				return nil, err
-			}
-
-			//Cache the response if it's cacheable.
-			if req.Method == http.MethodGet && (res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotModified) {
-				t.Cache.Set(req.URL.String(), resBytes)
-			}
+	// Cache the response
+	item := t.Cache.Get(req.URL.String())
+	if item != nil {
+		res, err = t.readResponse(req)
+		if err != nil {
+			return nil, err
 		}
+		res.Header.Set("Multikube-Cache-Age", item.Age().String())
+	} else {
+		res, err = roundTripper.RoundTrip(req)
+		if err != nil {
+			return nil, err
+		}
+	}
 
+  // Cache any response
+	_, err = t.cacheResponse(res)
+	if err != nil {
+		return nil, err
 	}
 
 	return res, nil
 
+}
+
+// cacheResponse tries to commit a http.Response to the transport cache.
+// Careful! cacheResponse makes use of http.DumpResponse which will drain the original response and replace it with a new one
+func (t *Transport) cacheResponse(res *http.Response) (bool, error) {
+	if t.Cache == nil {
+		return false, nil
+	}
+	// Don't cache if method is not GET
+	if res.Request.Method != http.MethodGet {
+		return false, nil
+	}
+	// Don't cache if response code isn't 200 (OK) or 304 (NotModified)
+	if !(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotModified) {
+		return false, nil
+	}
+	// Don't cache if certain url params are present (kubernetes streams)
+	q := res.Request.URL.Query()
+	if q.Get("watch") == "true" || q.Get("follow") == "true" {
+		return false, nil
+	}
+	b, err := httputil.DumpResponse(res, true)
+	if err != nil {
+		return false, err
+	}
+	t.Cache.Set(res.Request.URL.String(), b)
+	return true, nil
 }
 
 func (t *Transport) readResponse(req *http.Request) (*http.Response, error) {
@@ -122,15 +142,4 @@ func (t *Transport) readResponse(req *http.Request) (*http.Response, error) {
 	}
 	b := bytes.NewBuffer(item.Value)
 	return http.ReadResponse(bufio.NewReader(b), req)
-}
-
-// isCacheable determines if an http request is eligible for caching
-// by looking for watch and follow query parameters in the URL. This is very
-// Kubernetes-specific and needs a better implementation. But will do for now.
-func isCacheable(r *http.Request) bool {
-	q := r.URL.Query()
-	if q.Get("watch") == "true" || q.Get("follow") == "true" {
-		return false
-	}
-	return true
 }

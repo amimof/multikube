@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -13,18 +12,6 @@ import (
 	"path"
 	"time"
 )
-
-// Config holds a top-level configuration of an instance of Multikube. It is used to
-// pass around configuration used by different packages within the project.
-type Config struct {
-	OIDCIssuerURL          string
-	OIDCUsernameClaim      string
-	OIDCPollInterval       time.Duration
-	OIDCInsecureSkipVerify bool
-	OIDCCa                 *x509.Certificate
-	RS256PublicKey         *rsa.PublicKey
-	JWKS                   *JWKS
-}
 
 // JWKS is a representation of Json Web Key Store. It holds multiple JWK's in an array
 type JWKS struct {
@@ -148,7 +135,7 @@ func tlsClient(ca *x509.Certificate, i bool) *http.Client {
 // GetJWKSFromURL fetches the keys of an OpenID Connect endpoint in a go routine. It polls the endpoint
 // every n seconds. Returns a cancel function which can be called to stop polling and close the channel.
 // The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
-func (c *Config) GetJWKSFromURL() func() {
+func (c *Proxy) GetJWKSFromURL() func() {
 
 	// Make sure config has non-nil fields
 	c.JWKS = &JWKS{
