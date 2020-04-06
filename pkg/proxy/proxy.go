@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/http/httpproxy"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -51,20 +52,6 @@ func New() *Proxy {
 		JWKS:              &JWKS{},
 	}
 }
-
-// NewProxyFrom creates an instance of Proxy
-// func NewProxyFrom(kc *api.Config) *Proxy {
-// 	p := NewProxy()
-// 	p.KubeConfig = kc
-// 	p.Config = &Config{
-// 		OIDCIssuerURL:     "",
-// 		OIDCPollInterval:  time.Second * 2,
-// 		OIDCUsernameClaim: "sub",
-// 		RS256PublicKey:    &rsa.PublicKey{},
-// 		JWKS:              &JWKS{},
-// 	}
-// 	return p
-// }
 
 // Use chains all middlewares and applies a context to the request flow
 func (p *Proxy) Use(mw ...Middleware) Middleware {
@@ -273,6 +260,49 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		panic(err)
+	}
+
+}
+
+// GetJWKSFromURL fetches the keys of an OpenID Connect endpoint in a go routine. It polls the endpoint
+// every n seconds. Returns a cancel function which can be called to stop polling and close the channel.
+// The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
+func (c *Proxy) GetJWKSFromURL() func() {
+
+	// Make sure config has non-nil fields
+	c.JWKS = &JWKS{
+		Keys: []JSONWebKey{},
+	}
+
+	// Run a function in a go routine that continuously fetches from remote oidc provider
+	quit := make(chan int)
+	go func() {
+		for {
+			time.Sleep(c.OIDCPollInterval)
+			select {
+			case <-quit:
+				close(quit)
+				return
+			default:
+				// Make a request and fetch content of .well-known url (http://some-url/.well-known/openid-configuration)
+				w, err := getWellKnown(c.OIDCIssuerURL, c.OIDCCa, c.OIDCInsecureSkipVerify)
+				if err != nil {
+					log.Printf("ERROR retrieving openid-configuration: %s", err)
+					continue
+				}
+				// Get content of jwks_keys field
+				j, err := getKeys(w.JwksURI, c.OIDCCa, c.OIDCInsecureSkipVerify)
+				if err != nil {
+					log.Printf("ERROR retrieving JWKS from provider: %s", err)
+					continue
+				}
+				c.JWKS = j
+			}
+		}
+	}()
+
+	return func() {
+		quit <- 1
 	}
 
 }

@@ -11,11 +11,6 @@ var (
 	defToken  = "aGVsbG93b3JsZA=="
 )
 
-var config = &Config{
-	OIDCIssuerURL:  "http://localhost:5556/dex",
-	RS256PublicKey: nil,
-}
-
 var kubeConf *api.Config = &api.Config{
 	APIVersion: "v1",
 	Kind:       "Config",
@@ -40,7 +35,8 @@ var kubeConf *api.Config = &api.Config{
 
 // Just creates a new proxy instance
 func TestProxyNewProxy(t *testing.T) {
-	p := NewProxyFrom(kubeConf)
+	p := New()
+	p.KubeConfig = kubeConf
 	server := p.KubeConfig.Clusters[name].Server
 	if server != defServer {
 		t.Fatalf("Expected config cluster to be %s, got %s", defServer, server)

@@ -6,11 +6,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
-	"time"
 )
 
 // JWKS is a representation of Json Web Key Store. It holds multiple JWK's in an array
@@ -128,49 +126,6 @@ func tlsClient(ca *x509.Certificate, i bool) *http.Client {
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
-	}
-
-}
-
-// GetJWKSFromURL fetches the keys of an OpenID Connect endpoint in a go routine. It polls the endpoint
-// every n seconds. Returns a cancel function which can be called to stop polling and close the channel.
-// The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
-func (c *Proxy) GetJWKSFromURL() func() {
-
-	// Make sure config has non-nil fields
-	c.JWKS = &JWKS{
-		Keys: []JSONWebKey{},
-	}
-
-	// Run a function in a go routine that continuously fetches from remote oidc provider
-	quit := make(chan int)
-	go func() {
-		for {
-			time.Sleep(c.OIDCPollInterval)
-			select {
-			case <-quit:
-				close(quit)
-				return
-			default:
-				// Make a request and fetch content of .well-known url (http://some-url/.well-known/openid-configuration)
-				w, err := getWellKnown(c.OIDCIssuerURL, c.OIDCCa, c.OIDCInsecureSkipVerify)
-				if err != nil {
-					log.Printf("ERROR retrieving openid-configuration: %s", err)
-					continue
-				}
-				// Get content of jwks_keys field
-				j, err := getKeys(w.JwksURI, c.OIDCCa, c.OIDCInsecureSkipVerify)
-				if err != nil {
-					log.Printf("ERROR retrieving JWKS from provider: %s", err)
-					continue
-				}
-				c.JWKS = j
-			}
-		}
-	}()
-
-	return func() {
-		quit <- 1
 	}
 
 }
