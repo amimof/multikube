@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/http/httpproxy"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -26,43 +27,39 @@ const (
 
 // Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
 type Proxy struct {
-	CertChain  *x509.Certificate
-	Config     *Config
-	KubeConfig *api.Config
-	mw         http.Handler
-	transports map[string]http.RoundTripper
-	tlsconfigs map[string]*tls.Config
+	KubeConfig             *api.Config
+	OIDCIssuerURL          string
+	OIDCUsernameClaim      string
+	OIDCPollInterval       time.Duration
+	OIDCInsecureSkipVerify bool
+	OIDCCa                 *x509.Certificate
+	RS256PublicKey         *rsa.PublicKey
+	CacheTTL               time.Duration
+	JWKS                   *JWKS
+	mw                     http.Handler
+	transports             map[string]http.RoundTripper
+	tlsconfigs             map[string]*tls.Config
 }
 
-// NewProxy creates a new Proxy and initialises router and configuration
-func NewProxy() *Proxy {
+// New creates a new Proxy instance
+func New() *Proxy {
 	return &Proxy{
-		transports: make(map[string]http.RoundTripper),
-		tlsconfigs: make(map[string]*tls.Config),
-	}
-}
-
-// NewProxyFrom creates an instance of Proxy
-func NewProxyFrom(kc *api.Config) *Proxy {
-	p := NewProxy()
-	p.KubeConfig = kc
-	p.Config = &Config{
-		OIDCIssuerURL:     "",
-		OIDCPollInterval:  time.Second * 2,
+		transports:        make(map[string]http.RoundTripper),
+		tlsconfigs:        make(map[string]*tls.Config),
 		OIDCUsernameClaim: "sub",
+		OIDCPollInterval:  time.Second * 2,
 		RS256PublicKey:    &rsa.PublicKey{},
 		JWKS:              &JWKS{},
 	}
-	return p
 }
 
 // Use chains all middlewares and applies a context to the request flow
 func (p *Proxy) Use(mw ...Middleware) Middleware {
-	return func(c *Config, final http.Handler) http.Handler {
+	return func(c *Proxy, final http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			last := final
 			for i := len(mw) - 1; i >= 0; i-- {
-				last = mw[i](p.Config, last)
+				last = mw[i](p, last)
 			}
 			last.ServeHTTP(w, r)
 		})
@@ -111,11 +108,18 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	req.Header("Impersonate-User", opts.sub)
 	req.Header("Authorization", fmt.Sprintf("Bearer %s", opts.Token))
 
+	// Don't use transport cache if ttl is set to 0s
+	resCache := cache.New()
+	resCache.TTL = p.CacheTTL
+	if p.CacheTTL.String() == "0s" {
+		resCache = nil
+	}
+
 	// Remember the transport created by the restclient so that we can re-use the connection
 	if p.transports[opts.ctx] == nil {
 		p.transports[opts.ctx] = &Transport{
 			TLSClientConfig: tlsConfig,
-			Cache:           cache.New(),
+			Cache:           resCache,
 		}
 	}
 
@@ -256,6 +260,49 @@ func (p *Proxy) directTunnel(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		panic(err)
+	}
+
+}
+
+// GetJWKSFromURL fetches the keys of an OpenID Connect endpoint in a go routine. It polls the endpoint
+// every n seconds. Returns a cancel function which can be called to stop polling and close the channel.
+// The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
+func (p *Proxy) GetJWKSFromURL() func() {
+
+	// Make sure config has non-nil fields
+	p.JWKS = &JWKS{
+		Keys: []JSONWebKey{},
+	}
+
+	// Run a function in a go routine that continuously fetches from remote oidc provider
+	quit := make(chan int)
+	go func() {
+		for {
+			time.Sleep(p.OIDCPollInterval)
+			select {
+			case <-quit:
+				close(quit)
+				return
+			default:
+				// Make a request and fetch content of .well-known url (http://some-url/.well-known/openid-configuration)
+				w, err := getWellKnown(p.OIDCIssuerURL, p.OIDCCa, p.OIDCInsecureSkipVerify)
+				if err != nil {
+					log.Printf("ERROR retrieving openid-configuration: %s", err)
+					continue
+				}
+				// Get content of jwks_keys field
+				j, err := getKeys(w.JwksURI, p.OIDCCa, p.OIDCInsecureSkipVerify)
+				if err != nil {
+					log.Printf("ERROR retrieving JWKS from provider: %s", err)
+					continue
+				}
+				p.JWKS = j
+			}
+		}
+	}()
+
+	return func() {
+		quit <- 1
 	}
 
 }
