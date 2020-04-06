@@ -98,7 +98,7 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 		}
 	}
 
-  // Cache any response
+	// Cache any response
 	_, err = t.cacheResponse(res)
 	if err != nil {
 		return nil, err
