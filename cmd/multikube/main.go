@@ -8,6 +8,7 @@ import (
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/server"
+	"github.com/amimof/multikube/pkg/middleware"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
@@ -144,9 +145,8 @@ func main() {
 
 	// Setup default middlewares
 	middlewares := []proxy.Middleware{
-		proxy.WithEmpty,
+		middleware.WithEmpty,
 		proxy.WithLogging,
-		proxy.WithMetrics,
 		proxy.WithJWT,
 		proxy.WithCtxRoot,
 		proxy.WithHeader,

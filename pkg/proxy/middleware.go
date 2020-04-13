@@ -10,7 +10,6 @@ import (
 	"github.com/SermoDigital/jose/jws"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/square/go-jose.v2/jwt"
 	"log"
 	"math/big"
@@ -119,20 +118,6 @@ func (r *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func WithEmpty(c *Proxy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)
-	})
-}
-
-// WithMetrics is an empty handler that does nothing
-func WithMetrics(c *Proxy, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		pushChain := promhttp.InstrumentHandlerInFlight(frontendGauge,
-			promhttp.InstrumentHandlerDuration(frontendHistogram.MustCurryWith(prometheus.Labels{"handler": "push"}),
-				promhttp.InstrumentHandlerCounter(frontendCounter,
-					promhttp.InstrumentHandlerResponseSize(responseSize, next),
-				),
-			),
-		)
-		pushChain.ServeHTTP(w, r)
 	})
 }
 
