@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"net/http"
 	"github.com/amimof/multikube/pkg/proxy"
+	"net/http"
 )
 
 // Middleware represents a multikube middleware
