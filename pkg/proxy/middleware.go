@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
@@ -13,6 +14,7 @@ import (
 	"gopkg.in/square/go-jose.v2/jwt"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -89,13 +91,13 @@ func getTokenFromRequest(req *http.Request) []byte {
 }
 
 // WriteHeader sends and sets an HTTP response header with the provided
-// status code.
+// status code. Implements the http.ResponseWriter interface
 func (r *responseWriter) WriteHeader(statusCode int) {
 	r.status = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Write
+// Write implements the http.ResponseWriter interface
 func (r *responseWriter) Write(b []byte) (int, error) {
 	if r.status == 0 {
 		r.status = 200
@@ -103,6 +105,14 @@ func (r *responseWriter) Write(b []byte) (int, error) {
 	n, err := r.ResponseWriter.Write(b)
 	r.length += n
 	return n, err
+}
+
+// Hijack implements the http.Hijacker interface
+func (r *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if r.length < 0 {
+		r.length = 0
+	}
+	return r.ResponseWriter.(http.Hijacker).Hijack()
 }
 
 // WithEmpty is an empty handler that does nothing
