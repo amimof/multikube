@@ -77,7 +77,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resCache = nil
 	}
 
-	// Create a transport that will be re-used for 
+	// Create a transport that will be re-used for
 	if p.transports[opts.ctx] == nil {
 		// Setup TLS config
 		tlsConfig, err := configureTLS(opts)

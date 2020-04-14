@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
@@ -13,10 +14,9 @@ import (
 	"gopkg.in/square/go-jose.v2/jwt"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
-	"net"
-	"bufio"
 	"strings"
 	"time"
 )
