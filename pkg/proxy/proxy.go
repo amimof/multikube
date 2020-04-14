@@ -35,6 +35,15 @@ type Proxy struct {
 	transports             map[string]http.RoundTripper
 }
 
+// Options embeds Cluster and AuthInfo from https://godoc.org/k8s.io/client-go/tools/clientcmd/api
+// so that fields and methods are easily accessible from one type.
+type Options struct {
+	*api.Cluster
+	*api.AuthInfo
+	ctx string
+	sub string
+}
+
 // New creates a new Proxy instance
 func New() *Proxy {
 	return &Proxy{
