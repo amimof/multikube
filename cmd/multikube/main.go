@@ -6,7 +6,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"github.com/SermoDigital/jose/crypto"
-	"github.com/amimof/multikube/pkg/middleware"
 	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/opentracing/opentracing-go"
@@ -144,34 +143,31 @@ func main() {
 	p.CacheTTL = cacheTTL
 
 	// Setup default middlewares
-	middlewares := []proxy.Middleware{
-		middleware.WithEmpty,
-		proxy.WithLogging,
-		proxy.WithJWT,
-		proxy.WithCtxRoot,
-		proxy.WithHeader,
+	middlewares := []proxy.MiddlewareFunc{
+		proxy.WithEmpty(),
+		proxy.WithLogging(),
+		proxy.WithJWT(),
+		proxy.WithHeader(),
 	}
 
 	// Add JWK validation middleware if issuer url is provided on cmd line
 	if oidcIssuerURL != "" {
-		p.OIDCIssuerURL = oidcIssuerURL
-		p.OIDCPollInterval = oidcPollInterval
-		p.OIDCUsernameClaim = oidcUsernameClaim
-		p.OIDCInsecureSkipVerify = oidcInsecureSkipVerify
-		if oidcCaFile != "" {
-			p.OIDCCa = readCert(oidcCaFile)
+		oidcConfig := proxy.OIDCConfig{
+			OIDCIssuerURL:          oidcIssuerURL,
+			OIDCPollInterval:       oidcPollInterval,
+			OIDCUsernameClaim:      oidcUsernameClaim,
+			OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
+			OIDCCa:                 readCert(oidcCaFile),
 		}
-		// Start polling OIDC Provider
-		stop := p.GetJWKSFromURL()
-		defer stop()
-		middlewares = append(middlewares, proxy.WithJWKValidation)
+		middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
 	}
 
 	// // Add x509 public key validation middleware if cert provided on cmd line
 	if rs256PublicKey != "" {
-		p.RS256PublicKey = readPublicKey(rs256PublicKey)
-		p.OIDCUsernameClaim = oidcUsernameClaim
-		middlewares = append(middlewares, proxy.WithRS256Validation)
+		rs256Config := proxy.RS256Config{
+			PublicKey: readPublicKey(rs256PublicKey),
+		}
+		middlewares = append(middlewares, proxy.WithRS256(rs256Config))
 	}
 
 	// Create middleware
@@ -198,7 +194,7 @@ func main() {
 		TLSKeepAlive:      tlsKeepAlive,
 		TLSReadTimeout:    tlsReadTimeout,
 		TLSWriteTimeout:   tlsWriteTimeout,
-		Handler:           m(nil, p),
+		Handler:           m(p),
 	}
 
 	// Metrics server

@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -9,59 +8,47 @@ import (
 	"github.com/amimof/multikube/pkg/cache"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 )
 
-const (
-	contextNotFound string = "No route: context not found"
+// MiddlewareFunc defines a function to process middleware.
+type MiddlewareFunc func(http.Handler) http.Handler
+
+type ctxKey string
+
+var (
+	contextKey = ctxKey("Context")
+	subjectKey = ctxKey("Subject")
 )
 
 // Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
 type Proxy struct {
-	KubeConfig             *api.Config
-	OIDCIssuerURL          string
-	OIDCUsernameClaim      string
-	OIDCPollInterval       time.Duration
-	OIDCInsecureSkipVerify bool
-	OIDCCa                 *x509.Certificate
-	RS256PublicKey         *rsa.PublicKey
-	CacheTTL               time.Duration
-	JWKS                   *JWKS
-	mw                     http.Handler
-	transports             map[string]http.RoundTripper
-}
-
-// Options embeds Cluster and AuthInfo from https://godoc.org/k8s.io/client-go/tools/clientcmd/api
-// so that fields and methods are easily accessible from one type.
-type Options struct {
-	*api.Cluster
-	*api.AuthInfo
-	ctx string
-	sub string
+	KubeConfig     *api.Config
+	RS256PublicKey *rsa.PublicKey
+	CacheTTL       time.Duration
+	mw             http.Handler
+	transports     map[string]http.RoundTripper
 }
 
 // New creates a new Proxy instance
 func New() *Proxy {
 	return &Proxy{
-		transports:        make(map[string]http.RoundTripper),
-		OIDCUsernameClaim: "sub",
-		OIDCPollInterval:  time.Second * 2,
-		RS256PublicKey:    &rsa.PublicKey{},
-		JWKS:              &JWKS{},
+		transports: make(map[string]http.RoundTripper),
+		KubeConfig: api.NewConfig(),
 	}
 }
 
 // Use chains all middlewares and applies a context to the request flow
-func (p *Proxy) Use(mw ...Middleware) Middleware {
-	return func(c *Proxy, final http.Handler) http.Handler {
+func (p *Proxy) Use(mw ...MiddlewareFunc) MiddlewareFunc {
+	return func(final http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			last := final
 			for i := len(mw) - 1; i >= 0; i-- {
-				last = mw[i](p, last)
+				last = mw[i](last)
 			}
 			last.ServeHTTP(w, r)
 		})
@@ -72,10 +59,25 @@ func (p *Proxy) Use(mw ...Middleware) Middleware {
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	// Get a kubeconfig context
-	opts := optsFromCtx(r.Context(), p.KubeConfig)
-	if opts == nil {
-		http.Error(w, contextNotFound, http.StatusInternalServerError)
+	// Get the k8s context from the request
+	ctx := ParseContextFromRequest(r)
+	if ctx == "" {
+		http.Error(w, "Not route: context not found", http.StatusBadGateway)
+		return
+	}
+
+	// Get the subject from the request
+	sub := ParseSubjectFromRequest(r)
+
+	// Get k8s cluster and authinfo from kubeconfig using the ctx name
+	cluster := getClusterByContextName(p.KubeConfig, ctx)
+	if cluster == nil {
+		http.Error(w, fmt.Sprintf("no route: cluster not found for '%s'", ctx), http.StatusBadGateway)
+		return
+	}
+	auth := getAuthByContextName(p.KubeConfig, ctx)
+	if auth == nil {
+		http.Error(w, fmt.Sprintf("no route: authinfo not found for '%s'", ctx), http.StatusBadGateway)
 		return
 	}
 
@@ -87,87 +89,43 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a transport that will be re-used for
-	if p.transports[opts.ctx] == nil {
+	if p.transports[ctx] == nil {
 		// Setup TLS config
-		tlsConfig, err := configureTLS(opts)
+		tlsConfig, err := configureTLS(auth, cluster)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			panic(err)
 		}
-		p.transports[opts.ctx] = &Transport{
+		p.transports[ctx] = &Transport{
 			TLSClientConfig: tlsConfig,
 			Cache:           resCache,
 		}
 	}
 
 	// Create an instance of golang reverse proxy and attach our own transport to it
-	proxy := httputil.NewSingleHostReverseProxy(parseURL(opts.Server))
-	proxy.Transport = p.transports[opts.ctx]
+	proxy := httputil.NewSingleHostReverseProxy(parseURL(cluster.Server))
+	proxy.Transport = p.transports[ctx]
 
 	// Add some headers to the client request
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
-	r.Header.Set("Impersonate-User", opts.sub)
-	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", opts.AuthInfo.Token))
+	r.Header.Set("Impersonate-User", sub)
 
 	proxy.ServeHTTP(w, r)
-
-}
-
-// GetJWKSFromURL fetches the keys of an OpenID Connect endpoint in a go routine. It polls the endpoint
-// every n seconds. Returns a cancel function which can be called to stop polling and close the channel.
-// The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
-func (p *Proxy) GetJWKSFromURL() func() {
-
-	// Make sure config has non-nil fields
-	p.JWKS = &JWKS{
-		Keys: []JSONWebKey{},
-	}
-
-	// Run a function in a go routine that continuously fetches from remote oidc provider
-	quit := make(chan int)
-	go func() {
-		for {
-			time.Sleep(p.OIDCPollInterval)
-			select {
-			case <-quit:
-				close(quit)
-				return
-			default:
-				// Make a request and fetch content of .well-known url (http://some-url/.well-known/openid-configuration)
-				w, err := getWellKnown(p.OIDCIssuerURL, p.OIDCCa, p.OIDCInsecureSkipVerify)
-				if err != nil {
-					log.Printf("ERROR retrieving openid-configuration: %s", err)
-					continue
-				}
-				// Get content of jwks_keys field
-				j, err := getKeys(w.JwksURI, p.OIDCCa, p.OIDCInsecureSkipVerify)
-				if err != nil {
-					log.Printf("ERROR retrieving JWKS from provider: %s", err)
-					continue
-				}
-				p.JWKS = j
-			}
-		}
-	}()
-
-	return func() {
-		quit <- 1
-	}
 
 }
 
 // configureTLS composes a TLS configuration (tls.Config) from the provided Options parameter.
 // This is useful when building HTTP requests (for example with the net/http package)
 // and the TLS data is configured elsewhere.
-func configureTLS(options *Options) (*tls.Config, error) {
+func configureTLS(a *api.AuthInfo, c *api.Cluster) (*tls.Config, error) {
 
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: options.InsecureSkipTLSVerify,
+		InsecureSkipVerify: c.InsecureSkipTLSVerify,
 	}
 
 	// Load CA from file
-	if options.CertificateAuthority != "" {
-		caCert, err := ioutil.ReadFile(options.CertificateAuthority)
+	if c.CertificateAuthority != "" {
+		caCert, err := ioutil.ReadFile(c.CertificateAuthority)
 		if err != nil {
 			return nil, err
 		}
@@ -178,15 +136,15 @@ func configureTLS(options *Options) (*tls.Config, error) {
 	}
 
 	// Load CA from block
-	if options.CertificateAuthorityData != nil {
+	if c.CertificateAuthorityData != nil {
 		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(options.CertificateAuthorityData)
+		caCertPool.AppendCertsFromPEM(c.CertificateAuthorityData)
 		tlsConfig.RootCAs = caCertPool
 	}
 
 	// Load certs from file
-	if options.ClientCertificate != "" && options.ClientKey != "" {
-		cert, err := tls.LoadX509KeyPair(options.ClientCertificate, options.ClientKey)
+	if a.ClientCertificate != "" && a.ClientKey != "" {
+		cert, err := tls.LoadX509KeyPair(a.ClientCertificate, a.ClientKey)
 		if err != nil {
 			return nil, err
 		}
@@ -195,8 +153,8 @@ func configureTLS(options *Options) (*tls.Config, error) {
 	}
 
 	// Load certs from block
-	if options.ClientCertificateData != nil && options.ClientKeyData != nil {
-		cert, err := tls.X509KeyPair(options.ClientCertificateData, options.ClientKeyData)
+	if a.ClientCertificateData != nil && a.ClientKeyData != nil {
+		cert, err := tls.X509KeyPair(a.ClientCertificateData, a.ClientKeyData)
 		if err != nil {
 			return nil, err
 		}
@@ -217,84 +175,65 @@ func parseURL(str string) *url.URL {
 	return u
 }
 
-// getAuthInfo returns an api.AuthInfo in map authinfos identified by it's key n
-func getAuthInfo(authinfos map[string]*api.AuthInfo, n string) *api.AuthInfo {
-	for k, v := range authinfos {
-		if k == n {
-			return v
+// ParseContextFromRequest tries to find the requested context name either by URL or HTTP header.
+// Will return the value of 'Multikube-Context' HTTP header. Will return the first part
+// of the URL path if no headers are set.
+func ParseContextFromRequest(req *http.Request) string {
+	val := req.Header.Get("Multikube-Context")
+	if val != "" {
+		return val
+	}
+
+	c, rem := getCtxFromURL(req.URL)
+	if c != "" {
+		val = c
+		if rem != "" {
+			req.URL.Path = rem
+		}
+	}
+
+	return val
+}
+
+// ParseSubjectFromRequest returns a string with the value of ContextKey key from
+// the HTTP request Context (context.Context)
+func ParseSubjectFromRequest(req *http.Request) string {
+	if sub, ok := req.Context().Value(subjectKey).(string); ok {
+		return sub
+	}
+	return ""
+}
+
+// getClusterByContextName returns an api.Cluster from the kubeconfig using context name.
+// Returns a new empty Cluster object with non-nil maps if no cluster found in the kubeconfig.
+func getClusterByContextName(kubeconfig *api.Config, n string) *api.Cluster {
+	if ctx, ok1 := kubeconfig.Contexts[n]; ok1 {
+		if clu, ok2 := kubeconfig.Clusters[ctx.Cluster]; ok2 {
+			return clu
 		}
 	}
 	return nil
 }
 
-// getContext returns an api.Context in map contexts identified by it's key n
-func getContext(contexts map[string]*api.Context, n string) *api.Context {
-	for k, v := range contexts {
-		if k == n {
-			return v
+// getAuthByContextName returns an api.AuthInfo from the kubeconfig using context name.
+// Returns a new empty AuthInfo object with non-nil maps if no cluster found in the kubeconfig.
+func getAuthByContextName(kubeconfig *api.Config, n string) *api.AuthInfo {
+	if ctx, ok1 := kubeconfig.Contexts[n]; ok1 {
+		if auth, ok2 := kubeconfig.AuthInfos[ctx.AuthInfo]; ok2 {
+			return auth
 		}
 	}
 	return nil
 }
 
-// getCluster returns an api.Cluster in map clusters identified by it's key n
-func getCluster(clusters map[string]*api.Cluster, n string) *api.Cluster {
-	for k, v := range clusters {
-		if k == n {
-			return v
-		}
+// getCtxFromURL reads path params from u and returns the kubeconfig context
+// as well as the path params used for upstream communication
+func getCtxFromURL(u *url.URL) (string, string) {
+	val := ""
+	rem := []string{}
+	if vals := strings.Split(u.Path, "/"); len(vals) > 1 {
+		val = vals[1]
+		rem = vals[2:]
 	}
-	return nil
-}
-
-// getOptions returns a new pointer to an Options instance which is constructed
-// from an api.Config object and name n. Returns a nil value if unable to find an Options that matches.
-func getOptions(config *api.Config, n string) *Options {
-	ctx := getContext(config.Contexts, n)
-	if ctx == nil {
-		return nil
-	}
-	authInfo := getAuthInfo(config.AuthInfos, ctx.AuthInfo)
-	if authInfo == nil {
-		return nil
-	}
-	cluster := getCluster(config.Clusters, ctx.Cluster)
-	if cluster == nil {
-		return nil
-	}
-	return &Options{
-		cluster,
-		authInfo,
-		n,
-		"",
-	}
-}
-
-// optsFromCtx returns a pointer to an Options instance defined by context and api.Config. Returns
-// a nil value if unable to find an Options matching values in context and the given config.
-func optsFromCtx(ctx context.Context, config *api.Config) *Options {
-
-	// Make sure Subject is set
-	sub, ok := ctx.Value(subjectKey).(string)
-	if !ok || sub == "" {
-		return nil
-	}
-
-	// Make sure Context is set
-	cont, ok := ctx.Value(contextKey).(string)
-	if !ok || cont == "" {
-		return nil
-	}
-
-	// Get a kubeconfig context
-	opts := getOptions(config, cont)
-	if opts == nil {
-		return nil
-	}
-
-	opts.ctx = cont
-	opts.sub = sub
-
-	return opts
-
+	return val, fmt.Sprintf("/%s", strings.Join(rem, "/"))
 }
