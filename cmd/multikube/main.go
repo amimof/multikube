@@ -142,13 +142,12 @@ func main() {
 	p.KubeConfig = c
 	p.CacheTTL = cacheTTL
 
-	// Setup default middlewares
-	middlewares := []proxy.MiddlewareFunc{
+	p.Use(
 		proxy.WithEmpty(),
 		proxy.WithLogging(),
 		proxy.WithJWT(),
 		proxy.WithHeader(),
-	}
+	)
 
 	// Add JWK validation middleware if issuer url is provided on cmd line
 	if oidcIssuerURL != "" {
@@ -159,7 +158,8 @@ func main() {
 			OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
 			OIDCCa:                 readCert(oidcCaFile),
 		}
-		middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
+		//middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
+		p.Use(proxy.WithOIDC(oidcConfig))
 	}
 
 	// // Add x509 public key validation middleware if cert provided on cmd line
@@ -167,11 +167,8 @@ func main() {
 		rs256Config := proxy.RS256Config{
 			PublicKey: readPublicKey(rs256PublicKey),
 		}
-		middlewares = append(middlewares, proxy.WithRS256(rs256Config))
+		p.Use(proxy.WithRS256(rs256Config))
 	}
-
-	// Create middleware
-	m := p.Use(middlewares...)
 
 	// Create the server
 	s := &server.Server{
@@ -194,7 +191,7 @@ func main() {
 		TLSKeepAlive:      tlsKeepAlive,
 		TLSReadTimeout:    tlsReadTimeout,
 		TLSWriteTimeout:   tlsWriteTimeout,
-		Handler:           m(p),
+		Handler:           p.Chain(),
 	}
 
 	// Metrics server

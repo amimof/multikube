@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -28,10 +27,9 @@ var (
 // Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
 type Proxy struct {
 	KubeConfig     *api.Config
-	RS256PublicKey *rsa.PublicKey
 	CacheTTL       time.Duration
-	mw             http.Handler
 	transports     map[string]http.RoundTripper
+	middleware		 []MiddlewareFunc
 }
 
 // New creates a new Proxy instance
@@ -42,18 +40,30 @@ func New() *Proxy {
 	}
 }
 
-// Use chains all middlewares and applies a context to the request flow
-func (p *Proxy) Use(mw ...MiddlewareFunc) MiddlewareFunc {
+// Apply chains all middlewares and resturns a MiddlewareFunc that can wrap an http.Handler
+func (p *Proxy) Apply(middleware ...MiddlewareFunc) MiddlewareFunc {
 	return func(final http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			last := final
-			for i := len(mw) - 1; i >= 0; i-- {
-				last = mw[i](last)
+			for i := len(p.middleware) - 1; i >= 0; i-- {
+				last = p.middleware[i](last)
 			}
 			last.ServeHTTP(w, r)
 		})
 	}
 }
+
+// Use adds a middleware
+func (p *Proxy) Use(middleware ...MiddlewareFunc) {
+	p.middleware = append(p.middleware, middleware...)
+}
+
+// Chain is a convenience function that chains all applied middleware and wraps proxy handler with it
+func (p *Proxy) Chain() http.Handler {
+	h := p.Apply(p.middleware...)
+	return h(p)
+}
+
 
 // ServeHTTP routes the request to an apiserver. It determines, resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
