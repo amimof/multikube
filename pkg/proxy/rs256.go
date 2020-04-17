@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/SermoDigital/jose/jws"
+	"math/rand"
 	"net/http"
 )
 
@@ -36,11 +37,11 @@ func WithRS256(c RS256Config) MiddlewareFunc {
 				return
 			}
 
-			// Set context
-			//username, ok := t.Claims().Get(c.OIDCUsernameClaim).(string)
-			username, ok := t.Claims().Get("").(string)
-			if !ok {
-				username = ""
+			// For security purposes a random value is set to username if no username claim is found or if the claim returns an empty string.
+			// Kubernetes API will ignore user impersonation if this value is empty or nil.
+			username, ok := t.Claims().Get("sub").(string)
+			if !ok || username == "" {
+				username = randomStr(10)
 			}
 
 			ctx := context.WithValue(r.Context(), subjectKey, username)
@@ -49,4 +50,14 @@ func WithRS256(c RS256Config) MiddlewareFunc {
 
 		})
 	}
+}
+
+// Returns a random fixed length string
+func randomStr(n int) string {
+	letterRunes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
 }

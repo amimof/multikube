@@ -10,11 +10,8 @@ import (
 func TestMiddlewareWithHeader(t *testing.T) {
 	assert := assert.New(t)
 
-	p := New()
+	p := New().Use(WithHeader())
 	p.KubeConfig = kubeConf
-	m := p.Use(
-		WithHeader(),
-	)
 
 	req, err := http.NewRequest("GET", "/api/v1/pods/default", nil)
 	if err != nil {
@@ -27,7 +24,7 @@ func TestMiddlewareWithHeader(t *testing.T) {
 
 	// Our handlers satisfy http.Handler, so we can call their ServeHTTP method
 	// directly and pass in our Request and ResponseRecorder.
-	m(p).ServeHTTP(rr, req)
+	p.Chain().ServeHTTP(rr, req)
 
 	// Check the status code is what we expect.
 	if status := rr.Code; status != http.StatusOK {

@@ -26,10 +26,10 @@ var (
 
 // Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
 type Proxy struct {
-	KubeConfig     *api.Config
-	CacheTTL       time.Duration
-	transports     map[string]http.RoundTripper
-	middleware		 []MiddlewareFunc
+	KubeConfig *api.Config
+	CacheTTL   time.Duration
+	transports map[string]http.RoundTripper
+	middleware []MiddlewareFunc
 }
 
 // New creates a new Proxy instance
@@ -54,8 +54,9 @@ func (p *Proxy) Apply(middleware ...MiddlewareFunc) MiddlewareFunc {
 }
 
 // Use adds a middleware
-func (p *Proxy) Use(middleware ...MiddlewareFunc) {
+func (p *Proxy) Use(middleware ...MiddlewareFunc) *Proxy {
 	p.middleware = append(p.middleware, middleware...)
+	return p
 }
 
 // Chain is a convenience function that chains all applied middleware and wraps proxy handler with it
@@ -63,7 +64,6 @@ func (p *Proxy) Chain() http.Handler {
 	h := p.Apply(p.middleware...)
 	return h(p)
 }
-
 
 // ServeHTTP routes the request to an apiserver. It determines, resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
