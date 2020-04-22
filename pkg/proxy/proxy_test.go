@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"context"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -42,6 +41,7 @@ var kubeConf *api.Config = &api.Config{
 	CurrentContext: name,
 }
 
+// Tests and empty proxy without config. Should return 502 bad gateway
 func TestProxy(t *testing.T) {
 	p := New()
 	req, err := http.NewRequest("GET", "/dev-cluster-1/api/v1/pods/default", nil)
@@ -50,13 +50,11 @@ func TestProxy(t *testing.T) {
 	}
 	rr := httptest.NewRecorder()
 	p.ServeHTTP(rr, req)
-	if status := rr.Code; status != http.StatusInternalServerError {
-		t.Fatalf("Received status code '%d'. Response: '%s'", status, rr.Body.String())
+
+	if status := rr.Code; status != http.StatusBadGateway {
+		t.Fatalf("Got status code %d. Expected: %d", status, http.StatusBadGateway)
 	}
 
-	// We expect 'no route' since we are not using any middleware nor is client sending any credentials
-	expected := "No route: context not found\n"
-	assert.Equal(t, expected, rr.Body.String(), "Got unexpected response body")
 }
 
 func TestProxyParseURL(t *testing.T) {
@@ -68,9 +66,12 @@ func TestProxyParseURL(t *testing.T) {
 	assert.Equal(t, "https", u.Scheme, "Got unexpected scheme in URL")
 }
 
-func TestProxyGetOptsFromContext(t *testing.T) {
-	ctx := context.WithValue(context.Background(), contextKey, "dev-cluster-1")
-	ctx = context.WithValue(ctx, subjectKey, "lazy_developer")
-	opts := optsFromCtx(ctx, kubeConf)
-	assert.NotNil(t, opts, nil)
+func TestProxy_getClusterByContextName(t *testing.T) {
+	cluster := getClusterByContextName(kubeConf, "dev-cluster-1")
+	assert.NotNil(t, cluster, nil)
+}
+
+func TestProxy_getAuthByContextName(t *testing.T) {
+	cluster := getAuthByContextName(kubeConf, "dev-cluster-1")
+	assert.NotNil(t, cluster, nil)
 }

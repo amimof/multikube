@@ -142,40 +142,33 @@ func main() {
 	p.KubeConfig = c
 	p.CacheTTL = cacheTTL
 
-	// Setup default middlewares
-	middlewares := []proxy.Middleware{
-		proxy.WithEmpty,
-		proxy.WithLogging,
-		proxy.WithMetrics,
-		proxy.WithJWT,
-		proxy.WithCtxRoot,
-		proxy.WithHeader,
-	}
+	p.Use(
+		proxy.WithEmpty(),
+		proxy.WithLogging(),
+		proxy.WithJWT(),
+		proxy.WithHeader(),
+	)
 
 	// Add JWK validation middleware if issuer url is provided on cmd line
 	if oidcIssuerURL != "" {
-		p.OIDCIssuerURL = oidcIssuerURL
-		p.OIDCPollInterval = oidcPollInterval
-		p.OIDCUsernameClaim = oidcUsernameClaim
-		p.OIDCInsecureSkipVerify = oidcInsecureSkipVerify
-		if oidcCaFile != "" {
-			p.OIDCCa = readCert(oidcCaFile)
+		oidcConfig := proxy.OIDCConfig{
+			OIDCIssuerURL:          oidcIssuerURL,
+			OIDCPollInterval:       oidcPollInterval,
+			OIDCUsernameClaim:      oidcUsernameClaim,
+			OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
+			OIDCCa:                 readCert(oidcCaFile),
 		}
-		// Start polling OIDC Provider
-		stop := p.GetJWKSFromURL()
-		defer stop()
-		middlewares = append(middlewares, proxy.WithJWKValidation)
+		//middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
+		p.Use(proxy.WithOIDC(oidcConfig))
 	}
 
 	// // Add x509 public key validation middleware if cert provided on cmd line
 	if rs256PublicKey != "" {
-		p.RS256PublicKey = readPublicKey(rs256PublicKey)
-		p.OIDCUsernameClaim = oidcUsernameClaim
-		middlewares = append(middlewares, proxy.WithRS256Validation)
+		rs256Config := proxy.RS256Config{
+			PublicKey: readPublicKey(rs256PublicKey),
+		}
+		p.Use(proxy.WithRS256(rs256Config))
 	}
-
-	// Create middleware
-	m := p.Use(middlewares...)
 
 	// Create the server
 	s := &server.Server{
@@ -198,7 +191,7 @@ func main() {
 		TLSKeepAlive:      tlsKeepAlive,
 		TLSReadTimeout:    tlsReadTimeout,
 		TLSWriteTimeout:   tlsWriteTimeout,
-		Handler:           m(nil, p),
+		Handler:           p.Chain(),
 	}
 
 	// Metrics server

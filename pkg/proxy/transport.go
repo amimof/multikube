@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"github.com/amimof/multikube/pkg/cache"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net"
 	"net/http"
@@ -13,38 +12,12 @@ import (
 	"time"
 )
 
-var backendHistogram = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Name:    "multikube_backend_request_duration_seconds",
-		Help:    "A histogram of request latencies to backends",
-		Buckets: prometheus.DefBuckets,
-	},
-	[]string{},
-)
-
-var backendCounter = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "multikube_backend_requests_total",
-		Help: "A counter for requests to backends.",
-	},
-	[]string{"code", "method"},
-)
-
-var backendGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "multikube_backend_live_requests",
-	Help: "A gauge of live requests currently in flight to backends",
-})
-
 // Transport is an implementation of RoundTripper and extension of http.Transport with the
 // addition of a Cache.
 type Transport struct {
 	Cache           *cache.Cache
 	TLSClientConfig *tls.Config
 	transport       *http.Transport
-}
-
-func init() {
-	prometheus.MustRegister(backendHistogram, backendCounter, backendGauge)
 }
 
 // RoundTrip implements http.Transport
