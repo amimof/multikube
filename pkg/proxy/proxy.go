@@ -35,8 +35,15 @@ type Proxy struct {
 // New creates a new Proxy instance
 func New() *Proxy {
 	return &Proxy{
-		transports: make(map[string]http.RoundTripper),
 		KubeConfig: api.NewConfig(),
+		transports: make(map[string]http.RoundTripper),
+	}
+}
+
+// WithHandler takes any http.Handler and returns it as a MiddlewareFunc so that it can be used in proxy
+func WithHandler(next http.Handler) MiddlewareFunc {
+	return func(inner http.Handler) http.Handler {
+		return next
 	}
 }
 
@@ -70,7 +77,7 @@ func (p *Proxy) Chain() http.Handler {
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Get the k8s context from the request
-	ctx := ParseContextFromRequest(r)
+	ctx := ParseContextFromRequest(r, true)
 	if ctx == "" {
 		http.Error(w, "Not route: context not found", http.StatusBadGateway)
 		return
@@ -91,13 +98,6 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Don't use transport cache if ttl is set to 0s
-	resCache := cache.New()
-	resCache.TTL = p.CacheTTL
-	if p.CacheTTL.String() == "0s" {
-		resCache = nil
-	}
-
 	// Create a transport that will be re-used for
 	if p.transports[ctx] == nil {
 		// Setup TLS config
@@ -105,6 +105,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			panic(err)
+		}
+		// Don't use transport cache if ttl is set to 0s
+		var resCache *cache.Cache
+		if p.CacheTTL.Seconds() > 0.0 {
+			resCache = cache.New()
+			resCache.TTL = p.CacheTTL
 		}
 		p.transports[ctx] = &Transport{
 			TLSClientConfig: tlsConfig,
@@ -187,8 +193,9 @@ func parseURL(str string) *url.URL {
 
 // ParseContextFromRequest tries to find the requested context name either by URL or HTTP header.
 // Will return the value of 'Multikube-Context' HTTP header. Will return the first part
-// of the URL path if no headers are set.
-func ParseContextFromRequest(req *http.Request) string {
+// of the URL path if no headers are set. Set replace to true if the URL path in provided request
+// should be replaced with a path without context name.
+func ParseContextFromRequest(req *http.Request, replace bool) string {
 	val := req.Header.Get("Multikube-Context")
 	if val != "" {
 		return val
@@ -197,11 +204,11 @@ func ParseContextFromRequest(req *http.Request) string {
 	c, rem := getCtxFromURL(req.URL)
 	if c != "" {
 		val = c
-		if rem != "" {
-			req.URL.Path = rem
-		}
 	}
 
+	if rem != "" && replace {
+		req.URL.Path = rem
+	}
 	return val
 }
 

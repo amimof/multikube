@@ -2,9 +2,11 @@ package proxy
 
 import (
 	"bufio"
+	"github.com/prometheus/client_golang/prometheus"
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -45,12 +47,17 @@ func (r *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 func WithLogging() MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := ParseContextFromRequest(r, false)
 			start := time.Now()
+			timer := prometheus.NewTimer(httpDuration.WithLabelValues(ctx, r.Method, r.Proto))
 			lrw := &responseWriter{ResponseWriter: w}
 			next.ServeHTTP(lrw, r)
+			httpRequests.WithLabelValues(ctx, r.Method, r.Proto, strconv.Itoa(lrw.status)).Inc()
+			timer.ObserveDuration()
 			var isResCached bool
 			if lrw.Header().Get("Multikube-Cache-Age") != "" {
 				isResCached = true
+				httpRequestsCached.WithLabelValues(ctx, r.Method, r.Proto, strconv.Itoa(lrw.status)).Inc()
 			}
 			duration := time.Now().Sub(start)
 			log.Printf("%s %s %s %s %s %d %d %s %t", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, lrw.status, lrw.length, duration.String(), isResCached)

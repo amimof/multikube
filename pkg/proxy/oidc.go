@@ -67,7 +67,7 @@ func (j *JWKS) Find(s string) *JSONWebKey {
 // GetJWKSFromURL fetches the keys of an OpenID Connect endpoint in a go routine. It polls the endpoint
 // every n seconds. Returns a cancel function which can be called to stop polling and close the channel.
 // The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
-func (p *OIDCConfig) GetJWKSFromURL() func() {
+func (p *OIDCConfig) getJWKSFromURL() func() {
 
 	// Make sure config has non-nil fields
 	p.JWKS = &JWKS{
@@ -88,14 +88,17 @@ func (p *OIDCConfig) GetJWKSFromURL() func() {
 				w, err := getWellKnown(p.OIDCIssuerURL, p.OIDCCa, p.OIDCInsecureSkipVerify)
 				if err != nil {
 					log.Printf("ERROR retrieving openid-configuration: %s", err)
+					oidcIssuerUp.WithLabelValues(p.OIDCIssuerURL).Set(0)
 					continue
 				}
 				// Get content of jwks_keys field
 				j, err := getKeys(w.JwksURI, p.OIDCCa, p.OIDCInsecureSkipVerify)
 				if err != nil {
 					log.Printf("ERROR retrieving JWKS from provider: %s", err)
+					oidcIssuerUp.WithLabelValues(p.OIDCIssuerURL).Set(0)
 					continue
 				}
+				oidcIssuerUp.WithLabelValues(p.OIDCIssuerURL).Set(1)
 				p.JWKS = j
 			}
 		}
@@ -110,13 +113,17 @@ func (p *OIDCConfig) GetJWKSFromURL() func() {
 // WithOIDC is a middleware that validates a JWT token in the http request using an OIDC provider configured in c
 func WithOIDC(c OIDCConfig) MiddlewareFunc {
 
-	c.GetJWKSFromURL()
+	c.getJWKSFromURL()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+			ctxName := ParseContextFromRequest(r, false)
+			oidcReqsTotal.WithLabelValues(ctxName).Inc()
+
 			t, err := jws.ParseJWTFromRequest(r)
 			if err != nil {
+				oidcReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
@@ -124,6 +131,7 @@ func WithOIDC(c OIDCConfig) MiddlewareFunc {
 			raw := string(getTokenFromRequest(r))
 			tok, err := jwt.ParseSigned(raw)
 			if err != nil {
+				oidcReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
@@ -132,10 +140,12 @@ func WithOIDC(c OIDCConfig) MiddlewareFunc {
 			kid := tok.Headers[0].KeyID
 			jwk := c.JWKS.Find(kid)
 			if jwk == nil {
+				oidcReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, "key id invalid", http.StatusUnauthorized)
 				return
 			}
 			if jwk.Kty != "RSA" {
+				oidcReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, fmt.Sprintf("Invalid key type. Expected 'RSA' got '%s'", jwk.Kty), http.StatusUnauthorized)
 				return
 			}
@@ -143,12 +153,14 @@ func WithOIDC(c OIDCConfig) MiddlewareFunc {
 			// decode the base64 bytes for n
 			nb, err := base64.RawURLEncoding.DecodeString(jwk.N)
 			if err != nil {
+				oidcReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
 			// Check if E is big-endian int
 			if jwk.E != "AQAB" && jwk.E != "AAEAAQ" {
+				oidcReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, fmt.Sprintf("Expected E to be one of 'AQAB' and 'AAEAAQ' but got '%s'", jwk.E), http.StatusUnauthorized)
 				return
 			}
@@ -160,11 +172,7 @@ func WithOIDC(c OIDCConfig) MiddlewareFunc {
 
 			err = t.Validate(pk, crypto.SigningMethodRS256)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
-				return
-			}
-
-			if err != nil {
+				oidcReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
@@ -174,8 +182,9 @@ func WithOIDC(c OIDCConfig) MiddlewareFunc {
 				username = ""
 			}
 
-			ctx := context.WithValue(r.Context(), subjectKey, username)
+			oidcReqsAuthorized.WithLabelValues(ctxName).Inc()
 
+			ctx := context.WithValue(r.Context(), subjectKey, username)
 			next.ServeHTTP(w, r.WithContext(ctx))
 
 		})

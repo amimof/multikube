@@ -17,22 +17,29 @@ type RS256Config struct {
 // WithRS256 is a middleware that validates a JWT token in the http request using RS256 signing method.
 // It will do so using a rsa public key provided in Config
 func WithRS256(c RS256Config) MiddlewareFunc {
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+			ctxName := ParseContextFromRequest(r, false)
+			rs256ReqsTotal.WithLabelValues(ctxName).Inc()
+
 			t, err := jws.ParseJWTFromRequest(r)
 			if err != nil {
+				rs256ReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
 			if t == nil {
+				rs256ReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, "No token in request", http.StatusUnauthorized)
 				return
 			}
 
 			err = t.Validate(c.PublicKey, crypto.SigningMethodRS256)
 			if err != nil {
+				rs256ReqsUnauthorized.WithLabelValues(ctxName).Inc()
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
@@ -44,8 +51,9 @@ func WithRS256(c RS256Config) MiddlewareFunc {
 				username = randomStr(10)
 			}
 
-			ctx := context.WithValue(r.Context(), subjectKey, username)
+			rs256ReqsAuthorized.WithLabelValues(ctxName).Inc()
 
+			ctx := context.WithValue(r.Context(), subjectKey, username)
 			next.ServeHTTP(w, r.WithContext(ctx))
 
 		})
