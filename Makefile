@@ -28,7 +28,7 @@ export CGO_ENABLED=0
 all: | $(BIN) ; $(info $(M) building executable to $(BUILDPATH)) @ ## Build program binary
 	$Q $(GO) build \
 		-tags release \
-		-ldflags '-X $(MODULE)/cmd.Version=$(VERSION) -X $(MODULE)/cmd.BuildDate=$(DATE)' \
+		-ldflags '-X main.VERSION=${VERSION} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}' \
 		-o $(BUILDPATH) cmd/multikube/main.go
 
 # Tools
