@@ -7,6 +7,7 @@ import (
 	"github.com/amimof/multikube/pkg/cache"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -26,18 +27,34 @@ var (
 
 // Proxy implements an HTTP handler. It has a built-in transport with in-mem cache capabilities.
 type Proxy struct {
-	KubeConfig *api.Config
-	CacheTTL   time.Duration
+	kubeConfig *api.Config
 	transports map[string]http.RoundTripper
 	middleware []MiddlewareFunc
 }
 
 // New creates a new Proxy instance
-func New() *Proxy {
-	return &Proxy{
-		KubeConfig: api.NewConfig(),
-		transports: make(map[string]http.RoundTripper),
+func New(c *api.Config) (*Proxy, error) {
+
+	var transports = make(map[string]http.RoundTripper)
+
+	for ctxKey := range c.Contexts {
+		cluster := getClusterByContextName(c, ctxKey)
+		auth := getAuthByContextName(c, ctxKey)
+		tlsConfig, err := configureTLS(auth, cluster)
+		if err != nil {
+			return nil, err
+		}
+		transports[ctxKey] = &Transport{
+			TLSClientConfig: tlsConfig,
+			Cache:           cache.New(),
+		}
+
 	}
+
+	return &Proxy{
+		kubeConfig: c,
+		transports: transports,
+	}, nil
 }
 
 // WithHandler takes any http.Handler and returns it as a MiddlewareFunc so that it can be used in proxy
@@ -72,6 +89,17 @@ func (p *Proxy) Chain() http.Handler {
 	return h(p)
 }
 
+// CacheTTL sets the TTL value of all transports to d
+func (p *Proxy) CacheTTL(d time.Duration) {
+	for key := range p.transports {
+		if p.transports[key].(*Transport).Cache != nil {
+			log.Printf("%s", key)
+			p.transports[key].(*Transport).Cache.TTL = d
+			cacheTTL.WithLabelValues(key).Set(d.Seconds())
+		}
+	}
+}
+
 // ServeHTTP routes the request to an apiserver. It determines, resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -86,36 +114,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Get the subject from the request
 	sub := ParseSubjectFromRequest(r)
 
-	// Get k8s cluster and authinfo from kubeconfig using the ctx name
-	cluster := getClusterByContextName(p.KubeConfig, ctx)
+	// // Get k8s cluster and authinfo from kubeconfig using the ctx name
+	cluster := getClusterByContextName(p.kubeConfig, ctx)
 	if cluster == nil {
 		http.Error(w, fmt.Sprintf("no route: cluster not found for '%s'", ctx), http.StatusBadGateway)
 		return
-	}
-	auth := getAuthByContextName(p.KubeConfig, ctx)
-	if auth == nil {
-		http.Error(w, fmt.Sprintf("no route: authinfo not found for '%s'", ctx), http.StatusBadGateway)
-		return
-	}
-
-	// Create a transport that will be re-used for
-	if p.transports[ctx] == nil {
-		// Setup TLS config
-		tlsConfig, err := configureTLS(auth, cluster)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			panic(err)
-		}
-		// Don't use transport cache if ttl is set to 0s
-		var resCache *cache.Cache
-		if p.CacheTTL.Seconds() > 0.0 {
-			resCache = cache.New()
-			resCache.TTL = p.CacheTTL
-		}
-		p.transports[ctx] = &Transport{
-			TLSClientConfig: tlsConfig,
-			Cache:           resCache,
-		}
 	}
 
 	// Create an instance of golang reverse proxy and attach our own transport to it
