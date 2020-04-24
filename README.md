@@ -1,5 +1,5 @@
 # multikube
-[![Build Status](https://travis-ci.org/amimof/multikube.svg?branch=master)](https://travis-ci.org/amimof/multikube) [![huego](https://godoc.org/github.com/amimof/multikube?status.svg)](https://godoc.org/github.com/amimof/multikube) [![Go Report Card](https://goreportcard.com/badge/github.com/amimof/multikube)](https://goreportcard.com/report/github.com/amimof/multikube)
+[![Build Status](https://travis-ci.org/amimof/multikube.svg?branch=master)](https://travis-ci.org/amimof/multikube) [![huego](https://godoc.org/github.com/amimof/multikube?status.svg)](https://godoc.org/github.com/amimof/multikube) [![Go Report Card](https://goreportcard.com/badge/github.com/amimof/multikube)](https://goreportcard.com/report/github.com/amimof/multikube) [![codecov](https://codecov.io/gh/amimof/multikube/branch/master/graph/badge.svg)](https://codecov.io/gh/amimof/multikube)
 
 Multikube is a modern HTTP reverse proxy for [Kubernetes](http://kubernetes.io/) API server. 
 

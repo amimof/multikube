@@ -29,6 +29,7 @@ jobs:
     - make test
     - make benchmark
     - make coverage
+    - bash <(curl -s https://codecov.io/bash)
 
   - name: "Compile"
     stage: build
