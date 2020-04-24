@@ -9,6 +9,7 @@ import (
 	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/opentracing/opentracing-go"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
 	"github.com/uber/jaeger-client-go"
@@ -98,6 +99,24 @@ func init() {
 	pflag.DurationVar(&cacheTTL, "cache-ttl", 1*time.Second, "maximum duration before cached responses are invalidated. Set this value to 0s to disable the cache")
 
 	pflag.BoolVar(&oidcInsecureSkipVerify, "oidc-insecure-skip-verify", false, "")
+
+	// Create build_info metrics
+	if err := prometheus.Register(prometheus.NewGaugeFunc(
+		prometheus.GaugeOpts{
+			Name: "multikube_build_info",
+			Help: "A constant gauge with build info labels.",
+			ConstLabels: prometheus.Labels{
+				"branch":    BRANCH,
+				"goversion": GOVERSION,
+				"commit":    COMMIT,
+				"version":   VERSION,
+			},
+		},
+		func() float64 { return 1 },
+	)); err != nil {
+		log.Printf("Unable to register 'multikube_build_info metric %s'", err.Error())
+	}
+
 }
 
 func main() {
@@ -138,9 +157,11 @@ func main() {
 	}
 
 	// Create the proxy
-	p := proxy.New()
-	p.KubeConfig = c
-	p.CacheTTL = cacheTTL
+	p, err := proxy.New(c)
+	if err != nil {
+		log.Fatal(err)
+	}
+	p.CacheTTL(cacheTTL)
 
 	p.Use(
 		proxy.WithEmpty(),
@@ -205,7 +226,6 @@ func main() {
 	// Setup opentracing
 	cfg := config.Configuration{
 		ServiceName: "multikube",
-
 		Sampler: &config.SamplerConfig{
 			Type:  "const",
 			Param: 1,

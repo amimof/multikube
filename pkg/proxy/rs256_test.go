@@ -54,14 +54,17 @@ func TestMiddlewareWithRS256Validation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := New().Use(
+	p, err := New(kubeConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p.Use(
 		WithJWT(),
 		WithRS256(RS256Config{
 			PublicKey: pubkey,
-		}))
-	p.KubeConfig = kubeConf
-
-	p.Chain().ServeHTTP(rr, req)
+		}),
+	).Chain().ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
 		t.Fatalf("Got status code %d. Expected: %d", status, http.StatusOK)
@@ -79,14 +82,17 @@ func TestMiddlewareWithRS256Validation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p = New().Use(
+	p, err = New(kubeConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p.Use(
 		WithJWT(),
 		WithRS256(RS256Config{
 			PublicKey: pubkey,
-		}))
-	p.KubeConfig = kubeConf
-
-	p.Chain().ServeHTTP(rr, req)
+		}),
+	).Chain().ServeHTTP(rr, req)
 
 	assert.Equal(http.StatusUnauthorized, rr.Code, "Got unexpected status code")
 

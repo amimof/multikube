@@ -10,8 +10,11 @@ import (
 func TestMiddlewareJWT(t *testing.T) {
 	assert := assert.New(t)
 
-	p := New().Use(WithJWT())
-	p.KubeConfig = kubeConf
+	p, err := New(kubeConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Use(WithJWT())
 
 	req, err := http.NewRequest("GET", "/dev-cluster-1/api/v1/pods/default", nil)
 	if err != nil {

@@ -10,8 +10,11 @@ import (
 func TestMiddlewareWithHeader(t *testing.T) {
 	assert := assert.New(t)
 
-	p := New().Use(WithHeader())
-	p.KubeConfig = kubeConf
+	p, err := New(kubeConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Use(WithHeader())
 
 	req, err := http.NewRequest("GET", "/api/v1/pods/default", nil)
 	if err != nil {
