@@ -7,7 +7,6 @@ import (
 	"github.com/amimof/multikube/pkg/cache"
 	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd/api"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -42,13 +41,12 @@ func New(c *api.Config) (*Proxy, error) {
 		auth := getAuthByContextName(c, ctxKey)
 		tlsConfig, err := configureTLS(auth, cluster)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		transports[ctxKey] = &Transport{
 			TLSClientConfig: tlsConfig,
 			Cache:           cache.New(),
 		}
-
 	}
 
 	return &Proxy{
@@ -93,7 +91,6 @@ func (p *Proxy) Chain() http.Handler {
 func (p *Proxy) CacheTTL(d time.Duration) {
 	for key := range p.transports {
 		if p.transports[key].(*Transport).Cache != nil {
-			log.Printf("%s", key)
 			p.transports[key].(*Transport).Cache.TTL = d
 			cacheTTL.WithLabelValues(key).Set(d.Seconds())
 		}

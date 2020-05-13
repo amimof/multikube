@@ -42,23 +42,6 @@ data:
   tls.key: >-
     LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcEFJQkFBS0NBUUVBNXBvazdWblJCQVE5cW5DTkszTDhGSzNqeDBlcmkxYXJmNUpjTGt4NVJqTi9IMVFFCm5EUUVQWDkxS3FaQ0VRdW1SYUU5MWM1SjBrTVRSSXBwVzR0VHV4TDJNUTVsc1piODAxNmFEeXZ1RmwrcmdrTFQKTU5peTI5bDFOWFpnMmFXVGFETVlpVmVWaHdQd21NY0d3Z1ZrRHl4WXE3bmFTcFlHU1N0QUN3TG1JNEo5OFNhNgpYanFSZXZiaVg4bFhjVDFYOGpWQytRRVNMRGFrOHdabTdGNlBiSmNiVFk2ZGk5WmRYbW04SGE2cCs0UmJUakFCCldrTDFVTVpIUURNSWZoUUExaHdXbllZOUpjNWV2VHEycU92UDVpd2dFWnRCZ3lNbk9ic3pQeWRtOGYzcnVDM20KQzdxZVpJY29SWlB4NEtuaDh4Uk4wM29aeDFqM0NUb1cvc29IclFJREFRQUJBb0lCQUQ5SWMvUFMzeUpNQzZRMwphUFpRZ3M4bC9VbFY2TVMvVHljZVFqL09hc1dTSWtPMXFlSTRBQ1hrVVlJWHlDK25VOFR0LytzcHhtWjJVOVpPCmFhVmVzZWEzeUdvaitsSm5EaER2ZURYTHAzWHFZVVhKRXUzbnVnWE5RblllZTJ1Zkhibk5zK0VVOFFyeFVOaU0KWGRWbTUxT21wdHJSa1E5QTVvNnoyTXBzekQxWDc5akZoLzBlWjdUejJoWTlURDB0NlY4NSt2UDJ6MHVERzJ3MQpzVDhSbjFlOXJZUXhsR0c4R1Z1YzBiYlRacHFYbXpHWEJ1bGZGbllHR0pER1pycUxVaXJiY1pHWS9OSmJFVWZiCjN6RGtxZzByOU53ZDBoM0NpaG1oYkduVTQyZ1lodzgxMjFIOWJTSGZ4Y2prZWwwaS9ja1Y0T21uclhxM0REeGMKR0kyNzBWMENnWUVBOTV1M3hkSnNUeVJCL1NqZzc3YnJacHFnVnloeXpDdi9Vck0yaWlueDR0dXBqbVNQT2x4cQp5aFBYbDIxM242N1lXNmJab2J1YzNvb1FBWk5iTCtzYmVGSGNkQzZRb05yNnNBTzl6SW0wMmF6QWEyVldpZDlCCnh6dFBleTV6b2FGSUd4V2tzdUxObXFnNC9xTFRFOEpIb3drSTh5OXAwTlhEVndpQkxHT0M5ajhDZ1lFQTdtcmcKK1VNNGNxaUh5WGlRYm9aZ3RicFJqSFlaL2RSWFJ4bDJ0VEV1aVZUalpkcUl6ekJobkRTNEVvOGx5RXZRbVBkWQpFeEFxWmF5Vm82YUNhNHF6TzB0TnRMbEEzOWVsY085NXhLSDRscjZROUxZRitGNVdhTnYzZ3VXMkJDLzhxNGZHCjdPNWJMMFg2am5YbDVxM0pnRHU5RVE2cklyZzJyekx6SHU3My94TUNnWUVBdUJZWlp3V3VhSmg0UnhNaFNKY2kKSkVKSmV3TWpkaEF2M3ZoR1VDb25INVpZVlBrR1UwbHFTNXE4Nm1RRVQ3L2FNeW0xRzcwMFAyODl2eTRpMlZsZQpMdklOaUlNbUc3RXlON0pRWmNUcm8vbi9oTmp1b2NwT1NTVWJUbVdXcWxBU0g3RFRwZnRoQ042UW9SL0U5aWUyCndzdHd6L3dzRzRzUms1OUxDZ2xoMEZrQ2dZRUFzM3l1NWJpZmRHSS81NExtYU82dE8rS0twZzM3UDBadWRrNUwKT2RsT3lZQ291UE11YjV4aXY3QklxMkFzOTM5c0NOeWM1NjBSM2YxeG9nUW14ME5oNzArZnJtQ1E0SE4rVDJsWgo2Smh2aHp6cjcrNWd6RHhwSFFRTWIvVHpkRytUN3FhSE1iTzMzZnoyeGUwb0tPUElnTXQ0YUxEOFVXVVJkaEFMClM4eG4weFVDZ1lCb0ZvdmpYSTZNOWt0ZjRzdnhGUTVjRUQ3NWdDL2dndmQvcHZYWE9lbk96Z2hEQXZCN1RtVVUKVWRLWWRLNFEvVk5UK0w2bUViNWprY0pZSndpVlJpRUxQcVlrTkg5bko5OXBvN1V3UkxuK1dLbUxNbTRwUlZQYgpTOXRKZVEyaDk4WnFSNmo4Y1dRKytGc0toNDZkWWtnZ3ZXUFBod1NqWHNDR25sQ21nc25wRUE9PQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo=
 ---
-kind: ConfigMap
-apiVersion: v1
-data:
-  kubeconfig: |
-    apiVersion: v1
-    kind: Config
-    clusters: []
-    contexts: []
-    current-context: ''
-    preferences: {}
-    users: []
-metadata:
-  name: multikube
-  namespace: multikube
-  labels:
-    app: multikube
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -77,27 +60,27 @@ spec:
       labels:
         app: multikube
       annotations:
-        prometheus.io/port: '8888'
-        prometheus.io/scrape: 'true'
+        prometheus.io/port: "8888"
+        prometheus.io/scrape: "true"
     spec:
       volumes:
         - name: multikube-tls
           secret:
             secretName: multikube-tls
             defaultMode: 420
-        - name: multikube-kubeconfig
-          configMap:
-            name: multikube-kubeconfig
+        - name: kubeconfig
+          secret:
+            secretName: kubeconfig
             defaultMode: 420
       containers:
         - name: multikube
-          image: 'amimof/multikube:latest'
+          image: "amimof/multikube:latest"
           args:
-            - '--tls-certificate=/etc/multikube/tls/tls.crt'
-            - '--tls-key=/etc/multikube/tls/tls.key'
-            - '--tls-host=0.0.0.0'
-            - '--metrics-host=0.0.0.0'
-            - '--kubeconfig=/etc/multikube/config/kubeconfig'
+            - "--tls-certificate=/etc/multikube/tls/tls.crt"
+            - "--tls-key=/etc/multikube/tls/tls.key"
+            - "--tls-host=0.0.0.0"
+            - "--metrics-host=0.0.0.0"
+            - "--kubeconfig=/etc/multikube/config/config"
           ports:
             - name: https
               containerPort: 8443
@@ -116,7 +99,7 @@ spec:
             - name: multikube-tls
               readOnly: true
               mountPath: /etc/multikube/tls
-            - name: multikube-kubeconfig
+            - name: kubeconfig
               readOnly: true
               mountPath: /etc/multikube/config
           imagePullPolicy: Always
@@ -129,7 +112,7 @@ metadata:
   name: multikube
   namespace: multikube
   annotations:
-    nginx.ingress.kubernetes.io/ssl-passthrough: 'true'
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
 spec:
   rules:
     - host: multikube.apps.mdlwr.se
