@@ -24,5 +24,6 @@ kubectl apply -f https://raw.githubusercontent.com/amimof/multikube/master/deplo
 Port-forward 8080 to test it locally. You can of course create an ingress as well
 ```
 kubectl port-forward deployment/multikube -n multikube 8443:8443
-curl http://localhost:8080/
+curl -k http://localhost:8443/
+no token present in request
 ```
