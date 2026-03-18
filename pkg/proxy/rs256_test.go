@@ -1,11 +1,12 @@
 package proxy
 
 import (
-	"github.com/SermoDigital/jose/crypto"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/SermoDigital/jose/crypto"
+	"github.com/stretchr/testify/assert"
 )
 
 var validRS256pubkey = []byte(`-----BEGIN PUBLIC KEY-----
@@ -43,7 +44,7 @@ func TestMiddlewareWithRS256Validation(t *testing.T) {
 	}
 	rr := httptest.NewRecorder()
 
-	//req.Header.Set("Multikube-Context", "dev-cluster-1")
+	// req.Header.Set("Multikube-Context", "dev-cluster-1")
 	req.Header.Set("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhbWlyQG1pZGRsZXdhcmUuc2UiLCJuYW1lIjoiSm9obiBEb2UiLCJhZG1pbiI6dHJ1ZSwiaWF0IjoxNTE2MjM5MDIyfQ.nSyFTR7SZ95-pkt_PcjbmVX7rZDizLxONOnF9HWhBIe1R6ir-rrzmOaXjVxfdcVlBKEFE9bz6PJMwD8-tqsZUqlOeXSLNXXeCGhdmhluBJrJMi-Ewyzmvm7yJ2L8bVfhhBJ3z_PivSbxMKLpWz7VkbwaJrk8950QkQ5oB_CV0ysoppTybGzvU1e8tc5h5wRKimju3BA3mA5HxN8K7-2lM_JZ8cbxBToGMBMsHKSy4VXAxm-lmvSwletLXqdSlqDQZejjJYYGaPpvDih1voTJ_FJnYFzx_NWq5qN416IGJrr1RAe92B2gfRUmzftFMMw8NEYBLDNXgKx3d9OOO9xKi9DxZ9wkFrZlwNZBj-VPTgNt5zeNgME8CJqgxvCaESuDAMWkjnfdyhBYAu9uUvbRSjFowFdQFumnVlKNfAlhKOQFOZpifFIwRFYda8lzvlJv1CzHEt500HgL2qofoIOTzFQNeJ_XkOQvRBy4eBkwxKvbHlwUAObxzZrCBjaAeQRGrMU926zpujSFQ_9KzUqNsNrxJWkBybOFViQp5mMZGFIWJbdt_oiROwZLG-NDK2i932hepUfr0i52mrTX-M9vTwy4uQsiMh2eSI7Ntghw0_xgrqqp6HZON7RPdKo2ldC5_rt9TFKKmyXvhZFLgxwsm8bzvqlIbV4KwNbEZIhh-n0")
 
 	/*
@@ -102,8 +103,7 @@ func TestMiddlewareWithRS256Validation(t *testing.T) {
 	/*
 		/ Test with a bad rsa pub key
 	*/
-	rr = httptest.NewRecorder()
+	_ = httptest.NewRecorder()
 	_, err = crypto.ParseRSAPublicKeyFromPEM(badRS256pubkey)
 	assert.EqualError(err, "invalid key: Key must be PEM encoded PKCS1 or PKCS8 private key", "Got unexpected error")
-
 }

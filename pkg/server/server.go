@@ -3,16 +3,17 @@ package server
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/go-openapi/swag"
-	"github.com/tylerb/graceful"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/go-openapi/swag/netutils"
+	"github.com/tylerb/graceful"
 )
 
 const (
@@ -97,7 +98,6 @@ func (s *Server) hasScheme(scheme string) bool {
 
 // Listen configures server listeners
 func (s *Server) Listen() error {
-
 	if s.shutdown == nil {
 		s.shutdown = make(chan struct{})
 	}
@@ -143,7 +143,7 @@ func (s *Server) Listen() error {
 			return err
 		}
 
-		h, p, err := swag.SplitHostPort(listener.Addr().String())
+		h, p, err := netutils.SplitHostPort(listener.Addr().String())
 		if err != nil {
 			return err
 		}
@@ -158,7 +158,7 @@ func (s *Server) Listen() error {
 			return err
 		}
 
-		sh, sp, err := swag.SplitHostPort(tlsListener.Addr().String())
+		sh, sp, err := netutils.SplitHostPort(tlsListener.Addr().String())
 		if err != nil {
 			return err
 		}
@@ -173,7 +173,6 @@ func (s *Server) Listen() error {
 
 // Serve the api
 func (s *Server) Serve() error {
-
 	if !s.hasListeners {
 		err := s.Listen()
 		if err != nil {
@@ -242,8 +241,8 @@ func (s *Server) Serve() error {
 		srv := http.Server{}
 		httpsServer := &graceful.Server{Server: &srv}
 		httpsServer.MaxHeaderBytes = int(s.MaxHeaderSize)
-		//httpsServer.ReadTimeout = s.TLSReadTimeout
-		//httpsServer.WriteTimeout = s.TLSWriteTimeout
+		// httpsServer.ReadTimeout = s.TLSReadTimeout
+		// httpsServer.WriteTimeout = s.TLSWriteTimeout
 		httpsServer.SetKeepAlivesEnabled(int64(s.TLSKeepAlive) > 0)
 		httpsServer.TCPKeepAlive = s.TLSKeepAlive
 		if s.TLSListenLimit > 0 {
@@ -287,7 +286,7 @@ func (s *Server) Serve() error {
 		}
 
 		if s.TLSCACertificate != "" {
-			caCert, err := ioutil.ReadFile(s.TLSCACertificate)
+			caCert, err := os.ReadFile(s.TLSCACertificate)
 			if err != nil {
 				return err
 			}
@@ -296,8 +295,6 @@ func (s *Server) Serve() error {
 			httpsServer.TLSConfig.ClientCAs = caCertPool
 			httpsServer.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
 		}
-
-		httpsServer.TLSConfig.BuildNameToCertificate()
 
 		if len(httpsServer.TLSConfig.Certificates) == 0 {
 			if s.TLSCertificate == "" {

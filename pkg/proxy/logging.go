@@ -2,12 +2,13 @@ package proxy
 
 import (
 	"bufio"
-	"github.com/prometheus/client_golang/prometheus"
 	"log"
 	"net"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // responseWriter implements http.ResponseWriter and adds status code and response length bytes
@@ -59,7 +60,7 @@ func WithLogging() MiddlewareFunc {
 				isResCached = true
 				httpRequestsCached.WithLabelValues(ctx, r.Method, r.Proto, strconv.Itoa(lrw.status)).Inc()
 			}
-			duration := time.Now().Sub(start)
+			duration := time.Since(start)
 			log.Printf("%s %s %s %s %s %d %d %s %t", r.Method, r.URL.Path, r.URL.RawQuery, r.RemoteAddr, r.Proto, lrw.status, lrw.length, duration.String(), isResCached)
 		})
 	}
