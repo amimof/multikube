@@ -4,14 +4,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/amimof/multikube/pkg/cache"
-	"io/ioutil"
-	"k8s.io/client-go/tools/clientcmd/api"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/amimof/multikube/pkg/cache"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 // MiddlewareFunc defines a function to process middleware.
@@ -33,8 +34,7 @@ type Proxy struct {
 
 // New creates a new Proxy instance
 func New(c *api.Config) (*Proxy, error) {
-
-	var transports = make(map[string]http.RoundTripper)
+	transports := make(map[string]http.RoundTripper)
 
 	for ctxKey := range c.Contexts {
 		cluster := getClusterByContextName(c, ctxKey)
@@ -100,7 +100,6 @@ func (p *Proxy) CacheTTL(d time.Duration) {
 // ServeHTTP routes the request to an apiserver. It determines, resolves an apiserver using
 // data in the request itsel such as certificate data, authorization bearer tokens, http headers etc.
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
 	// Get the k8s context from the request
 	ctx := ParseContextFromRequest(r, true)
 	if ctx == "" {
@@ -127,21 +126,19 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("Impersonate-User", sub)
 
 	proxy.ServeHTTP(w, r)
-
 }
 
 // configureTLS composes a TLS configuration (tls.Config) from the provided Options parameter.
 // This is useful when building HTTP requests (for example with the net/http package)
 // and the TLS data is configured elsewhere.
 func configureTLS(a *api.AuthInfo, c *api.Cluster) (*tls.Config, error) {
-
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: c.InsecureSkipTLSVerify,
 	}
 
 	// Load CA from file
 	if c.CertificateAuthority != "" {
-		caCert, err := ioutil.ReadFile(c.CertificateAuthority)
+		caCert, err := os.ReadFile(c.CertificateAuthority)
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +162,6 @@ func configureTLS(a *api.AuthInfo, c *api.Cluster) (*tls.Config, error) {
 			return nil, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
-		tlsConfig.BuildNameToCertificate()
 	}
 
 	// Load certs from block
@@ -175,7 +171,6 @@ func configureTLS(a *api.AuthInfo, c *api.Cluster) (*tls.Config, error) {
 			return nil, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{cert}
-		tlsConfig.BuildNameToCertificate()
 	}
 
 	return tlsConfig, nil

@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
-	"github.com/amimof/multikube/pkg/cache"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"time"
+
+	"github.com/amimof/multikube/pkg/cache"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Transport is an implementation of RoundTripper and extension of http.Transport with the
@@ -22,7 +23,6 @@ type Transport struct {
 
 // RoundTrip implements http.Transport
 func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error) {
-
 	// Use default transport with http2 if not told otherwise
 	if t.transport == nil {
 		t.transport = &http.Transport{
@@ -78,7 +78,6 @@ func (t *Transport) RoundTrip(req *http.Request) (res *http.Response, err error)
 	}
 
 	return res, nil
-
 }
 
 // cacheResponse tries to commit a http.Response to the transport cache.
@@ -92,7 +91,8 @@ func (t *Transport) cacheResponse(res *http.Response) (bool, error) {
 		return false, nil
 	}
 	// Don't cache if response code isn't 200 (OK) or 304 (NotModified)
-	if !(res.StatusCode == http.StatusOK || res.StatusCode == http.StatusNotModified) {
+	statusOK := res.StatusCode >= 200 && res.StatusCode < 300
+	if statusOK {
 		return false, nil
 	}
 	// Don't cache if certain url params are present (kubernetes streams)

@@ -111,7 +111,7 @@ func (c *Cache) Size() int {
 
 // Age returns the duration elapsed since creation
 func (i *Item) Age() time.Duration {
-	return time.Now().Sub(i.created)
+	return time.Since(i.created)
 }
 
 // ExpiresAt return the time when the item was created plus the configured TTL

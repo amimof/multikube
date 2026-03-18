@@ -9,10 +9,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/SermoDigital/jose/crypto"
-	"github.com/SermoDigital/jose/jws"
-	"gopkg.in/square/go-jose.v2/jwt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
@@ -20,6 +17,10 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/SermoDigital/jose/crypto"
+	"github.com/SermoDigital/jose/jws"
+	"gopkg.in/square/go-jose.v2/jwt"
 )
 
 // OIDCConfig is configuration for OIDC middleware
@@ -68,7 +69,6 @@ func (j *JWKS) Find(s string) *JSONWebKey {
 // every n seconds. Returns a cancel function which can be called to stop polling and close the channel.
 // The endpoint must support OpenID Connect discovery as per https://openid.net/specs/openid-connect-discovery-1_0.html
 func (p *OIDCConfig) getJWKSFromURL() func() {
-
 	// Make sure config has non-nil fields
 	p.JWKS = &JWKS{
 		Keys: []JSONWebKey{},
@@ -107,17 +107,14 @@ func (p *OIDCConfig) getJWKSFromURL() func() {
 	return func() {
 		quit <- 1
 	}
-
 }
 
 // WithOIDC is a middleware that validates a JWT token in the http request using an OIDC provider configured in c
 func WithOIDC(c OIDCConfig) MiddlewareFunc {
-
 	c.getJWKSFromURL()
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			ctxName := ParseContextFromRequest(r, false)
 			oidcReqsTotal.WithLabelValues(ctxName).Inc()
 
@@ -186,7 +183,6 @@ func WithOIDC(c OIDCConfig) MiddlewareFunc {
 
 			ctx := context.WithValue(r.Context(), subjectKey, username)
 			next.ServeHTTP(w, r.WithContext(ctx))
-
 		})
 	}
 }
@@ -203,7 +199,6 @@ func getTokenFromRequest(req *http.Request) []byte {
 // an OpenID Connect .well-formed URL as per https://openid.net/specs/openid-connect-discovery-1_0.html
 // Unmarshals it's json content into JWKS and returns it
 func getKeys(u string, ca *x509.Certificate, i bool) (*JWKS, error) {
-
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, err
@@ -214,9 +209,9 @@ func getKeys(u string, ca *x509.Certificate, i bool) (*JWKS, error) {
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +229,6 @@ func getKeys(u string, ca *x509.Certificate, i bool) (*JWKS, error) {
 // see https://openid.net/specs/openid-connect-discovery-1_0.html.
 // Accepts a trusted CA certificate as well as a bool to skip tls verification
 func getWellKnown(u string, ca *x509.Certificate, i bool) (*openIDConfiguration, error) {
-
 	ul, err := url.Parse(u)
 	if err != nil {
 		return nil, err
@@ -242,7 +236,7 @@ func getWellKnown(u string, ca *x509.Certificate, i bool) (*openIDConfiguration,
 
 	ul.Path = path.Join(ul.Path, ".well-known/openid-configuration")
 
-	//wellKnownURL := fmt.Sprintf("%s/%s", u, "/.well-known/openid-configuration")
+	// wellKnownURL := fmt.Sprintf("%s/%s", u, "/.well-known/openid-configuration")
 	req, err := http.NewRequest("GET", ul.String(), nil)
 	if err != nil {
 		return nil, err
@@ -253,9 +247,9 @@ func getWellKnown(u string, ca *x509.Certificate, i bool) (*openIDConfiguration,
 		return nil, err
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -267,12 +261,11 @@ func getWellKnown(u string, ca *x509.Certificate, i bool) (*openIDConfiguration,
 	}
 
 	return c, nil
-
 }
 
 // Creates an http client with TLS configuration. If ca is nil then client without TLS configuration is returned instead
 // Set i to true to skip tls verification for this client
-func tlsClient(ca *x509.Certificate, i bool) *http.Client {
+func tlsClient(ca *x509.Certificate, _ bool) *http.Client {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 	}
@@ -293,5 +286,4 @@ func tlsClient(ca *x509.Certificate, i bool) *http.Client {
 			TLSClientConfig: tlsConfig,
 		},
 	}
-
 }

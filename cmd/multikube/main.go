@@ -5,6 +5,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"log"
+	"os"
+	"time"
+
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/server"
@@ -14,11 +18,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
-	"io/ioutil"
 	"k8s.io/client-go/tools/clientcmd"
-	"log"
-	"os"
-	"time"
 )
 
 var (
@@ -116,11 +116,9 @@ func init() {
 	)); err != nil {
 		log.Printf("Unable to register 'multikube_build_info metric %s'", err.Error())
 	}
-
 }
 
 func main() {
-
 	showver := pflag.Bool("version", false, "Print version")
 
 	pflag.Usage = func() {
@@ -131,7 +129,7 @@ func main() {
 		fmt.Fprint(os.Stderr, title+"\n\n")
 		desc := "Manages multiple Kubernetes clusters and provides a single API to clients"
 		if desc != "" {
-			fmt.Fprintf(os.Stderr, desc+"\n\n")
+			fmt.Fprintf(os.Stderr, "%s\n\n", desc)
 		}
 		fmt.Fprintln(os.Stderr, pflag.CommandLine.FlagUsages())
 	}
@@ -179,7 +177,7 @@ func main() {
 			OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
 			OIDCCa:                 readCert(oidcCaFile),
 		}
-		//middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
+		// middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
 		p.Use(proxy.WithOIDC(oidcConfig))
 	}
 
@@ -221,7 +219,11 @@ func main() {
 	ms.Host = metricsHost
 	ms.Name = "metrics"
 	ms.Handler = promhttp.Handler()
-	go ms.Serve()
+	go func() {
+		if err := ms.Serve(); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// Setup opentracing
 	cfg := config.Configuration{
@@ -235,24 +237,25 @@ func main() {
 			BufferFlushInterval: 1 * time.Second,
 		},
 	}
+
+	//nolint:all
 	tracer, closer, err := cfg.New("multikube", config.Logger(jaeger.StdLogger))
 	if err != nil {
 		log.Fatal(err)
 	}
 	opentracing.SetGlobalTracer(tracer)
-	defer closer.Close()
+	defer func() { _ = closer.Close() }()
 
 	// Listen and serve!
 	err = s.Serve()
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }
 
 // Reads an x509 certificate from the filesystem and returns an instance of x509.Certiticate. Returns nil on errors
 func readCert(p string) *x509.Certificate {
-	signer, err := ioutil.ReadFile(p)
+	signer, err := os.ReadFile(p)
 	if err != nil {
 		return nil
 	}
@@ -266,7 +269,7 @@ func readCert(p string) *x509.Certificate {
 
 // Reads a RSA public key file from the filesystem and parses it into an instance of rsa.PublicKey
 func readPublicKey(p string) *rsa.PublicKey {
-	f, err := ioutil.ReadFile(p)
+	f, err := os.ReadFile(p)
 	if err != nil {
 		log.Fatal(err)
 		return nil

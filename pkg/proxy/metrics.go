@@ -122,5 +122,6 @@ func init() {
 		rs256ReqsAuthorized,
 		rs256ReqsUnauthorized,
 		cacheTTL,
+		cacheLen,
 	)
 }
