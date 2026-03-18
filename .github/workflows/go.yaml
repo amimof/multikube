@@ -1,0 +1,93 @@
+name: Go
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  license:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.1
+          cache: true
+
+      - name: Pre-download modules
+        run: go mod download
+      - name: License Report
+        run: make license-report
+      - name: License Check
+        run: make license-check
+
+  staticcheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.1
+          cache: true
+
+      - name: Lint
+        run: make lint
+      - name: Go Vet
+        run: make vet
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.1
+          cache: true
+
+      - name: Test
+        run: make test
+      - name: Race
+        run: make race
+      - name: Benchmark
+        run: make benchmark
+      - name: Coverage
+        run: make coverage
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: coverage-raw
+          path: ./test/coverage.out
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: coverage-html
+          path: ./test/coverage.html
+
+  build:
+    runs-on: ubuntu-24.04
+    if: github.head_ref != 'master'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.1
+          cache: true
+
+      - name: Compile Server
+        run: make server
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-artifacts
+          path: ./bin/*
