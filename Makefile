@@ -42,7 +42,7 @@ oci: ; $(info $(M) building container image) @ ## Build container image from Doc
 	$(RUNTIME) tag ghcr.io/amimof/multikube:${VERSION} ghcr.io/amimof/multikube:latest
 
 .PHONY: protos
-protos: $(API_SERVICES)/* ; $(info $(M) generating protos) @ ## Generate protos
+protos: ; $(info $(M) generating protos) @ ## Generate protos
 	buf generate
 
 # Tools

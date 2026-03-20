@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package config.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/amimof/multikube/api/config/v1;types";
+
+message Config {
+  string version = 1;
+  repeated Certificate certificates = 2;
+  repeated CertificateAuthority certificate_authorities = 3;
+  repeated Credential credentials = 4;
+  repeated Route routes = 5;
+  repeated Backend backends = 6;
+  Server server = 7;
+  Authentication auth = 8;
+  Metrics metrics = 9;
+  Cache cache = 10;
+}
+
+message Certificate {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  option (buf.validate.message).oneof = {
+    fields: [
+      "certificate",
+      "certificate_data"
+    ],
+    required: true
+  };
+  string certificate = 2;
+  string certificate_data = 3;
+  option (buf.validate.message).oneof = {
+    fields: [
+      "key",
+      "key_data"
+    ],
+    required: true
+  };
+  string key = 4;
+  string key_data = 5;
+}
+
+message CertificateAuthority {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  option (buf.validate.message).oneof = {
+    fields: [
+      "certificate",
+      "certificate_data"
+    ],
+    required: true
+  };
+  string certificate = 2;
+  string certificate_data = 3;
+}
+
+message Credential {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  option (buf.validate.message).oneof = {
+    fields: [
+      "client_certificate_ref",
+      "token",
+      "basic"
+    ],
+    required: true
+  };
+  string client_certificate_ref = 2;
+  string token = 3;
+  CredentialBasic basic = 4;
+}
+
+message CredentialBasic {
+  string username = 1 [(buf.validate.field).string.min_len = 1];
+  string password = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message Backend {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  string server = 2 [(buf.validate.field).string.min_len = 1];
+  string ca_ref = 3;
+  string auth_ref = 4;
+  bool insecure_skip_tls_verify = 5;
+  google.protobuf.Duration cache_ttl = 6;
+}
+
+message Route {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  Match match = 2;
+  string backend_ref = 3 [(buf.validate.field).string.min_len = 1];
+}
+
+message Match {
+  string sni = 1;
+  HeaderMatch header = 2;
+  string path_prefix = 3;
+  JWTMatch jwt = 4;
+}
+
+message HeaderMatch {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  string value = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message JWTMatch {
+  string claim = 1 [(buf.validate.field).string.min_len = 1];
+  string value = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message Server {
+  repeated Listener listeners = 1 [(buf.validate.field).repeated.min_items = 1];
+  uint64 max_header_size = 2;
+  google.protobuf.Duration read_timeout = 3;
+  google.protobuf.Duration write_timeout = 4;
+  google.protobuf.Duration keep_alive = 5;
+  google.protobuf.Duration shutdown_grace_period = 6;
+}
+
+message Listener {
+  string protocol = 1 [(buf.validate.field).string = {in: ["http", "https", "unix"]}];
+  string address = 2;
+  int32 port = 3;
+  string socket_path = 4;
+  ListenerTLS tls = 5;
+}
+
+message ListenerTLS {
+  repeated string certificate_refs = 1 [(buf.validate.field).repeated.min_items = 1];
+  string client_auth = 2 [(buf.validate.field).string = {in: ["", "none", "request", "require"]}];
+  string client_ca_ref = 3;
+  string min_version = 4 [(buf.validate.field).string = {in: ["", "1.0", "1.1", "1.2", "1.3"]}];
+}
+
+message Authentication {
+  JWTAuth jwt_auth = 1;
+}
+
+message JWTAuth {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "rs256",
+      "oidc"
+    ],
+    required: true
+  };
+  RS256Auth rs256 = 1;
+  OIDCAuth oidc = 2;
+}
+
+message RS256Auth {
+  string public_key = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message OIDCAuth {
+  string issuer_url = 1 [(buf.validate.field).string.min_len = 1];
+  string username_claim = 2;
+  string ca_file = 3;
+  google.protobuf.Duration poll_interval = 4;
+  bool insecure_skip_tls_verify = 5;
+}
+
+message Metrics {
+  string address = 1;
+  int32 port = 2;
+}
+
+message Cache {
+  google.protobuf.Duration ttl = 1;
+}
