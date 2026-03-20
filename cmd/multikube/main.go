@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SermoDigital/jose/crypto"
+	mkconfig "github.com/amimof/multikube/pkg/config"
 	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/opentracing/opentracing-go"
@@ -62,6 +63,7 @@ var (
 	tlsCACertificate       string
 
 	rs256PublicKey string
+	configPath     string
 	kubeconfigPath string
 	cacheTTL       time.Duration
 )
@@ -74,6 +76,7 @@ func init() {
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
 	pflag.StringVar(&rs256PublicKey, "rs256-public-key", "", "the RS256 public key used to validate the signature of client JWT's")
+	pflag.StringVar(&configPath, "config", "/etc/multikube/config.yaml", "path to the multikube configuration file")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
 	pflag.StringVar(&metricsHost, "metrics-host", "localhost", "The host address on which to listen for the --metrics-port port")
 	pflag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
@@ -148,6 +151,22 @@ func main() {
 		log.Fatalf("Both flags `--rs256-public-key` and `--oidc-issue-url` cannot be set")
 	}
 
+	// Load multikube configuration file if provided
+	var mkCfg *mkconfig.RuntimeConfig
+	if configPath != "" {
+		extCfg, err := mkconfig.LoadFromFile(configPath)
+		if err != nil {
+			log.Printf("Warning: could not load config file %s: %v", configPath, err)
+		} else {
+			rtCfg, err := mkconfig.Convert(extCfg)
+			if err != nil {
+				log.Fatalf("Invalid configuration in %s: %v", configPath, err)
+			}
+			log.Printf("Loaded configuration from %s (%d backends, %d routes)", configPath, len(rtCfg.Backends), len(rtCfg.Routes))
+			mkCfg = rtCfg
+		}
+	}
+
 	// Read provided kubeconfig file
 	c, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
@@ -190,27 +209,38 @@ func main() {
 	}
 
 	// Create the server
-	s := &server.Server{
-		EnabledListeners:  enabledListeners,
-		CleanupTimeout:    cleanupTimeout,
-		MaxHeaderSize:     maxHeaderSize,
-		SocketPath:        socketPath,
-		Host:              host,
-		Port:              port,
-		ListenLimit:       listenLimit,
-		KeepAlive:         keepAlive,
-		ReadTimeout:       readTimeout,
-		WriteTimeout:      writeTimeout,
-		TLSHost:           tlsHost,
-		TLSPort:           tlsPort,
-		TLSCertificate:    tlsCertificate,
-		TLSCertificateKey: tlsCertificateKey,
-		TLSCACertificate:  tlsCACertificate,
-		TLSListenLimit:    tlsListenLimit,
-		TLSKeepAlive:      tlsKeepAlive,
-		TLSReadTimeout:    tlsReadTimeout,
-		TLSWriteTimeout:   tlsWriteTimeout,
-		Handler:           p.Chain(),
+	var s *server.Server
+	if mkCfg != nil {
+		// Build server from config file.
+		var err error
+		s, err = server.NewServerFromConfig(mkCfg, p.Chain())
+		if err != nil {
+			log.Fatalf("Failed to create server from config: %v", err)
+		}
+	} else {
+		// Fall back to CLI flags.
+		s = &server.Server{
+			EnabledListeners:  enabledListeners,
+			CleanupTimeout:    cleanupTimeout,
+			MaxHeaderSize:     maxHeaderSize,
+			SocketPath:        socketPath,
+			Host:              host,
+			Port:              port,
+			ListenLimit:       listenLimit,
+			KeepAlive:         keepAlive,
+			ReadTimeout:       readTimeout,
+			WriteTimeout:      writeTimeout,
+			TLSHost:           tlsHost,
+			TLSPort:           tlsPort,
+			TLSCertificate:    tlsCertificate,
+			TLSCertificateKey: tlsCertificateKey,
+			TLSCACertificate:  tlsCACertificate,
+			TLSListenLimit:    tlsListenLimit,
+			TLSKeepAlive:      tlsKeepAlive,
+			TLSReadTimeout:    tlsReadTimeout,
+			TLSWriteTimeout:   tlsWriteTimeout,
+			Handler:           p.Chain(),
+		}
 	}
 
 	// Metrics server

@@ -1,0 +1,5 @@
+version: v1
+name: buf.build/amimof/multikube
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate

@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -34,6 +35,7 @@ type Server struct {
 	TLSCertificate    string
 	TLSCertificateKey string
 	TLSCACertificate  string
+	TLSConfig         *tls.Config
 	SocketPath        string
 	Name              string
 	KeepAlive         time.Duration
@@ -88,12 +90,7 @@ func NewServerTLS() *Server {
 }
 
 func (s *Server) hasScheme(scheme string) bool {
-	for _, v := range s.EnabledListeners {
-		if v == scheme {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.EnabledListeners, scheme)
 }
 
 // Listen configures server listeners
@@ -254,57 +251,63 @@ func (s *Server) Serve() error {
 
 		httpsServer.Handler = s.Handler
 
-		// Inspired by https://blog.bracebin.com/achieving-perfect-ssl-labs-score-with-go
-		httpsServer.TLSConfig = &tls.Config{
-			// Causes servers to use Go's default ciphersuite preferences,
-			// which are tuned to avoid attacks. Does nothing on clients.
-			PreferServerCipherSuites: true,
-			// Only use curves which have assembly implementations
-			// https://github.com/golang/go/tree/master/src/crypto/elliptic
-			CurvePreferences: []tls.CurveID{tls.CurveP256},
-			// Use modern tls mode https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
-			NextProtos: []string{"h2", "http/1.1"},
-			// https://www.owasp.org/index.php/Transport_Layer_Protection_Cheat_Sheet#Rule_-_Only_Support_Strong_Protocols
-			MinVersion: tls.VersionTLS12,
-			// These ciphersuites support Forward Secrecy: https://en.wikipedia.org/wiki/Forward_secrecy
-			CipherSuites: []uint16{
-				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			},
-			ClientAuth: tls.RequestClientCert,
-		}
-
-		if s.TLSCertificate != "" && s.TLSCertificateKey != "" {
-			httpsServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
-			cert, err := tls.LoadX509KeyPair(s.TLSCertificate, s.TLSCertificateKey)
-			if err != nil {
-				return err
+		if s.TLSConfig != nil {
+			// Use pre-built TLS configuration (from config file).
+			httpsServer.TLSConfig = s.TLSConfig
+		} else {
+			// Build TLS configuration from individual fields (CLI flags).
+			// Inspired by https://blog.bracebin.com/achieving-perfect-ssl-labs-score-with-go
+			httpsServer.TLSConfig = &tls.Config{
+				// Causes servers to use Go's default ciphersuite preferences,
+				// which are tuned to avoid attacks. Does nothing on clients.
+				PreferServerCipherSuites: true,
+				// Only use curves which have assembly implementations
+				// https://github.com/golang/go/tree/master/src/crypto/elliptic
+				CurvePreferences: []tls.CurveID{tls.CurveP256},
+				// Use modern tls mode https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
+				NextProtos: []string{"h2", "http/1.1"},
+				// https://www.owasp.org/index.php/Transport_Layer_Protection_Cheat_Sheet#Rule_-_Only_Support_Strong_Protocols
+				MinVersion: tls.VersionTLS12,
+				// These ciphersuites support Forward Secrecy: https://en.wikipedia.org/wiki/Forward_secrecy
+				CipherSuites: []uint16{
+					tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+					tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+					tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+				},
+				ClientAuth: tls.RequestClientCert,
 			}
-			httpsServer.TLSConfig.Certificates[0] = cert
-		}
 
-		if s.TLSCACertificate != "" {
-			caCert, err := os.ReadFile(s.TLSCACertificate)
-			if err != nil {
-				return err
-			}
-			caCertPool := x509.NewCertPool()
-			caCertPool.AppendCertsFromPEM(caCert)
-			httpsServer.TLSConfig.ClientCAs = caCertPool
-			httpsServer.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		}
-
-		if len(httpsServer.TLSConfig.Certificates) == 0 {
-			if s.TLSCertificate == "" {
-				if s.TLSCertificateKey == "" {
-					log.Fatalf("the required flags `--tls-certificate` and `--tls-key` were not specified")
+			if s.TLSCertificate != "" && s.TLSCertificateKey != "" {
+				httpsServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+				cert, err := tls.LoadX509KeyPair(s.TLSCertificate, s.TLSCertificateKey)
+				if err != nil {
+					return err
 				}
-				log.Printf("the required flag `--tls-certificate` was not specified")
+				httpsServer.TLSConfig.Certificates[0] = cert
 			}
-			if s.TLSCertificateKey == "" {
-				log.Fatalf("the required flag `--tls-key` was not specified")
+
+			if s.TLSCACertificate != "" {
+				caCert, err := os.ReadFile(s.TLSCACertificate)
+				if err != nil {
+					return err
+				}
+				caCertPool := x509.NewCertPool()
+				caCertPool.AppendCertsFromPEM(caCert)
+				httpsServer.TLSConfig.ClientCAs = caCertPool
+				httpsServer.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			}
+
+			if len(httpsServer.TLSConfig.Certificates) == 0 {
+				if s.TLSCertificate == "" {
+					if s.TLSCertificateKey == "" {
+						log.Fatalf("the required flags `--tls-certificate` and `--tls-key` were not specified")
+					}
+					log.Printf("the required flag `--tls-certificate` was not specified")
+				}
+				if s.TLSCertificateKey == "" {
+					log.Fatalf("the required flag `--tls-key` was not specified")
+				}
 			}
 		}
 
