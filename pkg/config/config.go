@@ -346,18 +346,18 @@ func convertMatch(m *types.Match) *Match {
 
 func convertServer(s *types.Server, certs []Certificate, cas []CertificateAuthority) (ServerConfig, error) {
 	sc := ServerConfig{
-		MaxHeaderSize: s.MaxHeaderSize,
+		MaxHeaderSize: s.GetMaxHeaderSize(),
 	}
-	if s.ReadTimeout != nil {
+	if s.GetReadTimeout() != nil {
 		sc.ReadTimeout = s.ReadTimeout.AsDuration()
 	}
-	if s.WriteTimeout != nil {
+	if s.GetWriteTimeout() != nil {
 		sc.WriteTimeout = s.WriteTimeout.AsDuration()
 	}
-	if s.KeepAlive != nil {
+	if s.GetKeepAlive() != nil {
 		sc.KeepAlive = s.KeepAlive.AsDuration()
 	}
-	if s.ShutdownGracePeriod != nil {
+	if s.GetShutdownGracePeriod() != nil {
 		sc.ShutdownGracePeriod = s.ShutdownGracePeriod.AsDuration()
 	}
 
@@ -371,7 +371,7 @@ func convertServer(s *types.Server, certs []Certificate, cas []CertificateAuthor
 		caByName[ca.Name] = i
 	}
 
-	for i, l := range s.Listeners {
+	for i, l := range s.GetListeners() {
 		rl := Listener{
 			Protocol:   l.Protocol,
 			Address:    l.Address,
