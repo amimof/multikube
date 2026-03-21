@@ -77,39 +77,11 @@ var noopHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) 
 
 // --- Tests ---
 
-func TestNewServerFromConfig_HTTPOnly(t *testing.T) {
-	cfg := &config.RuntimeConfig{
-		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{Protocol: "http", Address: "0.0.0.0", Port: 9090},
-			},
-			MaxHeaderSize:       2000000,
-			ReadTimeout:         15 * time.Second,
-			WriteTimeout:        20 * time.Second,
-			KeepAlive:           1 * time.Minute,
-			ShutdownGracePeriod: 5 * time.Second,
-		},
-	}
-
-	s, err := NewServerFromConfig(cfg, noopHandler)
-	require.NoError(t, err)
-
-	assert.Equal(t, []string{"http"}, s.EnabledListeners)
-	assert.Equal(t, "0.0.0.0", s.Host)
-	assert.Equal(t, 9090, s.Port)
-	assert.Equal(t, uint64(2000000), s.MaxHeaderSize)
-	assert.Equal(t, 15*time.Second, s.ReadTimeout)
-	assert.Equal(t, 20*time.Second, s.WriteTimeout)
-	assert.Equal(t, 1*time.Minute, s.KeepAlive)
-	assert.Equal(t, 5*time.Second, s.CleanupTimeout)
-	assert.Nil(t, s.TLSConfig)
-}
-
 func TestNewServerFromConfig_UnixOnly(t *testing.T) {
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{Protocol: "unix", SocketPath: "/tmp/test.sock"},
+			Unix: &config.UnixListenerConfig{
+				Path: "/tmp/test.sock",
 			},
 		},
 	}
@@ -126,16 +98,12 @@ func TestNewServerFromConfig_HTTPSWithCerts(t *testing.T) {
 
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{
-					Protocol: "https",
-					Address:  "0.0.0.0",
-					Port:     8443,
-					TLS: &config.ListenerTLS{
-						Certificates: []tls.Certificate{tlsCert},
-						ClientAuth:   tls.NoClientCert,
-						MinVersion:   tls.VersionTLS12,
-					},
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: "0.0.0.0:8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{tlsCert},
+					ClientAuth:   tls.NoClientCert,
+					MinVersion:   tls.VersionTLS12,
 				},
 			},
 			ReadTimeout:  10 * time.Second,
@@ -159,11 +127,6 @@ func TestNewServerFromConfig_HTTPSWithCerts(t *testing.T) {
 	assert.Equal(t, uint16(tls.VersionTLS12), s.TLSConfig.MinVersion)
 	assert.Equal(t, tls.NoClientCert, s.TLSConfig.ClientAuth)
 	assert.Nil(t, s.TLSConfig.ClientCAs)
-
-	// File path fields should be empty (config-based path).
-	assert.Empty(t, s.TLSCertificate)
-	assert.Empty(t, s.TLSCertificateKey)
-	assert.Empty(t, s.TLSCACertificate)
 }
 
 func TestNewServerFromConfig_HTTPSWithMultipleCerts(t *testing.T) {
@@ -172,15 +135,11 @@ func TestNewServerFromConfig_HTTPSWithMultipleCerts(t *testing.T) {
 
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{
-					Protocol: "https",
-					Address:  "0.0.0.0",
-					Port:     8443,
-					TLS: &config.ListenerTLS{
-						Certificates: []tls.Certificate{cert1, cert2},
-						MinVersion:   tls.VersionTLS12,
-					},
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: "0.0.0.0:8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{cert1, cert2},
+					MinVersion:   tls.VersionTLS12,
 				},
 			},
 		},
@@ -199,17 +158,13 @@ func TestNewServerFromConfig_HTTPSWithClientAuth(t *testing.T) {
 
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{
-					Protocol: "https",
-					Address:  "0.0.0.0",
-					Port:     8443,
-					TLS: &config.ListenerTLS{
-						Certificates: []tls.Certificate{tlsCert},
-						ClientAuth:   tls.RequireAndVerifyClientCert,
-						ClientCA:     caPool,
-						MinVersion:   tls.VersionTLS12,
-					},
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: "0.0.0.0:8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{tlsCert},
+					ClientAuth:   tls.RequireAndVerifyClientCert,
+					ClientCA:     caPool,
+					MinVersion:   tls.VersionTLS12,
 				},
 			},
 		},
@@ -228,16 +183,12 @@ func TestNewServerFromConfig_HTTPSClientAuthRequest(t *testing.T) {
 
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{
-					Protocol: "https",
-					Address:  "0.0.0.0",
-					Port:     8443,
-					TLS: &config.ListenerTLS{
-						Certificates: []tls.Certificate{tlsCert},
-						ClientAuth:   tls.RequestClientCert,
-						MinVersion:   tls.VersionTLS12,
-					},
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: "0.0.0.0:8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{tlsCert},
+					ClientAuth:   tls.RequestClientCert,
+					MinVersion:   tls.VersionTLS12,
 				},
 			},
 		},
@@ -255,18 +206,15 @@ func TestNewServerFromConfig_AllProtocols(t *testing.T) {
 
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{
-					Protocol: "https",
-					Address:  "0.0.0.0",
-					Port:     8443,
-					TLS: &config.ListenerTLS{
-						Certificates: []tls.Certificate{tlsCert},
-						MinVersion:   tls.VersionTLS12,
-					},
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: "0.0.0.0:8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{tlsCert},
+					MinVersion:   tls.VersionTLS12,
 				},
-				{Protocol: "http", Address: "0.0.0.0", Port: 8080},
-				{Protocol: "unix", SocketPath: "/tmp/mk.sock"},
+			},
+			Unix: &config.UnixListenerConfig{
+				Path: "/tmp/mk.sock",
 			},
 			ReadTimeout:         5 * time.Second,
 			WriteTimeout:        5 * time.Second,
@@ -278,9 +226,7 @@ func TestNewServerFromConfig_AllProtocols(t *testing.T) {
 	s, err := NewServerFromConfig(cfg, noopHandler)
 	require.NoError(t, err)
 
-	assert.Equal(t, []string{"https", "http", "unix"}, s.EnabledListeners)
-	assert.Equal(t, "0.0.0.0", s.Host)
-	assert.Equal(t, 8080, s.Port)
+	assert.Equal(t, []string{"https", "unix"}, s.EnabledListeners)
 	assert.Equal(t, "0.0.0.0", s.TLSHost)
 	assert.Equal(t, 8443, s.TLSPort)
 	assert.Equal(t, "/tmp/mk.sock", s.SocketPath)
@@ -304,15 +250,11 @@ func TestNewServerFromConfig_TLSMinVersions(t *testing.T) {
 
 			cfg := &config.RuntimeConfig{
 				Server: config.ServerConfig{
-					Listeners: []config.Listener{
-						{
-							Protocol: "https",
-							Address:  "0.0.0.0",
-							Port:     8443,
-							TLS: &config.ListenerTLS{
-								Certificates: []tls.Certificate{tlsCert},
-								MinVersion:   tt.version,
-							},
+					HTTPS: &config.HTTPSListenerConfig{
+						Address: "0.0.0.0:8443",
+						TLS: &config.ListenerTLS{
+							Certificates: []tls.Certificate{tlsCert},
+							MinVersion:   tt.version,
 						},
 					},
 				},
@@ -327,10 +269,16 @@ func TestNewServerFromConfig_TLSMinVersions(t *testing.T) {
 }
 
 func TestNewServerFromConfig_Defaults(t *testing.T) {
+	tlsCert := generateTestCert(t)
+
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{Protocol: "http", Address: "127.0.0.1", Port: 8080},
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: "127.0.0.1:8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{tlsCert},
+					MinVersion:   tls.VersionTLS12,
+				},
 			},
 			// All timeouts left at zero — should get defaults.
 		},
@@ -341,24 +289,9 @@ func TestNewServerFromConfig_Defaults(t *testing.T) {
 
 	assert.Equal(t, uint64(1000000), s.MaxHeaderSize)
 	assert.Equal(t, 10*time.Second, s.CleanupTimeout)
-	assert.Equal(t, 3*time.Minute, s.KeepAlive)
-	assert.Equal(t, 30*time.Second, s.ReadTimeout)
-	assert.Equal(t, 30*time.Second, s.WriteTimeout)
-}
-
-func TestNewServerFromConfig_DuplicateProtocolError(t *testing.T) {
-	cfg := &config.RuntimeConfig{
-		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{Protocol: "http", Address: "0.0.0.0", Port: 8080},
-				{Protocol: "http", Address: "0.0.0.0", Port: 9090},
-			},
-		},
-	}
-
-	_, err := NewServerFromConfig(cfg, noopHandler)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `duplicate protocol "http"`)
+	assert.Equal(t, 3*time.Minute, s.TLSKeepAlive)
+	assert.Equal(t, 30*time.Second, s.TLSReadTimeout)
+	assert.Equal(t, 30*time.Second, s.TLSWriteTimeout)
 }
 
 func TestNewServerFromConfig_HandlerIsSet(t *testing.T) {
@@ -367,10 +300,16 @@ func TestNewServerFromConfig_HandlerIsSet(t *testing.T) {
 		called = true
 	})
 
+	tlsCert := generateTestCert(t)
+
 	cfg := &config.RuntimeConfig{
 		Server: config.ServerConfig{
-			Listeners: []config.Listener{
-				{Protocol: "http", Address: "127.0.0.1", Port: 8080},
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: "127.0.0.1:8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{tlsCert},
+					MinVersion:   tls.VersionTLS12,
+				},
 			},
 		},
 	}
@@ -382,4 +321,26 @@ func TestNewServerFromConfig_HandlerIsSet(t *testing.T) {
 	// Verify it's the same handler.
 	s.Handler.ServeHTTP(nil, nil)
 	assert.True(t, called)
+}
+
+func TestNewServerFromConfig_BarePort(t *testing.T) {
+	tlsCert := generateTestCert(t)
+
+	cfg := &config.RuntimeConfig{
+		Server: config.ServerConfig{
+			HTTPS: &config.HTTPSListenerConfig{
+				Address: ":8443",
+				TLS: &config.ListenerTLS{
+					Certificates: []tls.Certificate{tlsCert},
+					MinVersion:   tls.VersionTLS12,
+				},
+			},
+		},
+	}
+
+	s, err := NewServerFromConfig(cfg, noopHandler)
+	require.NoError(t, err)
+
+	assert.Equal(t, "", s.TLSHost)
+	assert.Equal(t, 8443, s.TLSPort)
 }

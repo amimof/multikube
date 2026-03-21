@@ -36,6 +36,8 @@ type Proxy struct {
 func New(c *api.Config) (*Proxy, error) {
 	transports := make(map[string]http.RoundTripper)
 
+	fmt.Print(c.AuthInfos["utbildning-dev"].Token)
+
 	for ctxKey := range c.Contexts {
 		cluster := getClusterByContextName(c, ctxKey)
 		auth := getAuthByContextName(c, ctxKey)
@@ -115,6 +117,16 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if cluster == nil {
 		http.Error(w, fmt.Sprintf("no route: cluster not found for '%s'", ctx), http.StatusBadGateway)
 		return
+	}
+
+	auth := getAuthByContextName(p.kubeConfig, ctx)
+	if auth != nil && auth.Token != "" {
+		r.Header.Set("Authorization", "Bearer "+auth.Token)
+	} else if auth != nil && auth.Username != "" {
+		r.SetBasicAuth(auth.Username, auth.Password)
+	} else {
+		// mTLS-only backend: no token/basic auth; TLS client cert is in the Transport.
+		r.Header.Del("Authorization")
 	}
 
 	// Create an instance of golang reverse proxy and attach our own transport to it

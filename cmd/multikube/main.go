@@ -161,14 +161,14 @@ func main() {
 		extCfg, err = mkconfig.LoadFromFile(configPath)
 		if err != nil {
 			log.Printf("Warning: could not load config file %s: %v", configPath, err)
-		} else {
-			rtCfg, err := mkconfig.Convert(extCfg)
-			if err != nil {
-				log.Fatalf("Invalid configuration in %s: %v", configPath, err)
-			}
-			log.Printf("Loaded configuration from %s (%d backends, %d routes)", configPath, len(rtCfg.Backends), len(rtCfg.Routes))
-			mkCfg = rtCfg
+			os.Exit(1)
 		}
+		rtCfg, err := mkconfig.Convert(extCfg)
+		if err != nil {
+			log.Fatalf("Invalid configuration in %s: %v", configPath, err)
+		}
+		log.Printf("Loaded configuration from %s (%d backends, %d routes)", configPath, len(rtCfg.Backends), len(rtCfg.Routes))
+		mkCfg = rtCfg
 	}
 
 	b := bytes.NewBuffer(nil)
@@ -210,10 +210,17 @@ func main() {
 		p.Use(proxy.WithOIDC(oidcConfig))
 	}
 
-	// // Add x509 public key validation middleware if cert provided on cmd line
+	// // Add RS256 public key validation middleware if public key provided
 	if rs256PublicKey != "" {
 		rs256Config := proxy.RS256Config{
 			PublicKey: readPublicKey(rs256PublicKey),
+		}
+		p.Use(proxy.WithRS256(rs256Config))
+	}
+
+	if mkCfg.Auth.JWT.RS256.PublicKey != "" {
+		rs256Config := proxy.RS256Config{
+			PublicKey: readPublicKey(mkCfg.Auth.JWT.RS256.PublicKey),
 		}
 		p.Use(proxy.WithRS256(rs256Config))
 	}
@@ -230,26 +237,27 @@ func main() {
 	} else {
 		// Fall back to CLI flags.
 		s = &server.Server{
-			EnabledListeners:  enabledListeners,
-			CleanupTimeout:    cleanupTimeout,
-			MaxHeaderSize:     maxHeaderSize,
-			SocketPath:        socketPath,
-			Host:              host,
-			Port:              port,
-			ListenLimit:       listenLimit,
-			KeepAlive:         keepAlive,
-			ReadTimeout:       readTimeout,
-			WriteTimeout:      writeTimeout,
-			TLSHost:           tlsHost,
-			TLSPort:           tlsPort,
-			TLSCertificate:    tlsCertificate,
-			TLSCertificateKey: tlsCertificateKey,
-			TLSCACertificate:  tlsCACertificate,
-			TLSListenLimit:    tlsListenLimit,
-			TLSKeepAlive:      tlsKeepAlive,
-			TLSReadTimeout:    tlsReadTimeout,
-			TLSWriteTimeout:   tlsWriteTimeout,
-			Handler:           p.Chain(),
+			EnabledListeners: enabledListeners,
+			CleanupTimeout:   cleanupTimeout,
+			MaxHeaderSize:    maxHeaderSize,
+			SocketPath:       socketPath,
+			Host:             host,
+			Port:             port,
+			ListenLimit:      listenLimit,
+			KeepAlive:        keepAlive,
+			ReadTimeout:      readTimeout,
+			WriteTimeout:     writeTimeout,
+			// TLSConfig:        tlsConfig,
+			TLSHost: tlsHost,
+			TLSPort: tlsPort,
+			// TLSCertificate:    cert,
+			// TLSCertificateKey: tlsCertificateKey,
+			// TLSCACertificate:  tlsCACertificate,
+			TLSListenLimit:  tlsListenLimit,
+			TLSKeepAlive:    tlsKeepAlive,
+			TLSReadTimeout:  tlsReadTimeout,
+			TLSWriteTimeout: tlsWriteTimeout,
+			Handler:         p.Chain(),
 		}
 	}
 
@@ -316,6 +324,7 @@ func readPublicKey(p string) *rsa.PublicKey {
 	}
 	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
 	if err != nil {
+		log.Fatal(err)
 		return nil
 	}
 	return pubkey

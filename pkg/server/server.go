@@ -2,11 +2,9 @@ package server
 
 import (
 	"crypto/tls"
-	"crypto/x509"
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"slices"
 	"strconv"
 	"sync"
@@ -25,28 +23,28 @@ const (
 
 // Server for the multikube API
 type Server struct {
-	EnabledListeners  []string
-	Host              string
-	Port              int
-	ListenLimit       int
-	TLSHost           string
-	TLSPort           int
-	TLSListenLimit    int
-	TLSCertificate    string
-	TLSCertificateKey string
-	TLSCACertificate  string
-	TLSConfig         *tls.Config
-	SocketPath        string
-	Name              string
-	KeepAlive         time.Duration
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	TLSKeepAlive      time.Duration
-	TLSReadTimeout    time.Duration
-	TLSWriteTimeout   time.Duration
-	CleanupTimeout    time.Duration
-	MaxHeaderSize     uint64
-	Handler           http.Handler
+	EnabledListeners []string
+	Host             string
+	Port             int
+	ListenLimit      int
+	TLSHost          string
+	TLSPort          int
+	TLSListenLimit   int
+	// TLSCertificate    string
+	// TLSCertificateKey string
+	// TLSCACertificate  string
+	TLSConfig       *tls.Config
+	SocketPath      string
+	Name            string
+	KeepAlive       time.Duration
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
+	TLSKeepAlive    time.Duration
+	TLSReadTimeout  time.Duration
+	TLSWriteTimeout time.Duration
+	CleanupTimeout  time.Duration
+	MaxHeaderSize   uint64
+	Handler         http.Handler
 
 	shutdown      chan struct{}
 	httpServerL   net.Listener
@@ -74,18 +72,18 @@ func NewServer() *Server {
 // NewServerTLS returns a default TLS enabled server
 func NewServerTLS() *Server {
 	return &Server{
-		EnabledListeners:  []string{"https"},
-		CleanupTimeout:    10 * time.Second,
-		MaxHeaderSize:     1000000,
-		TLSHost:           "127.0.0.1",
-		TLSPort:           8443,
-		TLSCertificate:    "",
-		TLSCertificateKey: "",
-		TLSCACertificate:  "",
-		TLSListenLimit:    0,
-		TLSKeepAlive:      3 * time.Minute,
-		TLSReadTimeout:    30 * time.Second,
-		TLSWriteTimeout:   30 * time.Second,
+		EnabledListeners: []string{"https"},
+		CleanupTimeout:   10 * time.Second,
+		MaxHeaderSize:    1000000,
+		TLSHost:          "127.0.0.1",
+		TLSPort:          8443,
+		// TLSCertificate:    "",
+		// TLSCertificateKey: "",
+		// TLSCACertificate:  "",
+		TLSListenLimit:  0,
+		TLSKeepAlive:    3 * time.Minute,
+		TLSReadTimeout:  30 * time.Second,
+		TLSWriteTimeout: 30 * time.Second,
 	}
 }
 
@@ -278,37 +276,37 @@ func (s *Server) Serve() error {
 				ClientAuth: tls.RequestClientCert,
 			}
 
-			if s.TLSCertificate != "" && s.TLSCertificateKey != "" {
-				httpsServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
-				cert, err := tls.LoadX509KeyPair(s.TLSCertificate, s.TLSCertificateKey)
-				if err != nil {
-					return err
-				}
-				httpsServer.TLSConfig.Certificates[0] = cert
-			}
-
-			if s.TLSCACertificate != "" {
-				caCert, err := os.ReadFile(s.TLSCACertificate)
-				if err != nil {
-					return err
-				}
-				caCertPool := x509.NewCertPool()
-				caCertPool.AppendCertsFromPEM(caCert)
-				httpsServer.TLSConfig.ClientCAs = caCertPool
-				httpsServer.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
-			}
-
-			if len(httpsServer.TLSConfig.Certificates) == 0 {
-				if s.TLSCertificate == "" {
-					if s.TLSCertificateKey == "" {
-						log.Fatalf("the required flags `--tls-certificate` and `--tls-key` were not specified")
-					}
-					log.Printf("the required flag `--tls-certificate` was not specified")
-				}
-				if s.TLSCertificateKey == "" {
-					log.Fatalf("the required flag `--tls-key` was not specified")
-				}
-			}
+			// if s.TLSCertificate != "" && s.TLSCertificateKey != "" {
+			// 	httpsServer.TLSConfig.Certificates = make([]tls.Certificate, 1)
+			// 	cert, err := tls.LoadX509KeyPair(s.TLSCertificate, s.TLSCertificateKey)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// 	httpsServer.TLSConfig.Certificates[0] = cert
+			// }
+			//
+			// if s.TLSCACertificate != "" {
+			// 	caCert, err := os.ReadFile(s.TLSCACertificate)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// 	caCertPool := x509.NewCertPool()
+			// 	caCertPool.AppendCertsFromPEM(caCert)
+			// 	httpsServer.TLSConfig.ClientCAs = caCertPool
+			// 	httpsServer.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			// }
+			//
+			// if len(httpsServer.TLSConfig.Certificates) == 0 {
+			// 	if s.TLSCertificate == "" {
+			// 		if s.TLSCertificateKey == "" {
+			// 			log.Fatalf("the required flags `--tls-certificate` and `--tls-key` were not specified")
+			// 		}
+			// 		log.Printf("the required flag `--tls-certificate` was not specified")
+			// 	}
+			// 	if s.TLSCertificateKey == "" {
+			// 		log.Fatalf("the required flag `--tls-key` was not specified")
+			// 	}
+			// }
 		}
 
 		wg.Add(2)
