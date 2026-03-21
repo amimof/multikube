@@ -109,7 +109,7 @@ license-report: | $(GOLICENSES) ## Analyzes go dependencies and prints the resul
 .PHONY: license-check
 license-check: | $(GOLICENSES) ## Checks whether licenses for a package are not allowed
 	@echo "$(M) running license check"
-	$Q $(GOLICENSES) check ./... --allowed_licenses="Unlicense,MPL-2.0,BSD-2-Clause,BSD-3-Clause,MIT,Apache-2.0"
+	$Q $(GOLICENSES) check ./... --allowed_licenses="Unlicense,ISC,MPL-2.0,BSD-2-Clause,BSD-3-Clause,MIT,Apache-2.0"
 
 .PHONY: license
 license: ## Runs license-check, license-report and license-save
