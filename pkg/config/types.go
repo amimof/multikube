@@ -19,7 +19,6 @@ type RuntimeConfig struct {
 	Routes                 []Route
 	Server                 ServerConfig
 	Auth                   *AuthConfig
-	Metrics                *MetricsConfig
 	Cache                  *CacheConfig
 }
 
@@ -85,7 +84,9 @@ type JWTMatch struct {
 
 // ServerConfig holds server listener and timeout configuration.
 type ServerConfig struct {
-	Listeners           []Listener
+	HTTPS               *HTTPSListenerConfig
+	Unix                *UnixListenerConfig
+	Metrics             *MetricsListenerConfig
 	MaxHeaderSize       uint64
 	ReadTimeout         time.Duration
 	WriteTimeout        time.Duration
@@ -93,21 +94,28 @@ type ServerConfig struct {
 	ShutdownGracePeriod time.Duration
 }
 
-// Listener defines a single network listener.
-type Listener struct {
-	Protocol   string
-	Address    string
-	Port       int
-	SocketPath string
-	TLS        *ListenerTLS
+// HTTPSListenerConfig holds the resolved HTTPS listener configuration.
+type HTTPSListenerConfig struct {
+	Address string
+	TLS     *ListenerTLS
 }
 
-// ListenerTLS holds fully-resolved TLS configuration for a listener.
+// ListenerTLS holds fully-resolved TLS configuration for the HTTPS listener.
 type ListenerTLS struct {
-	Certificates []tls.Certificate  // resolved from certificate_refs
+	Certificates []tls.Certificate  // loaded from cert/cert_data
 	ClientAuth   tls.ClientAuthType // parsed from string
-	ClientCA     *x509.CertPool     // resolved from client_ca_ref
+	ClientCA     *x509.CertPool     // loaded from ca/ca_data
 	MinVersion   uint16             // parsed TLS version constant
+}
+
+// UnixListenerConfig holds the resolved Unix socket listener configuration.
+type UnixListenerConfig struct {
+	Path string
+}
+
+// MetricsListenerConfig holds the resolved metrics endpoint configuration.
+type MetricsListenerConfig struct {
+	Address string
 }
 
 // AuthConfig holds authentication configuration.
@@ -134,12 +142,6 @@ type OIDCAuthConfig struct {
 	CAFile                string
 	PollInterval          time.Duration
 	InsecureSkipTLSVerify bool
-}
-
-// MetricsConfig holds Prometheus metrics endpoint configuration.
-type MetricsConfig struct {
-	Address string
-	Port    int
 }
 
 // CacheConfig holds cache configuration.

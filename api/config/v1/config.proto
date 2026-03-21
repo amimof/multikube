@@ -16,7 +16,6 @@ message Config {
   repeated Backend backends = 6;
   Server server = 7;
   Authentication auth = 8;
-  Metrics metrics = 9;
   Cache cache = 10;
 }
 
@@ -108,27 +107,40 @@ message JWTMatch {
 }
 
 message Server {
-  repeated Listener listeners = 1 [(buf.validate.field).repeated.min_items = 1];
-  uint64 max_header_size = 2;
-  google.protobuf.Duration read_timeout = 3;
-  google.protobuf.Duration write_timeout = 4;
-  google.protobuf.Duration keep_alive = 5;
-  google.protobuf.Duration shutdown_grace_period = 6;
+  HTTPSListener https = 1;
+  UnixListener unix = 2;
+  MetricsListener metrics = 3;
+  uint64 max_header_size = 4;
+  google.protobuf.Duration read_timeout = 5;
+  google.protobuf.Duration write_timeout = 6;
+  google.protobuf.Duration keep_alive = 7;
+  google.protobuf.Duration shutdown_grace_period = 8;
 }
 
-message Listener {
-  string protocol = 1 [(buf.validate.field).string = {in: ["http", "https", "unix"]}];
-  string address = 2;
-  int32 port = 3;
-  string socket_path = 4;
-  ListenerTLS tls = 5;
+message HTTPSListener {
+  string address = 1;
+  oneof cert_source {
+    string cert = 2;
+    string cert_data = 3;
+  }
+  oneof key_source {
+    string key = 4;
+    string key_data = 5;
+  }
+  oneof ca_source {
+    string ca = 6;
+    string ca_data = 7;
+  }
+  string client_auth = 8 [(buf.validate.field).string = {in: ["", "none", "request", "require"]}];
+  string min_version = 9 [(buf.validate.field).string = {in: ["", "1.0", "1.1", "1.2", "1.3"]}];
 }
 
-message ListenerTLS {
-  repeated string certificate_refs = 1 [(buf.validate.field).repeated.min_items = 1];
-  string client_auth = 2 [(buf.validate.field).string = {in: ["", "none", "request", "require"]}];
-  string client_ca_ref = 3;
-  string min_version = 4 [(buf.validate.field).string = {in: ["", "1.0", "1.1", "1.2", "1.3"]}];
+message UnixListener {
+  string path = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message MetricsListener {
+  string address = 1;
 }
 
 message Authentication {
@@ -157,11 +169,6 @@ message OIDCAuth {
   string ca_file = 3;
   google.protobuf.Duration poll_interval = 4;
   bool insecure_skip_tls_verify = 5;
-}
-
-message Metrics {
-  string address = 1;
-  int32 port = 2;
 }
 
 message Cache {

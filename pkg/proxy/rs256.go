@@ -3,10 +3,11 @@ package proxy
 import (
 	"context"
 	"crypto/rsa"
-	"github.com/SermoDigital/jose/crypto"
-	"github.com/SermoDigital/jose/jws"
 	"math/rand"
 	"net/http"
+
+	"github.com/SermoDigital/jose/crypto"
+	"github.com/SermoDigital/jose/jws"
 )
 
 // RS256Config is configuration for RS256 middleware
@@ -17,10 +18,8 @@ type RS256Config struct {
 // WithRS256 is a middleware that validates a JWT token in the http request using RS256 signing method.
 // It will do so using a rsa public key provided in Config
 func WithRS256(c RS256Config) MiddlewareFunc {
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			ctxName := ParseContextFromRequest(r, false)
 			rs256ReqsTotal.WithLabelValues(ctxName).Inc()
 
@@ -55,7 +54,6 @@ func WithRS256(c RS256Config) MiddlewareFunc {
 
 			ctx := context.WithValue(r.Context(), subjectKey, username)
 			next.ServeHTTP(w, r.WithContext(ctx))
-
 		})
 	}
 }

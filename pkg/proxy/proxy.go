@@ -117,6 +117,16 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	auth := getAuthByContextName(p.kubeConfig, ctx)
+	if auth != nil && auth.Token != "" {
+		r.Header.Set("Authorization", "Bearer "+auth.Token)
+	} else if auth != nil && auth.Username != "" {
+		r.SetBasicAuth(auth.Username, auth.Password)
+	} else {
+		// mTLS-only backend: no token/basic auth; TLS client cert is in the Transport.
+		r.Header.Del("Authorization")
+	}
+
 	// Create an instance of golang reverse proxy and attach our own transport to it
 	proxy := httputil.NewSingleHostReverseProxy(parseURL(cluster.Server))
 	proxy.Transport = p.transports[ctx]

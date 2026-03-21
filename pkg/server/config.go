@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/amimof/multikube/pkg/config"
@@ -32,57 +34,32 @@ func NewServerFromConfig(cfg *config.RuntimeConfig, handler http.Handler) (*Serv
 		s.CleanupTimeout = 10 * time.Second
 	}
 
-	// Track which protocols we've seen to detect duplicates.
-	seen := make(map[string]bool)
-
-	for i, l := range cfg.Server.Listeners {
-		if seen[l.Protocol] {
-			return nil, fmt.Errorf("server.listeners[%d]: duplicate protocol %q; the server currently supports at most one listener per protocol", i, l.Protocol)
+	// Apply HTTPS listener.
+	if cfg.Server.HTTPS != nil {
+		s.EnabledListeners = append(s.EnabledListeners, "https")
+		if err := applyHTTPSListener(s, cfg.Server.HTTPS, &cfg.Server); err != nil {
+			return nil, fmt.Errorf("server.https: %w", err)
 		}
-		seen[l.Protocol] = true
-		s.EnabledListeners = append(s.EnabledListeners, l.Protocol)
+	}
 
-		switch l.Protocol {
-		case "http":
-			applyHTTPListener(s, &l, &cfg.Server)
-		case "https":
-			applyHTTPSListener(s, &l, &cfg.Server)
-		case "unix":
-			s.SocketPath = l.SocketPath
-		}
+	// Apply Unix listener.
+	if cfg.Server.Unix != nil {
+		s.EnabledListeners = append(s.EnabledListeners, "unix")
+		s.SocketPath = cfg.Server.Unix.Path
 	}
 
 	return s, nil
 }
 
-// applyHTTPListener maps an HTTP listener config to Server fields.
-func applyHTTPListener(s *Server, l *config.Listener, sc *config.ServerConfig) {
-	s.Host = l.Address
-	s.Port = l.Port
-	s.ListenLimit = 0
-
-	if sc.KeepAlive != 0 {
-		s.KeepAlive = sc.KeepAlive
-	} else {
-		s.KeepAlive = 3 * time.Minute
-	}
-	if sc.ReadTimeout != 0 {
-		s.ReadTimeout = sc.ReadTimeout
-	} else {
-		s.ReadTimeout = 30 * time.Second
-	}
-	if sc.WriteTimeout != 0 {
-		s.WriteTimeout = sc.WriteTimeout
-	} else {
-		s.WriteTimeout = 30 * time.Second
-	}
-}
-
 // applyHTTPSListener maps an HTTPS listener config to Server fields and builds
 // the TLS configuration from already-resolved crypto materials.
-func applyHTTPSListener(s *Server, l *config.Listener, sc *config.ServerConfig) {
-	s.TLSHost = l.Address
-	s.TLSPort = l.Port
+func applyHTTPSListener(s *Server, hl *config.HTTPSListenerConfig, sc *config.ServerConfig) error {
+	host, port, err := parseAddress(hl.Address)
+	if err != nil {
+		return fmt.Errorf("parsing address: %w", err)
+	}
+	s.TLSHost = host
+	s.TLSPort = port
 	s.TLSListenLimit = 0
 
 	if sc.KeepAlive != 0 {
@@ -101,27 +78,50 @@ func applyHTTPSListener(s *Server, l *config.Listener, sc *config.ServerConfig) 
 		s.TLSWriteTimeout = 30 * time.Second
 	}
 
-	// Clear file-path fields so the existing Serve() code path in
-	// server.go skips its own certificate loading logic.
-	s.TLSCertificate = ""
-	s.TLSCertificateKey = ""
-	s.TLSCACertificate = ""
-
-	if l.TLS != nil {
+	if hl.TLS != nil {
 		s.TLSConfig = &tls.Config{
-			Certificates:             l.TLS.Certificates,
+			Certificates:             hl.TLS.Certificates,
 			PreferServerCipherSuites: true,
 			CurvePreferences:         []tls.CurveID{tls.CurveP256},
 			NextProtos:               []string{"h2", "http/1.1"},
-			MinVersion:               l.TLS.MinVersion,
+			MinVersion:               hl.TLS.MinVersion,
 			CipherSuites: []uint16{
 				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			},
-			ClientAuth: l.TLS.ClientAuth,
-			ClientCAs:  l.TLS.ClientCA,
+			ClientAuth: hl.TLS.ClientAuth,
+			ClientCAs:  hl.TLS.ClientCA,
 		}
 	}
+
+	return nil
+}
+
+// parseAddress splits a Go net.Listen-style address (e.g. ":8443",
+// "0.0.0.0:8443") into host string and port int.
+func parseAddress(addr string) (string, int, error) {
+	if addr == "" {
+		return "", 0, nil
+	}
+	// Handle bare port like ":8443"
+	if strings.HasPrefix(addr, ":") {
+		port, err := strconv.Atoi(addr[1:])
+		if err != nil {
+			return "", 0, fmt.Errorf("invalid port in %q: %w", addr, err)
+		}
+		return "", port, nil
+	}
+	// Split host:port
+	lastColon := strings.LastIndex(addr, ":")
+	if lastColon < 0 {
+		return "", 0, fmt.Errorf("no port in address %q", addr)
+	}
+	host := addr[:lastColon]
+	port, err := strconv.Atoi(addr[lastColon+1:])
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid port in %q: %w", addr, err)
+	}
+	return host, port, nil
 }

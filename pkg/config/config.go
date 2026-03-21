@@ -1,12 +1,20 @@
 package config
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"fmt"
+	"log"
+	"math/big"
+	"net"
 	"net/url"
 	"os"
+	"time"
 
 	"buf.build/go/protovalidate"
 	types "github.com/amimof/multikube/api/config/v1"
@@ -112,21 +120,6 @@ func validateCrossReferences(cfg *types.Config) error {
 		}
 	}
 
-	// Listener TLS → Certificate, CA
-	if cfg.Server != nil {
-		for i, l := range cfg.Server.Listeners {
-			if l.Tls != nil {
-				for _, ref := range l.Tls.CertificateRefs {
-					if !certNames[ref] {
-						return fmt.Errorf("server.listeners[%d]: tls.certificate_refs references unknown certificate %q", i, ref)
-					}
-				}
-				if l.Tls.ClientCaRef != "" && !caNames[l.Tls.ClientCaRef] {
-					return fmt.Errorf("server.listeners[%d]: tls.client_ca_ref references unknown certificate_authority %q", i, l.Tls.ClientCaRef)
-				}
-			}
-		}
-	}
 	return nil
 }
 
@@ -136,27 +129,9 @@ func validateListenerSemantics(cfg *types.Config) error {
 		return nil
 	}
 
-	protocolSeen := make(map[string]bool)
-	for i, l := range cfg.Server.Listeners {
-		if protocolSeen[l.Protocol] {
-			return fmt.Errorf("server.listeners[%d]: duplicate protocol %q; at most one listener per protocol is supported", i, l.Protocol)
-		}
-		protocolSeen[l.Protocol] = true
-
-		switch l.Protocol {
-		case "http":
-			if l.Tls != nil {
-				return fmt.Errorf("server.listeners[%d]: TLS must not be set for protocol http", i)
-			}
-		case "https":
-			if l.Tls == nil {
-				return fmt.Errorf("server.listeners[%d]: TLS is required for protocol https", i)
-			}
-		case "unix":
-			if l.SocketPath == "" {
-				return fmt.Errorf("server.listeners[%d]: socket_path is required for protocol unix", i)
-			}
-		}
+	// Unix listener requires a non-empty path.
+	if cfg.Server.Unix != nil && cfg.Server.Unix.Path == "" {
+		return fmt.Errorf("server.unix: path is required")
 	}
 	return nil
 }
@@ -287,7 +262,7 @@ func convert(cfg *types.Config) (*RuntimeConfig, error) {
 	}
 
 	// Convert server config.
-	sc, err := convertServer(cfg.Server, certs, cas)
+	sc, err := convertServer(cfg.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -304,14 +279,6 @@ func convert(cfg *types.Config) (*RuntimeConfig, error) {
 	// Convert auth.
 	if cfg.Auth != nil {
 		rc.Auth = convertAuth(cfg.Auth)
-	}
-
-	// Convert metrics.
-	if cfg.Metrics != nil {
-		rc.Metrics = &MetricsConfig{
-			Address: cfg.Metrics.Address,
-			Port:    int(cfg.Metrics.Port),
-		}
 	}
 
 	// Convert cache.
@@ -344,7 +311,7 @@ func convertMatch(m *types.Match) *Match {
 	return rm
 }
 
-func convertServer(s *types.Server, certs []Certificate, cas []CertificateAuthority) (ServerConfig, error) {
+func convertServer(s *types.Server) (ServerConfig, error) {
 	sc := ServerConfig{
 		MaxHeaderSize: s.GetMaxHeaderSize(),
 	}
@@ -361,55 +328,96 @@ func convertServer(s *types.Server, certs []Certificate, cas []CertificateAuthor
 		sc.ShutdownGracePeriod = s.ShutdownGracePeriod.AsDuration()
 	}
 
-	// Build cert/CA indexes for listener TLS resolution.
-	certByName := make(map[string]int, len(certs))
-	for i, c := range certs {
-		certByName[c.Name] = i
-	}
-	caByName := make(map[string]int, len(cas))
-	for i, ca := range cas {
-		caByName[ca.Name] = i
-	}
-
-	for i, l := range s.GetListeners() {
-		rl := Listener{
-			Protocol:   l.Protocol,
-			Address:    l.Address,
-			Port:       int(l.Port),
-			SocketPath: l.SocketPath,
+	// Convert HTTPS listener.
+	if s.GetHttps() != nil {
+		hl, err := convertHTTPSListener(s.Https)
+		if err != nil {
+			return ServerConfig{}, fmt.Errorf("server.https: %w", err)
 		}
+		sc.HTTPS = hl
+	}
 
-		if l.Tls != nil {
-			lt, err := convertListenerTLS(l.Tls, certs, certByName, cas, caByName)
-			if err != nil {
-				return ServerConfig{}, fmt.Errorf("server.listeners[%d]: %w", i, err)
-			}
-			rl.TLS = lt
+	// Convert Unix listener.
+	if s.GetUnix() != nil {
+		sc.Unix = &UnixListenerConfig{
+			Path: s.Unix.Path,
 		}
+	}
 
-		sc.Listeners = append(sc.Listeners, rl)
+	// Convert Metrics listener.
+	if s.GetMetrics() != nil {
+		sc.Metrics = &MetricsListenerConfig{
+			Address: s.Metrics.Address,
+		}
 	}
 
 	return sc, nil
 }
 
-func convertListenerTLS(
-	t *types.ListenerTLS,
-	certs []Certificate,
-	certByName map[string]int,
-	cas []CertificateAuthority,
-	caByName map[string]int,
-) (*ListenerTLS, error) {
+// convertHTTPSListener converts the proto HTTPSListener to a runtime
+// HTTPSListenerConfig. It loads TLS cert/key from file or inline data
+// (or auto-generates if neither is provided), loads CA, and parses
+// client_auth and min_version.
+func convertHTTPSListener(h *types.HTTPSListener) (*HTTPSListenerConfig, error) {
 	lt := &ListenerTLS{}
 
-	// Resolve certificate_refs.
-	for _, ref := range t.CertificateRefs {
-		idx := certByName[ref]
-		lt.Certificates = append(lt.Certificates, certs[idx].TLS)
+	// Load server certificate/key from oneof fields, or auto-generate.
+	cert, key := h.GetCert(), h.GetKey()
+	certData, keyData := h.GetCertData(), h.GetKeyData()
+
+	switch {
+	case cert != "" && key != "":
+		tlsCert, err := tls.LoadX509KeyPair(cert, key)
+		if err != nil {
+			return nil, fmt.Errorf("loading cert/key files: %w", err)
+		}
+		lt.Certificates = []tls.Certificate{tlsCert}
+	case certData != "" && keyData != "":
+		tlsCert, err := tls.X509KeyPair([]byte(certData), []byte(keyData))
+		if err != nil {
+			return nil, fmt.Errorf("parsing cert_data/key_data: %w", err)
+		}
+		lt.Certificates = []tls.Certificate{tlsCert}
+	default:
+		// No cert/key provided; auto-generate a self-signed certificate.
+		tlsCert, err := generateCertificates()
+		if err != nil {
+			return nil, fmt.Errorf("generating self-signed certificate: %w", err)
+		}
+		lt.Certificates = []tls.Certificate{tlsCert}
+	}
+
+	// Load CA from oneof fields (for client certificate verification).
+	ca, caData := h.GetCa(), h.GetCaData()
+	switch {
+	case ca != "":
+		data, err := os.ReadFile(ca)
+		if err != nil {
+			return nil, fmt.Errorf("reading ca file: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(data) {
+			return nil, fmt.Errorf("failed to parse CA PEM from file %q", ca)
+		}
+		lt.ClientCA = pool
+	case caData != "":
+		// Try base64 decode first (kubeconfig-style), fall back to raw PEM.
+		var pemData []byte
+		decoded, err := base64.StdEncoding.DecodeString(caData)
+		if err == nil {
+			pemData = decoded
+		} else {
+			pemData = []byte(caData)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pemData) {
+			return nil, fmt.Errorf("failed to parse CA PEM from ca_data")
+		}
+		lt.ClientCA = pool
 	}
 
 	// Parse client_auth.
-	switch t.ClientAuth {
+	switch h.ClientAuth {
 	case "", "none":
 		lt.ClientAuth = tls.NoClientCert
 	case "request":
@@ -418,18 +426,13 @@ func convertListenerTLS(
 		lt.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
-	// Resolve client_ca_ref.
-	if t.ClientCaRef != "" {
-		idx := caByName[t.ClientCaRef]
-		lt.ClientCA = cas[idx].Pool
-		// If client CA is set but client_auth was not explicitly set, default to require.
-		if t.ClientAuth == "" {
-			lt.ClientAuth = tls.RequireAndVerifyClientCert
-		}
+	// If client CA is set but client_auth was not explicitly set, default to require.
+	if lt.ClientCA != nil && h.ClientAuth == "" {
+		lt.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	// Parse min_version (default to TLS 1.2).
-	switch t.MinVersion {
+	switch h.MinVersion {
 	case "1.0":
 		lt.MinVersion = tls.VersionTLS10
 	case "1.1":
@@ -440,7 +443,10 @@ func convertListenerTLS(
 		lt.MinVersion = tls.VersionTLS12
 	}
 
-	return lt, nil
+	return &HTTPSListenerConfig{
+		Address: h.Address,
+		TLS:     lt,
+	}, nil
 }
 
 func convertAuth(a *types.Authentication) *AuthConfig {
@@ -470,6 +476,62 @@ func convertAuth(a *types.Authentication) *AuthConfig {
 	return ac
 }
 
+func generateCertificates() (tls.Certificate, error) {
+	cert := tls.Certificate{}
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return cert, err
+	}
+
+	// Valid for 1 year
+	notBefore := time.Now()
+	notAfter := notBefore.Add(365 * 24 * time.Hour) // Valid for 1 year
+
+	parent := &x509.Certificate{
+		KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+			x509.ExtKeyUsageClientAuth,
+		},
+		IsCA:                  false,
+		BasicConstraintsValid: true,
+		DNSNames:              []string{"localhost", "voiyd-node"},
+		IPAddresses: []net.IP{
+			net.IPv4(127, 0, 0, 1),
+		},
+		Subject: pkix.Name{
+			CommonName:         "voiyd-node",
+			Country:            []string{"SE"},
+			Province:           []string{"Halland"},
+			Locality:           []string{"Varberg"},
+			Organization:       []string{"voiyd-node"},
+			OrganizationalUnit: []string{"voiyd"},
+		},
+		SerialNumber: serial,
+		NotAfter:     notAfter,
+		NotBefore:    notBefore,
+	}
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return cert, err
+	}
+
+	certData, err := x509.CreateCertificate(rand.Reader, parent, parent, &key.PublicKey, key)
+	if err != nil {
+		return cert, err
+	}
+
+	cert = tls.Certificate{
+		Certificate: [][]byte{certData}, // Raw DER bytes from x509.CreateCertificate
+		PrivateKey:  key,                // *ecdsa.PrivateKey directly
+	}
+
+	log.Println("generated x509 key pair")
+	return cert, nil
+}
+
 // loadCertificate loads a TLS certificate from file paths or inline PEM data.
 func loadCertificate(c *types.Certificate) (tls.Certificate, error) {
 	if c.Certificate != "" && c.Key != "" {
@@ -478,7 +540,8 @@ func loadCertificate(c *types.Certificate) (tls.Certificate, error) {
 	if c.CertificateData != "" && c.KeyData != "" {
 		return tls.X509KeyPair([]byte(c.CertificateData), []byte(c.KeyData))
 	}
-	return tls.Certificate{}, fmt.Errorf("missing certificate/key data")
+	log.Println("generating certs")
+	return generateCertificates()
 }
 
 // loadCertificateAuthority loads a CA certificate pool from a file path or

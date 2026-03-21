@@ -196,25 +196,17 @@ routes:
     backend_ref: dev-cluster
 
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - frontend-cert
-          - frontend-cert-wildcard
-        client_auth: request
-        client_ca_ref: prod-ca
-        min_version: "1.2"
-
-    - protocol: http
-      address: 0.0.0.0
-      port: 8080
-
-    - protocol: unix
-      socket_path: /var/run/multikube.sock
-
+  https:
+    address: "0.0.0.0:8443"
+    cert: /etc/multikube/tls/server.crt
+    key: /etc/multikube/tls/server.key
+    client_auth: request
+    ca: /etc/multikube/tls/prod-ca.crt
+    min_version: "1.2"
+  unix:
+    path: /var/run/multikube.sock
+  metrics:
+    address: "0.0.0.0:8888"
   max_header_size: 1000000
   read_timeout: 30s
   write_timeout: 30s
@@ -225,10 +217,6 @@ auth:
   jwt_auth:
     rs256:
       public_key: /etc/multikube/keys/public.pem
-
-metrics:
-  address: 0.0.0.0
-  port: 8888
 
 cache:
   ttl: 1s
@@ -259,13 +247,8 @@ routes:
     backend_ref: default-cluster
 
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - server-cert
+  https:
+    address: "0.0.0.0:8443"
 `
 
 // ---------------------------------------------------------------------------
@@ -330,17 +313,18 @@ func TestLoad_ValidConfig(t *testing.T) {
 	assert.Equal(t, "dev-cluster", cfg.Routes[6].BackendRef)
 
 	// Server
-	assert.Len(t, cfg.Server.Listeners, 3)
-	assert.Equal(t, "https", cfg.Server.Listeners[0].Protocol)
-	assert.Equal(t, int32(8443), cfg.Server.Listeners[0].Port)
-	require.NotNil(t, cfg.Server.Listeners[0].Tls)
-	assert.Equal(t, []string{"frontend-cert", "frontend-cert-wildcard"}, cfg.Server.Listeners[0].Tls.CertificateRefs)
-	assert.Equal(t, "request", cfg.Server.Listeners[0].Tls.ClientAuth)
-	assert.Equal(t, "prod-ca", cfg.Server.Listeners[0].Tls.ClientCaRef)
-	assert.Equal(t, "1.2", cfg.Server.Listeners[0].Tls.MinVersion)
-	assert.Equal(t, "http", cfg.Server.Listeners[1].Protocol)
-	assert.Equal(t, "unix", cfg.Server.Listeners[2].Protocol)
-	assert.Equal(t, "/var/run/multikube.sock", cfg.Server.Listeners[2].SocketPath)
+	require.NotNil(t, cfg.Server)
+	require.NotNil(t, cfg.Server.Https)
+	assert.Equal(t, "0.0.0.0:8443", cfg.Server.Https.GetAddress())
+	assert.Equal(t, "/etc/multikube/tls/server.crt", cfg.Server.Https.GetCert())
+	assert.Equal(t, "/etc/multikube/tls/server.key", cfg.Server.Https.GetKey())
+	assert.Equal(t, "request", cfg.Server.Https.GetClientAuth())
+	assert.Equal(t, "/etc/multikube/tls/prod-ca.crt", cfg.Server.Https.GetCa())
+	assert.Equal(t, "1.2", cfg.Server.Https.GetMinVersion())
+	require.NotNil(t, cfg.Server.Unix)
+	assert.Equal(t, "/var/run/multikube.sock", cfg.Server.Unix.Path)
+	require.NotNil(t, cfg.Server.Metrics)
+	assert.Equal(t, "0.0.0.0:8888", cfg.Server.Metrics.Address)
 	assert.Equal(t, uint64(1000000), cfg.Server.MaxHeaderSize)
 	assert.Equal(t, 30*time.Second, cfg.Server.ReadTimeout.AsDuration())
 	assert.Equal(t, 30*time.Second, cfg.Server.WriteTimeout.AsDuration())
@@ -353,10 +337,6 @@ func TestLoad_ValidConfig(t *testing.T) {
 	require.NotNil(t, cfg.Auth.JwtAuth.Rs256)
 	assert.Equal(t, "/etc/multikube/keys/public.pem", cfg.Auth.JwtAuth.Rs256.PublicKey)
 	assert.Nil(t, cfg.Auth.JwtAuth.Oidc)
-
-	// Metrics
-	assert.Equal(t, "0.0.0.0", cfg.Metrics.Address)
-	assert.Equal(t, int32(8888), cfg.Metrics.Port)
 
 	// Cache
 	require.NotNil(t, cfg.Cache)
@@ -373,7 +353,9 @@ func TestLoad_Minimal(t *testing.T) {
 	assert.Len(t, cfg.Credentials, 1)
 	assert.Len(t, cfg.Backends, 1)
 	assert.Len(t, cfg.Routes, 1)
-	assert.Len(t, cfg.Server.Listeners, 1)
+	require.NotNil(t, cfg.Server)
+	require.NotNil(t, cfg.Server.Https)
+	assert.Equal(t, "0.0.0.0:8443", cfg.Server.Https.GetAddress())
 	assert.Nil(t, cfg.Routes[0].Match)
 	assert.Nil(t, cfg.Auth)
 }
@@ -428,9 +410,8 @@ certificates:
   - certificate: /a.crt
     key: /a.key
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "name: value length must be at least 1 characters",
 		},
@@ -440,9 +421,8 @@ server:
 certificates:
   - name: empty-cert
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "one of certificate, certificate_data must be set",
 		},
@@ -453,9 +433,8 @@ certificates:
   - name: no-key
     certificate: /a.crt
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "one of key, key_data must be set",
 		},
@@ -465,9 +444,8 @@ server:
 certificate_authorities:
   - certificate: /ca.crt
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "name: value length must be at least 1 characters",
 		},
@@ -477,9 +455,8 @@ server:
 certificate_authorities:
   - name: ca
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "one of certificate, certificate_data must be set",
 		},
@@ -491,9 +468,8 @@ certificate_authorities:
     certificate: /ca.crt
     certificate_data: "data"
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "only one of certificate, certificate_data can be set",
 		},
@@ -503,9 +479,8 @@ server:
 credentials:
   - token: tok
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "name: value length must be at least 1 characters",
 		},
@@ -515,9 +490,8 @@ server:
 credentials:
   - name: empty-cred
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "one of client_certificate_ref, token, basic must be set",
 		},
@@ -531,9 +505,8 @@ credentials:
       username: admin
       password: secret
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "only one of client_certificate_ref, token, basic can be set",
 		},
@@ -545,9 +518,8 @@ credentials:
     basic:
       username: admin
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "password: value length must be at least 1 characters",
 		},
@@ -557,9 +529,8 @@ server:
 backends:
   - server: https://k8s:6443
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "name: value length must be at least 1 characters",
 		},
@@ -569,9 +540,8 @@ server:
 backends:
   - name: cluster
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "server: value length must be at least 1 characters",
 		},
@@ -581,9 +551,8 @@ server:
 routes:
   - backend_ref: cluster
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "name: value length must be at least 1 characters",
 		},
@@ -593,9 +562,8 @@ server:
 routes:
   - name: route
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "backend_ref: value length must be at least 1 characters",
 		},
@@ -609,9 +577,8 @@ routes:
       header:
         value: something
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "header.name: value length must be at least 1 characters",
 		},
@@ -625,9 +592,8 @@ routes:
       header:
         name: X-Cluster
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "header.value: value length must be at least 1 characters",
 		},
@@ -641,9 +607,8 @@ routes:
       jwt:
         value: something
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "jwt.claim: value length must be at least 1 characters",
 		},
@@ -657,53 +622,18 @@ routes:
       jwt:
         claim: cluster
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 `,
 			wantErr: "jwt.value: value length must be at least 1 characters",
-		},
-		{
-			name: "NoListeners",
-			yaml: `
-server:
-  listeners: []
-`,
-			wantErr: "listeners: value must contain at least 1 item(s)",
-		},
-		{
-			name: "InvalidProtocol",
-			yaml: `
-server:
-  listeners:
-    - protocol: ftp
-      port: 21
-`,
-			wantErr: "protocol: value must be in list [http, https, unix]",
-		},
-		{
-			name: "HTTPSNoCertRefs",
-			yaml: `
-server:
-  listeners:
-    - protocol: https
-      port: 8443
-      tls:
-        certificate_refs: []
-`,
-			wantErr: "certificate_refs: value must contain at least 1 item(s)",
 		},
 		{
 			name: "InvalidClientAuth",
 			yaml: `
 server:
-  listeners:
-    - protocol: https
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
-        client_auth: maybe
+  https:
+    address: ":8443"
+    client_auth: maybe
 `,
 			wantErr: "client_auth: value must be in list",
 		},
@@ -711,13 +641,9 @@ server:
 			name: "InvalidMinVersion",
 			yaml: `
 server:
-  listeners:
-    - protocol: https
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
-        min_version: "1.5"
+  https:
+    address: ":8443"
+    min_version: "1.5"
 `,
 			wantErr: "min_version: value must be in list",
 		},
@@ -725,9 +651,8 @@ server:
 			name: "AuthBothRS256andOIDC",
 			yaml: `
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 auth:
   jwt_auth:
     rs256:
@@ -741,9 +666,8 @@ auth:
 			name: "RS256MissingPublicKey",
 			yaml: `
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 auth:
   jwt_auth:
     rs256: {}
@@ -754,9 +678,8 @@ auth:
 			name: "OIDCMissingIssuerURL",
 			yaml: `
 server:
-  listeners:
-    - protocol: http
-      port: 8080
+  https:
+    address: ":8443"
 auth:
   jwt_auth:
     oidc:
@@ -810,13 +733,8 @@ routes:
     backend_ref: cluster`,
 		"server": `
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert`,
+  https:
+    address: ":8443"`,
 	}
 	for k, v := range overrides {
 		sections[k] = v
@@ -985,111 +903,20 @@ routes:
 	assert.Contains(t, err.Error(), `backend_ref references unknown backend "nonexistent-cluster"`)
 }
 
-func TestValidate_ListenerBadCertRef(t *testing.T) {
+func TestValidate_UnixListenerNoPath(t *testing.T) {
 	cfg := baseYAML(map[string]string{
 		"server": `
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - nonexistent-cert`,
+  https:
+    address: ":8443"
+  unix:
+    path: ""`,
 	})
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
 	err = Validate(ext)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), `references unknown certificate "nonexistent-cert"`)
-}
-
-func TestValidate_ListenerBadClientCARef(t *testing.T) {
-	cfg := baseYAML(map[string]string{
-		"server": `
-server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
-        client_ca_ref: nonexistent-ca`,
-	})
-	ext, err := Load([]byte(cfg))
-	require.NoError(t, err)
-	err = Validate(ext)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `references unknown certificate_authority "nonexistent-ca"`)
-}
-
-func TestValidate_DuplicateProtocol(t *testing.T) {
-	cfg := baseYAML(map[string]string{
-		"server": `
-server:
-  listeners:
-    - protocol: http
-      address: 0.0.0.0
-      port: 8080
-    - protocol: http
-      address: 0.0.0.0
-      port: 8081`,
-	})
-	ext, err := Load([]byte(cfg))
-	require.NoError(t, err)
-	err = Validate(ext)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `duplicate protocol "http"`)
-}
-
-func TestValidate_HTTPListenerWithTLS(t *testing.T) {
-	cfg := baseYAML(map[string]string{
-		"server": `
-server:
-  listeners:
-    - protocol: http
-      address: 0.0.0.0
-      port: 8080
-      tls:
-        certificate_refs:
-          - cert`,
-	})
-	ext, err := Load([]byte(cfg))
-	require.NoError(t, err)
-	err = Validate(ext)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "TLS must not be set for protocol http")
-}
-
-func TestValidate_HTTPSListenerWithoutTLS(t *testing.T) {
-	cfg := baseYAML(map[string]string{
-		"server": `
-server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443`,
-	})
-	ext, err := Load([]byte(cfg))
-	require.NoError(t, err)
-	err = Validate(ext)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "TLS is required for protocol https")
-}
-
-func TestValidate_UnixListenerNoSocket(t *testing.T) {
-	cfg := baseYAML(map[string]string{
-		"server": `
-server:
-  listeners:
-    - protocol: unix`,
-	})
-	ext, err := Load([]byte(cfg))
-	require.NoError(t, err)
-	err = Validate(ext)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "socket_path is required for protocol unix")
+	assert.Contains(t, err.Error(), "server.unix.path")
 }
 
 func TestValidate_CertMixed(t *testing.T) {
@@ -1131,7 +958,6 @@ func TestConvert_FullConfig(t *testing.T) {
 
 	// Generate certs and CAs
 	certPath, keyPath := writeCertFiles(t, dir, "frontend")
-	cert2Path, key2Path := writeCertFiles(t, dir, "wildcard")
 	clientCertPath, clientKeyPath := writeCertFiles(t, dir, "client")
 	caPath := writeCAFile(t, dir, "prod-ca")
 	stagingCAPath := writeCAFile(t, dir, "staging-ca")
@@ -1144,10 +970,6 @@ certificates:
   - name: frontend-cert
     certificate: ` + certPath + `
     key: ` + keyPath + `
-
-  - name: frontend-cert-wildcard
-    certificate: ` + cert2Path + `
-    key: ` + key2Path + `
 
   - name: client-cert
     certificate: ` + clientCertPath + `
@@ -1229,25 +1051,17 @@ routes:
     backend_ref: dev-cluster
 
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - frontend-cert
-          - frontend-cert-wildcard
-        client_auth: request
-        client_ca_ref: prod-ca
-        min_version: "1.2"
-
-    - protocol: http
-      address: 0.0.0.0
-      port: 8080
-
-    - protocol: unix
-      socket_path: /var/run/multikube.sock
-
+  https:
+    address: "0.0.0.0:8443"
+    cert: ` + certPath + `
+    key: ` + keyPath + `
+    client_auth: request
+    ca: ` + caPath + `
+    min_version: "1.2"
+  unix:
+    path: /var/run/multikube.sock
+  metrics:
+    address: "0.0.0.0:8888"
   max_header_size: 1000000
   read_timeout: 30s
   write_timeout: 30s
@@ -1258,10 +1072,6 @@ auth:
   jwt_auth:
     rs256:
       public_key: /etc/multikube/keys/public.pem
-
-metrics:
-  address: 0.0.0.0
-  port: 8888
 
 cache:
   ttl: 5s
@@ -1274,11 +1084,11 @@ cache:
 	require.NotNil(t, rc)
 
 	// Certificates are loaded
-	assert.Len(t, rc.Certificates, 4)
+	assert.Len(t, rc.Certificates, 3)
 	assert.Equal(t, "frontend-cert", rc.Certificates[0].Name)
 	assert.NotEmpty(t, rc.Certificates[0].TLS.Certificate)
-	assert.Equal(t, "inline-cert", rc.Certificates[3].Name)
-	assert.NotEmpty(t, rc.Certificates[3].TLS.Certificate)
+	assert.Equal(t, "inline-cert", rc.Certificates[2].Name)
+	assert.NotEmpty(t, rc.Certificates[2].TLS.Certificate)
 
 	// CAs are loaded
 	assert.Len(t, rc.CertificateAuthorities, 3)
@@ -1337,24 +1147,20 @@ cache:
 	assert.Nil(t, rc.Routes[4].Match)
 	assert.Equal(t, "dev-cluster", rc.Routes[4].Backend.Name)
 
-	// Server config
-	assert.Len(t, rc.Server.Listeners, 3)
-	// HTTPS listener
-	l0 := rc.Server.Listeners[0]
-	assert.Equal(t, "https", l0.Protocol)
-	assert.Equal(t, "0.0.0.0", l0.Address)
-	assert.Equal(t, 8443, l0.Port)
-	require.NotNil(t, l0.TLS)
-	assert.Len(t, l0.TLS.Certificates, 2)
-	assert.Equal(t, tls.RequestClientCert, l0.TLS.ClientAuth)
-	assert.NotNil(t, l0.TLS.ClientCA)
-	assert.Equal(t, uint16(tls.VersionTLS12), l0.TLS.MinVersion)
-	// HTTP listener
-	assert.Equal(t, "http", rc.Server.Listeners[1].Protocol)
-	assert.Nil(t, rc.Server.Listeners[1].TLS)
+	// Server config — HTTPS listener
+	require.NotNil(t, rc.Server.HTTPS)
+	assert.Equal(t, "0.0.0.0:8443", rc.Server.HTTPS.Address)
+	require.NotNil(t, rc.Server.HTTPS.TLS)
+	assert.Len(t, rc.Server.HTTPS.TLS.Certificates, 1)
+	assert.Equal(t, tls.RequestClientCert, rc.Server.HTTPS.TLS.ClientAuth)
+	assert.NotNil(t, rc.Server.HTTPS.TLS.ClientCA)
+	assert.Equal(t, uint16(tls.VersionTLS12), rc.Server.HTTPS.TLS.MinVersion)
 	// Unix listener
-	assert.Equal(t, "unix", rc.Server.Listeners[2].Protocol)
-	assert.Equal(t, "/var/run/multikube.sock", rc.Server.Listeners[2].SocketPath)
+	require.NotNil(t, rc.Server.Unix)
+	assert.Equal(t, "/var/run/multikube.sock", rc.Server.Unix.Path)
+	// Metrics listener
+	require.NotNil(t, rc.Server.Metrics)
+	assert.Equal(t, "0.0.0.0:8888", rc.Server.Metrics.Address)
 
 	assert.Equal(t, uint64(1000000), rc.Server.MaxHeaderSize)
 	assert.Equal(t, 30*time.Second, rc.Server.ReadTimeout)
@@ -1369,11 +1175,6 @@ cache:
 	assert.Equal(t, "/etc/multikube/keys/public.pem", rc.Auth.JWT.RS256.PublicKey)
 	assert.Nil(t, rc.Auth.JWT.OIDC)
 
-	// Metrics
-	require.NotNil(t, rc.Metrics)
-	assert.Equal(t, "0.0.0.0", rc.Metrics.Address)
-	assert.Equal(t, 8888, rc.Metrics.Port)
-
 	// Cache
 	require.NotNil(t, rc.Cache)
 	assert.Equal(t, 5*time.Second, rc.Cache.TTL)
@@ -1381,15 +1182,9 @@ cache:
 
 func TestConvert_MinimalConfig(t *testing.T) {
 	dir := t.TempDir()
-	certPath, keyPath := writeCertFiles(t, dir, "server")
 	caPath := writeCAFile(t, dir, "ca")
 
 	cfg := `
-certificates:
-  - name: server-cert
-    certificate: ` + certPath + `
-    key: ` + keyPath + `
-
 certificate_authorities:
   - name: backend-ca
     certificate: ` + caPath + `
@@ -1409,13 +1204,8 @@ routes:
     backend_ref: default-cluster
 
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - server-cert
+  https:
+    address: "0.0.0.0:8443"
 `
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
@@ -1424,7 +1214,6 @@ server:
 	require.NoError(t, err)
 	require.NotNil(t, rc)
 
-	assert.Len(t, rc.Certificates, 1)
 	assert.Len(t, rc.CertificateAuthorities, 1)
 	assert.Len(t, rc.Credentials, 1)
 	assert.Len(t, rc.Backends, 1)
@@ -1433,8 +1222,12 @@ server:
 	require.NotNil(t, rc.Routes[0].Backend)
 	assert.Equal(t, "default-cluster", rc.Routes[0].Backend.Name)
 	assert.Nil(t, rc.Auth)
-	assert.Nil(t, rc.Metrics)
 	assert.Nil(t, rc.Cache)
+
+	// HTTPS listener should have auto-generated cert
+	require.NotNil(t, rc.Server.HTTPS)
+	require.NotNil(t, rc.Server.HTTPS.TLS)
+	assert.Len(t, rc.Server.HTTPS.TLS.Certificates, 1)
 }
 
 func TestConvert_InlineCertificates(t *testing.T) {
@@ -1470,13 +1263,8 @@ routes:
     backend_ref: cluster
 
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - inline-cert
+  https:
+    address: ":8443"
 `
 	_ = caPEM // generated but used through file
 	ext, err := Load([]byte(cfg))
@@ -1518,13 +1306,8 @@ routes:
     backend_ref: cluster
 
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
+  https:
+    address: ":8443"
 `
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
@@ -1573,20 +1356,19 @@ routes:
   - name: default
     backend_ref: cluster
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
-        min_version: "` + tt.version + `"
+  https:
+    address: ":8443"
+    cert: ` + certPath + `
+    key: ` + keyPath + `
+    min_version: "` + tt.version + `"
 `
 			ext, err := Load([]byte(cfg))
 			require.NoError(t, err)
 			rc, err := Convert(ext)
 			require.NoError(t, err)
-			assert.Equal(t, tt.expected, rc.Server.Listeners[0].TLS.MinVersion)
+			require.NotNil(t, rc.Server.HTTPS)
+			require.NotNil(t, rc.Server.HTTPS.TLS)
+			assert.Equal(t, tt.expected, rc.Server.HTTPS.TLS.MinVersion)
 		})
 	}
 }
@@ -1616,19 +1398,18 @@ routes:
   - name: default
     backend_ref: cluster
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
+  https:
+    address: ":8443"
+    cert: ` + certPath + `
+    key: ` + keyPath + `
 `
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
 	rc, err := Convert(ext)
 	require.NoError(t, err)
-	assert.Equal(t, uint16(tls.VersionTLS12), rc.Server.Listeners[0].TLS.MinVersion)
+	require.NotNil(t, rc.Server.HTTPS)
+	require.NotNil(t, rc.Server.HTTPS.TLS)
+	assert.Equal(t, uint16(tls.VersionTLS12), rc.Server.HTTPS.TLS.MinVersion)
 }
 
 func TestConvert_ClientCAImpliesRequireAuth(t *testing.T) {
@@ -1656,20 +1437,19 @@ routes:
   - name: default
     backend_ref: cluster
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
-        client_ca_ref: ca
+  https:
+    address: ":8443"
+    cert: ` + certPath + `
+    key: ` + keyPath + `
+    ca: ` + caPath + `
 `
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
 	rc, err := Convert(ext)
 	require.NoError(t, err)
-	assert.Equal(t, tls.RequireAndVerifyClientCert, rc.Server.Listeners[0].TLS.ClientAuth)
+	require.NotNil(t, rc.Server.HTTPS)
+	require.NotNil(t, rc.Server.HTTPS.TLS)
+	assert.Equal(t, tls.RequireAndVerifyClientCert, rc.Server.HTTPS.TLS.ClientAuth)
 }
 
 func TestConvert_OIDCAuth(t *testing.T) {
@@ -1697,13 +1477,10 @@ routes:
   - name: default
     backend_ref: cluster
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
+  https:
+    address: ":8443"
+    cert: ` + certPath + `
+    key: ` + keyPath + `
 auth:
   jwt_auth:
     oidc:
@@ -1750,13 +1527,8 @@ routes:
   - name: default
     backend_ref: cluster
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
+  https:
+    address: ":8443"
 `
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
@@ -1789,13 +1561,8 @@ routes:
   - name: default
     backend_ref: cluster
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
+  https:
+    address: ":8443"
 `
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
@@ -1824,13 +1591,8 @@ routes:
   - name: default
     backend_ref: cluster
 server:
-  listeners:
-    - protocol: https
-      address: 0.0.0.0
-      port: 8443
-      tls:
-        certificate_refs:
-          - cert
+  https:
+    address: ":8443"
 `
 	ext, err := Load([]byte(cfg))
 	require.NoError(t, err)
@@ -1839,6 +1601,41 @@ server:
 
 	assert.Nil(t, rc.Backends[0].CA)
 	assert.Nil(t, rc.Backends[0].Auth)
+}
+
+func TestConvert_AutoGenerateCert(t *testing.T) {
+	dir := t.TempDir()
+	caPath := writeCAFile(t, dir, "ca")
+
+	cfg := `
+certificate_authorities:
+  - name: ca
+    certificate: ` + caPath + `
+credentials:
+  - name: cred
+    token: tok
+backends:
+  - name: cluster
+    server: https://k8s:6443
+    ca_ref: ca
+    auth_ref: cred
+routes:
+  - name: default
+    backend_ref: cluster
+server:
+  https:
+    address: ":8443"
+`
+	ext, err := Load([]byte(cfg))
+	require.NoError(t, err)
+	rc, err := Convert(ext)
+	require.NoError(t, err)
+
+	// Should auto-generate a self-signed cert
+	require.NotNil(t, rc.Server.HTTPS)
+	require.NotNil(t, rc.Server.HTTPS.TLS)
+	assert.Len(t, rc.Server.HTTPS.TLS.Certificates, 1)
+	assert.NotEmpty(t, rc.Server.HTTPS.TLS.Certificates[0].Certificate)
 }
 
 // ---------------------------------------------------------------------------
