@@ -237,7 +237,7 @@ func TestRoundTrip_ImportThenExport(t *testing.T) {
 
 	// Import into multikube config.
 	configPath := filepath.Join(dir, "multikube.yaml")
-	err := runImport("myctx", originalKubeconfigPath, configPath)
+	err := runImport("myctx", originalKubeconfigPath, configPath, false)
 	require.NoError(t, err)
 
 	// Verify multikube config.
