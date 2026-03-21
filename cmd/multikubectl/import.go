@@ -17,6 +17,7 @@ func newImportCmd() *cobra.Command {
 	var (
 		kubeconfigPath string
 		configPath     string
+		force          bool
 	)
 
 	cmd := &cobra.Command{
@@ -39,12 +40,13 @@ with the context name as a prefix (e.g. "<context>-ca", "<context>-cred").`,
 				kubeconfigPath = defaultKubeconfigPath()
 			}
 
-			return runImport(contextName, kubeconfigPath, configPath)
+			return runImport(contextName, kubeconfigPath, configPath, force)
 		},
 	}
 
 	cmd.Flags().StringVar(&kubeconfigPath, "kubeconfig", "", "path to kubeconfig file (default: $KUBECONFIG or ~/.kube/config)")
 	cmd.Flags().StringVar(&configPath, "config", "/etc/multikube/config.yaml", "path to multikube config file to update")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing backend and related objects if they already exist")
 
 	return cmd
 }
@@ -63,7 +65,9 @@ func defaultKubeconfigPath() string {
 }
 
 // runImport is the core logic for the "config import" command.
-func runImport(contextName, kubeconfigPath, configPath string) error {
+// When force is true, existing objects with the same names are replaced
+// instead of causing a conflict error.
+func runImport(contextName, kubeconfigPath, configPath string, force bool) error {
 	// 1. Load the kubeconfig.
 	kubecfg, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
@@ -96,9 +100,14 @@ func runImport(contextName, kubeconfigPath, configPath string) error {
 		return err
 	}
 
-	// 5. Check for name conflicts.
-	if err := checkNameConflicts(cfg, result); err != nil {
-		return err
+	// 5. Handle name conflicts: remove existing objects when --force is set,
+	//    otherwise error out.
+	if force {
+		removeConflicts(cfg, result)
+	} else {
+		if err := checkNameConflicts(cfg, result); err != nil {
+			return err
+		}
 	}
 
 	// 6. Append new objects and write.
@@ -301,6 +310,100 @@ func checkNameConflicts(cfg *types.Config, r *importResult) error {
 	}
 
 	return nil
+}
+
+// removeConflicts removes existing objects from the config that have the same
+// names as the objects being imported. Objects referenced by other backends or
+// credentials are preserved to avoid breaking unrelated entries.
+func removeConflicts(cfg *types.Config, r *importResult) {
+	// Remove matching backend.
+	filtered := cfg.Backends[:0]
+	for _, b := range cfg.Backends {
+		if b.Name == r.Backend.Name {
+			fmt.Printf("Warning: overwriting existing backend %q\n", b.Name)
+			continue
+		}
+		filtered = append(filtered, b)
+	}
+	cfg.Backends = filtered
+
+	// Remove matching CA only if no other backend references it.
+	if r.CertificateAuthority != nil {
+		caName := r.CertificateAuthority.Name
+		if !caReferencedByOtherBackend(cfg, caName, r.Backend.Name) {
+			filteredCAs := cfg.CertificateAuthorities[:0]
+			for _, ca := range cfg.CertificateAuthorities {
+				if ca.Name != caName {
+					filteredCAs = append(filteredCAs, ca)
+				}
+			}
+			cfg.CertificateAuthorities = filteredCAs
+		}
+	}
+
+	// Remove matching certificate only if no other credential references it.
+	if r.Certificate != nil {
+		certName := r.Certificate.Name
+		if !certReferencedByOtherCredential(cfg, certName, r.Credential) {
+			filteredCerts := cfg.Certificates[:0]
+			for _, c := range cfg.Certificates {
+				if c.Name != certName {
+					filteredCerts = append(filteredCerts, c)
+				}
+			}
+			cfg.Certificates = filteredCerts
+		}
+	}
+
+	// Remove matching credential only if no other backend references it.
+	if r.Credential != nil {
+		credName := r.Credential.Name
+		if !credReferencedByOtherBackend(cfg, credName, r.Backend.Name) {
+			filteredCreds := cfg.Credentials[:0]
+			for _, c := range cfg.Credentials {
+				if c.Name != credName {
+					filteredCreds = append(filteredCreds, c)
+				}
+			}
+			cfg.Credentials = filteredCreds
+		}
+	}
+}
+
+// caReferencedByOtherBackend reports whether any backend other than
+// excludeBackendName references the given CA name.
+func caReferencedByOtherBackend(cfg *types.Config, caName, excludeBackendName string) bool {
+	for _, b := range cfg.Backends {
+		if b.Name != excludeBackendName && b.CaRef == caName {
+			return true
+		}
+	}
+	return false
+}
+
+// credReferencedByOtherBackend reports whether any backend other than
+// excludeBackendName references the given credential name.
+func credReferencedByOtherBackend(cfg *types.Config, credName, excludeBackendName string) bool {
+	for _, b := range cfg.Backends {
+		if b.Name != excludeBackendName && b.AuthRef == credName {
+			return true
+		}
+	}
+	return false
+}
+
+// certReferencedByOtherCredential reports whether any credential other than
+// excludeCred references the given certificate name.
+func certReferencedByOtherCredential(cfg *types.Config, certName string, excludeCred *types.Credential) bool {
+	for _, c := range cfg.Credentials {
+		if excludeCred != nil && c.Name == excludeCred.Name {
+			continue
+		}
+		if c.ClientCertificateRef == certName {
+			return true
+		}
+	}
+	return false
 }
 
 // appendObjects adds the imported objects to the config.

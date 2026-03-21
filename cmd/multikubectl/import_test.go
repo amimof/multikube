@@ -365,7 +365,7 @@ func TestRunImport_EndToEnd_TokenAuth(t *testing.T) {
 	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
 	configPath := filepath.Join(dir, "multikube-config.yaml")
 
-	err := runImport("staging", kubeconfigPath, configPath)
+	err := runImport("staging", kubeconfigPath, configPath, false)
 	require.NoError(t, err)
 
 	// Verify the config file was written.
@@ -416,7 +416,7 @@ func TestRunImport_EndToEnd_ClientCert(t *testing.T) {
 	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
 	configPath := filepath.Join(dir, "multikube-config.yaml")
 
-	err := runImport("prod", kubeconfigPath, configPath)
+	err := runImport("prod", kubeconfigPath, configPath, false)
 	require.NoError(t, err)
 
 	cfg, err := mkconfig.LoadFromFile(configPath)
@@ -465,7 +465,7 @@ func TestRunImport_EndToEnd_AppendToExisting(t *testing.T) {
 
 	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
 
-	err := runImport("new", kubeconfigPath, configPath)
+	err := runImport("new", kubeconfigPath, configPath, false)
 	require.NoError(t, err)
 
 	// Verify both backends exist.
@@ -490,7 +490,7 @@ func TestRunImport_ContextNotFound(t *testing.T) {
 	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
 	configPath := filepath.Join(dir, "config.yaml")
 
-	err := runImport("nonexistent", kubeconfigPath, configPath)
+	err := runImport("nonexistent", kubeconfigPath, configPath, false)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), `context "nonexistent" not found`)
 }
@@ -523,7 +523,7 @@ func TestRunImport_DuplicateBackend(t *testing.T) {
 
 	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
 
-	err := runImport("prod", kubeconfigPath, configPath)
+	err := runImport("prod", kubeconfigPath, configPath, false)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), `backend "prod" already exists`)
 }
@@ -549,7 +549,7 @@ func TestRunImport_CreatesNewFile(t *testing.T) {
 
 	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
 
-	err := runImport("demo", kubeconfigPath, configPath)
+	err := runImport("demo", kubeconfigPath, configPath, false)
 	require.NoError(t, err)
 
 	// Verify file was created in the subdirectory.
@@ -584,11 +584,153 @@ func TestRunImport_InsecureSkipTLS(t *testing.T) {
 	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
 	configPath := filepath.Join(dir, "config.yaml")
 
-	err := runImport("insecure", kubeconfigPath, configPath)
+	err := runImport("insecure", kubeconfigPath, configPath, false)
 	require.NoError(t, err)
 
 	cfg, err := mkconfig.LoadFromFile(configPath)
 	require.NoError(t, err)
 	require.Len(t, cfg.Backends, 1)
 	assert.True(t, cfg.Backends[0].InsecureSkipTlsVerify)
+}
+
+func TestRunImport_ForceOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+
+	// Existing config with a "prod" backend, CA, and credential.
+	existingYAML := `backends:
+  - name: prod
+    server: https://old-prod.example.com:6443
+    caRef: prod-ca
+    authRef: prod-cred
+certificateAuthorities:
+  - name: prod-ca
+    certificateData: b2xkLWNh
+credentials:
+  - name: prod-cred
+    token: old-token
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(existingYAML), 0o644))
+
+	kubecfg := &api.Config{
+		Clusters: map[string]*api.Cluster{
+			"prod-cluster": {
+				Server:                   "https://new-prod.k8s.example.com:6443",
+				CertificateAuthorityData: []byte("-----BEGIN CERTIFICATE-----\nnew-ca\n-----END CERTIFICATE-----"),
+			},
+		},
+		AuthInfos: map[string]*api.AuthInfo{
+			"prod-user": {
+				Token: "new-token-456",
+			},
+		},
+		Contexts: map[string]*api.Context{
+			"prod": {
+				Cluster:  "prod-cluster",
+				AuthInfo: "prod-user",
+			},
+		},
+	}
+
+	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
+
+	// Without --force, it should still fail.
+	err := runImport("prod", kubeconfigPath, configPath, false)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `backend "prod" already exists`)
+
+	// With --force, it should succeed and overwrite.
+	err = runImport("prod", kubeconfigPath, configPath, true)
+	require.NoError(t, err)
+
+	cfg, err := mkconfig.LoadFromFile(configPath)
+	require.NoError(t, err)
+
+	// Should have exactly one backend with the new server URL.
+	require.Len(t, cfg.Backends, 1)
+	assert.Equal(t, "prod", cfg.Backends[0].Name)
+	assert.Equal(t, "https://new-prod.k8s.example.com:6443", cfg.Backends[0].Server)
+
+	// CA should be replaced.
+	require.Len(t, cfg.CertificateAuthorities, 1)
+	assert.Equal(t, "prod-ca", cfg.CertificateAuthorities[0].Name)
+
+	// Credential should be replaced with new token.
+	require.Len(t, cfg.Credentials, 1)
+	assert.Equal(t, "prod-cred", cfg.Credentials[0].Name)
+	assert.Equal(t, "new-token-456", cfg.Credentials[0].Token)
+}
+
+func TestRunImport_ForceOverwrite_SkipsReferencedObjects(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+
+	// Existing config: two backends share the same CA and credential.
+	existingYAML := `backends:
+  - name: prod
+    server: https://old-prod.example.com:6443
+    caRef: shared-ca
+    authRef: shared-cred
+  - name: staging
+    server: https://staging.example.com:6443
+    caRef: shared-ca
+    authRef: shared-cred
+certificateAuthorities:
+  - name: shared-ca
+    certificateData: c2hhcmVkLWNh
+credentials:
+  - name: shared-cred
+    token: shared-token
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(existingYAML), 0o644))
+
+	// Import a new "prod" context whose generated CA and credential names
+	// (prod-ca, prod-cred) do NOT collide with the shared names.
+	kubecfg := &api.Config{
+		Clusters: map[string]*api.Cluster{
+			"prod-cluster": {
+				Server:                   "https://new-prod.k8s.example.com:6443",
+				CertificateAuthorityData: []byte("-----BEGIN CERTIFICATE-----\nnew-ca\n-----END CERTIFICATE-----"),
+			},
+		},
+		AuthInfos: map[string]*api.AuthInfo{
+			"prod-user": {
+				Token: "new-token",
+			},
+		},
+		Contexts: map[string]*api.Context{
+			"prod": {
+				Cluster:  "prod-cluster",
+				AuthInfo: "prod-user",
+			},
+		},
+	}
+
+	kubeconfigPath := writeKubeconfig(t, dir, kubecfg)
+
+	err := runImport("prod", kubeconfigPath, configPath, true)
+	require.NoError(t, err)
+
+	cfg, err := mkconfig.LoadFromFile(configPath)
+	require.NoError(t, err)
+
+	// "prod" backend should be replaced, "staging" should remain.
+	require.Len(t, cfg.Backends, 2)
+	backendNames := []string{cfg.Backends[0].Name, cfg.Backends[1].Name}
+	assert.Contains(t, backendNames, "prod")
+	assert.Contains(t, backendNames, "staging")
+
+	// The shared CA must still be present (referenced by "staging").
+	// The new "prod-ca" should also be present.
+	require.Len(t, cfg.CertificateAuthorities, 2)
+	caNames := []string{cfg.CertificateAuthorities[0].Name, cfg.CertificateAuthorities[1].Name}
+	assert.Contains(t, caNames, "shared-ca")
+	assert.Contains(t, caNames, "prod-ca")
+
+	// The shared credential must still be present (referenced by "staging").
+	// The new "prod-cred" should also be present.
+	require.Len(t, cfg.Credentials, 2)
+	credNames := []string{cfg.Credentials[0].Name, cfg.Credentials[1].Name}
+	assert.Contains(t, credNames, "shared-cred")
+	assert.Contains(t, credNames, "prod-cred")
 }
