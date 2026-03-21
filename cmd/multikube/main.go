@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SermoDigital/jose/crypto"
+	configv1 "github.com/amimof/multikube/api/config/v1"
 	mkconfig "github.com/amimof/multikube/pkg/config"
 	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/server"
@@ -153,8 +155,10 @@ func main() {
 
 	// Load multikube configuration file if provided
 	var mkCfg *mkconfig.RuntimeConfig
+	var extCfg *configv1.Config
+	var err error
 	if configPath != "" {
-		extCfg, err := mkconfig.LoadFromFile(configPath)
+		extCfg, err = mkconfig.LoadFromFile(configPath)
 		if err != nil {
 			log.Printf("Warning: could not load config file %s: %v", configPath, err)
 		} else {
@@ -167,8 +171,14 @@ func main() {
 		}
 	}
 
+	b := bytes.NewBuffer(nil)
+	err = mkconfig.ExportAllKubeconfigs(extCfg, b)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Read provided kubeconfig file
-	c, err := clientcmd.LoadFromFile(kubeconfigPath)
+	c, err := clientcmd.Load(b.Bytes())
 	if err != nil {
 		log.Fatal(err)
 	}
