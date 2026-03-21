@@ -65,7 +65,7 @@ func GenerateProxyKubeconfig(cfg *types.Config, backendNames []string, out io.Wr
 				return fmt.Errorf("no route found for backend %q", backend.Name)
 			}
 			if warn != nil {
-				fmt.Fprintf(warn, "warning: skipping backend %q: no route found\n", backend.Name)
+				_, _ = fmt.Fprintf(warn, "warning: skipping backend %q: no route found\n", backend.Name)
 			}
 			continue
 		}

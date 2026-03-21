@@ -36,8 +36,6 @@ type Proxy struct {
 func New(c *api.Config) (*Proxy, error) {
 	transports := make(map[string]http.RoundTripper)
 
-	fmt.Print(c.AuthInfos["utbildning-dev"].Token)
-
 	for ctxKey := range c.Contexts {
 		cluster := getClusterByContextName(c, ctxKey)
 		auth := getAuthByContextName(c, ctxKey)
