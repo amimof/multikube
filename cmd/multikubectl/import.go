@@ -337,21 +337,23 @@ func writeConfigFile(cfg *types.Config, path string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
+
+	defer func() {
+		_ = tmp.Close()
+	}()
+
 	tmpPath := tmp.Name()
 
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return fmt.Errorf("writing temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("closing temp file: %w", err)
+		if err := os.Remove(tmpPath); err != nil {
+			return fmt.Errorf("writing temp file: %w", err)
+		}
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("renaming temp file to %s: %w", path, err)
+		if err := os.Remove(tmpPath); err != nil {
+			return fmt.Errorf("renaming temp file to %s: %w", path, err)
+		}
 	}
 
 	return nil

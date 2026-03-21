@@ -36,7 +36,9 @@ func captureStdout(t *testing.T, fn func()) []byte {
 
 	fn()
 
-	w.Close()
+	defer func() {
+		_ = w.Close()
+	}()
 	os.Stdout = orig
 
 	var buf bytes.Buffer
