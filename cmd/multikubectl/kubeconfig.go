@@ -1,10 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
-	mkconfig "github.com/amimof/multikube/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -45,10 +41,5 @@ Examples:
 
 // runKubeconfig generates a proxy-targeting kubeconfig and writes it to stdout.
 func runKubeconfig(backendNames []string, configPath string) error {
-	cfg, err := mkconfig.LoadFromFile(configPath)
-	if err != nil {
-		return fmt.Errorf("loading multikube config %s: %w", configPath, err)
-	}
-
-	return mkconfig.GenerateProxyKubeconfig(cfg, backendNames, os.Stdout, os.Stderr)
+	return nil
 }

@@ -6,12 +6,10 @@ import (
 	"net"
 	"net/http"
 	"slices"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/go-openapi/swag/netutils"
 	"github.com/tylerb/graceful"
 )
 
@@ -24,27 +22,22 @@ const (
 // Server for the multikube API
 type Server struct {
 	EnabledListeners []string
-	Host             string
-	Port             int
+	Address          string
 	ListenLimit      int
-	TLSHost          string
-	TLSPort          int
+	TLSAddress       string
 	TLSListenLimit   int
-	// TLSCertificate    string
-	// TLSCertificateKey string
-	// TLSCACertificate  string
-	TLSConfig       *tls.Config
-	SocketPath      string
-	Name            string
-	KeepAlive       time.Duration
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	TLSKeepAlive    time.Duration
-	TLSReadTimeout  time.Duration
-	TLSWriteTimeout time.Duration
-	CleanupTimeout  time.Duration
-	MaxHeaderSize   uint64
-	Handler         http.Handler
+	TLSConfig        *tls.Config
+	SocketPath       string
+	Name             string
+	KeepAlive        time.Duration
+	ReadTimeout      time.Duration
+	WriteTimeout     time.Duration
+	TLSKeepAlive     time.Duration
+	TLSReadTimeout   time.Duration
+	TLSWriteTimeout  time.Duration
+	CleanupTimeout   time.Duration
+	MaxHeaderSize    uint64
+	Handler          http.Handler
 
 	shutdown      chan struct{}
 	httpServerL   net.Listener
@@ -60,8 +53,7 @@ func NewServer() *Server {
 		EnabledListeners: []string{"http"},
 		CleanupTimeout:   10 * time.Second,
 		MaxHeaderSize:    1000000,
-		Host:             "127.0.0.1",
-		Port:             8080,
+		Address:          "127.0.0.1:8080",
 		ListenLimit:      0,
 		KeepAlive:        3 * time.Minute,
 		ReadTimeout:      30 * time.Second,
@@ -75,15 +67,12 @@ func NewServerTLS() *Server {
 		EnabledListeners: []string{"https"},
 		CleanupTimeout:   10 * time.Second,
 		MaxHeaderSize:    1000000,
-		TLSHost:          "127.0.0.1",
-		TLSPort:          8443,
-		// TLSCertificate:    "",
-		// TLSCertificateKey: "",
-		// TLSCACertificate:  "",
-		TLSListenLimit:  0,
-		TLSKeepAlive:    3 * time.Minute,
-		TLSReadTimeout:  30 * time.Second,
-		TLSWriteTimeout: 30 * time.Second,
+		TLSAddress:       "127.0.0.1:8443",
+		TLSConfig:        &tls.Config{},
+		TLSListenLimit:   0,
+		TLSKeepAlive:     3 * time.Minute,
+		TLSReadTimeout:   30 * time.Second,
+		TLSWriteTimeout:  30 * time.Second,
 	}
 }
 
@@ -102,9 +91,8 @@ func (s *Server) Listen() error {
 	}
 
 	if s.hasScheme(schemeHTTPS) {
-		// Use http host if https host wasn't defined
-		if s.TLSHost == "" {
-			s.TLSHost = s.Host
+		if _, _, err := parseAddress(s.TLSAddress); err != nil {
+			return err
 		}
 		// Use http listen limit if https listen limit wasn't defined
 		if s.TLSListenLimit == 0 {
@@ -133,32 +121,21 @@ func (s *Server) Listen() error {
 	}
 
 	if s.hasScheme(schemeHTTP) {
-		listener, err := net.Listen("tcp", net.JoinHostPort(s.Host, strconv.Itoa(s.Port)))
+		if _, _, err := parseAddress(s.Address); err != nil {
+			return err
+		}
+		listener, err := net.Listen("tcp", s.Address)
 		if err != nil {
 			return err
 		}
-
-		h, p, err := netutils.SplitHostPort(listener.Addr().String())
-		if err != nil {
-			return err
-		}
-		s.Host = h
-		s.Port = p
 		s.httpServerL = listener
 	}
 
 	if s.hasScheme(schemeHTTPS) {
-		tlsListener, err := net.Listen("tcp", net.JoinHostPort(s.TLSHost, strconv.Itoa(s.TLSPort)))
+		tlsListener, err := net.Listen("tcp", s.TLSAddress)
 		if err != nil {
 			return err
 		}
-
-		sh, sp, err := netutils.SplitHostPort(tlsListener.Addr().String())
-		if err != nil {
-			return err
-		}
-		s.TLSHost = sh
-		s.TLSPort = sp
 		s.httpsServerL = tlsListener
 	}
 

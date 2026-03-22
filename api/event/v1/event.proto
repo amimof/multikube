@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package event.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/amimof/multikube/api/event/v1;event";
+
+service EventService {
+  rpc Subscribe(SubscribeRequest) returns (stream Envelope) {}
+  rpc Publish(PublishRequest) returns (PublishResponse) {}
+}
+
+message SubscribeRequest {
+  string client_id = 1;
+  map<string, string> selector = 2;
+}
+
+message Envelope {
+  string id = 1 [(buf.validate.field).string = {
+    uuid: true
+    min_len: 16
+  }];
+  google.protobuf.Timestamp timestamp = 2;
+  Event event = 3 [(buf.validate.field).required = true];
+  google.protobuf.Any object = 4 [(buf.validate.field).required = true];
+}
+
+enum Event {
+  EVENT_UNSPECIFIED = 0;
+  EVENT_CREATE = 1;
+  EVENT_CLIENT_CONNECT = 2;
+
+  EVENT_BACKEND_CREATE = 3;
+  EVENT_BACKEND_DELETE = 4;
+  EVENT_BACKEND_UPDATE = 5;
+  EVENT_BACKEND_PATCH = 6;
+}
+
+message PublishRequest {
+  Envelope event = 1;
+}
+
+message PublishResponse {
+  Envelope event = 1;
+}

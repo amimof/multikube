@@ -4,5 +4,13 @@ plugins:
     out: ./api
     opt:
       - paths=source_relative
+  - plugin: go-grpc
+    out: ./api
+    opt:
+      - paths=source_relative
+  - plugin: grpc-gateway
+    out: ./api
+    opt:
+      - paths=source_relative
   - plugin: openapiv2
     out: ./api
