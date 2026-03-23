@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package meta.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+option go_package = "github.com/amimof/multikube/api/meta/v1;meta";
+
+message Meta {
+  string name = 1 [
+    (buf.validate.field).string.min_len = 1,
+    (buf.validate.field).string.pattern = "^[A-Za-z0-9]+(?:[._-](?:[A-Za-z0-9]+))*$"
+  ];
+  map<string, string> labels = 2;
+  google.protobuf.Timestamp created = 3 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {format: "date"}];
+  google.protobuf.Timestamp updated = 4 [(grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {format: "date"}];
+  uint64 generation = 5 [
+    (buf.validate.field).uint64.gt = 0,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  uint64 resource_version = 6 [
+    (buf.validate.field).uint64.gt = 0,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+  string uid = 7 [
+    (buf.validate.field).string.uuid = true,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE
+  ];
+}

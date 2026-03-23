@@ -1,27 +1,43 @@
 package main
 
 import (
-	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"log"
+	"log/slog"
+	"math/big"
+	"net"
 	"os"
+	"path"
+	"path/filepath"
+	"strings"
 	"time"
 
+	"buf.build/go/protovalidate"
 	"github.com/SermoDigital/jose/crypto"
-	configv1 "github.com/amimof/multikube/api/config/v1"
-	mkconfig "github.com/amimof/multikube/pkg/config"
+	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/proxy"
+	"github.com/amimof/multikube/pkg/repository"
 	"github.com/amimof/multikube/pkg/server"
+	"github.com/dgraph-io/badger/v4"
+	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/pflag"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
-	"k8s.io/client-go/tools/clientcmd"
+	"google.golang.org/grpc"
+
+	"github.com/amimof/multikube/internal/app"
+	transport "github.com/amimof/multikube/internal/transport/grpc"
+	badgerrepo "github.com/amimof/multikube/pkg/repository/badger"
 )
 
 var (
@@ -40,10 +56,10 @@ var (
 
 	socketPath string
 
-	host         string
-	port         int
-	metricsHost  string
-	metricsPort  int
+	serverAddress  string
+	metricsAddress string
+	proxyAddress   string
+
 	listenLimit  int
 	keepAlive    time.Duration
 	readTimeout  time.Duration
@@ -54,8 +70,6 @@ var (
 	oidcUsernameClaim      string
 	oidcCaFile             string
 	oidcInsecureSkipVerify bool
-	tlsHost                string
-	tlsPort                int
 	tlsListenLimit         int
 	tlsKeepAlive           time.Duration
 	tlsReadTimeout         time.Duration
@@ -65,30 +79,55 @@ var (
 	tlsCACertificate       string
 
 	rs256PublicKey string
-	configPath     string
 	kubeconfigPath string
 	cacheTTL       time.Duration
+	dataPath       string
+	logLevel       string
+
+	log *slog.Logger
 )
 
+func parseSlogLevel(lvl string) (slog.Level, error) {
+	switch strings.ToLower(lvl) {
+	case "error":
+		return slog.LevelError, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "info":
+		return slog.LevelInfo, nil
+	case "debug":
+		return slog.LevelDebug, nil
+	}
+
+	var l slog.Level
+	return l, fmt.Errorf("not a valid log level: %q", lvl)
+}
+
 func init() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// decide how your app should handle this
+		panic(fmt.Errorf("could not determine home directory: %w", err))
+	}
+
+	defaultStatePath := filepath.Join(home, ".local", "state", "multikube")
+
 	pflag.StringVar(&socketPath, "socket-path", "/var/run/multikube.sock", "the unix socket to listen on")
-	pflag.StringVar(&host, "host", "localhost", "The host address on which to listen for the --port port")
-	pflag.StringVar(&tlsHost, "tls-host", "localhost", "The host address on which to listen for the --tls-port port")
+	pflag.StringVar(&serverAddress, "server-address", "0.0.0.0:5743", "Address to listen the TCP server on")
+	pflag.StringVar(&metricsAddress, "metrics-address", "0.0.0.0:8888", "Address to listen the metrics server on")
+	pflag.StringVar(&proxyAddress, "gateway-address", "0.0.0.0:8443", "Address to listen the http proxy server on")
 	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
 	pflag.StringVar(&rs256PublicKey, "rs256-public-key", "", "the RS256 public key used to validate the signature of client JWT's")
-	pflag.StringVar(&configPath, "config", "/etc/multikube/config.yaml", "path to the multikube configuration file")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
-	pflag.StringVar(&metricsHost, "metrics-host", "localhost", "The host address on which to listen for the --metrics-port port")
 	pflag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
 	pflag.StringVar(&oidcUsernameClaim, "oidc-username-claim", "sub", " The OpenID claim to use as the user name. Note that claims other than the default is not guaranteed to be unique and immutable")
 	pflag.StringVar(&oidcCaFile, "oidc-ca-file", "", "the certificate authority file to be used for verifyign the OpenID server")
+	pflag.StringVar(&dataPath, "data-path", defaultStatePath, "Directory to store state")
+	pflag.StringVar(&logLevel, "log-level", "info", "The level of verbosity of log output")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
-	pflag.IntVar(&port, "port", 8080, "the port to listen on for insecure connections, defaults to 8080")
-	pflag.IntVar(&tlsPort, "tls-port", 8443, "the port to listen on for secure connections, defaults to 8443")
-	pflag.IntVar(&metricsPort, "metrics-port", 8888, "the port to listen on for Prometheus metrics, defaults to 8888")
 	pflag.IntVar(&listenLimit, "listen-limit", 0, "limit the number of outstanding requests")
 	pflag.IntVar(&tlsListenLimit, "tls-listen-limit", 0, "limit the number of outstanding requests")
 	pflag.Uint64Var(&maxHeaderSize, "max-header-size", 1000000, "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
@@ -119,7 +158,7 @@ func init() {
 		},
 		func() float64 { return 1 },
 	)); err != nil {
-		log.Printf("Unable to register 'multikube_build_info metric %s'", err.Error())
+		log.Info("Unable to register 'multikube_build_info metric'", "error", err.Error())
 	}
 }
 
@@ -148,45 +187,116 @@ func main() {
 		return
 	}
 
-	// Only allow one of the flags rs256-public-key and oidc-issuer-url
-	if rs256PublicKey != "" && oidcIssuerURL != "" {
-		log.Fatalf("Both flags `--rs256-public-key` and `--oidc-issue-url` cannot be set")
+	// Setup logging
+	lvl, err := parseSlogLevel(logLevel)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error parsing log level: %v", err)
+		os.Exit(1)
+	}
+	log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: lvl, AddSource: true}))
+
+	// Setup badgerdb and repo
+	db, err := badger.Open(badger.DefaultOptions(path.Join(dataPath, "db")))
+	if err != nil {
+		log.Error("error opening badger database", "error", err)
+		os.Exit(1)
+
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Error("error closing database", "error", err)
+		}
+	}()
+
+	// Setup repo
+	repo := badgerrepo.New(db)
+
+	// Setup event exchange bus
+	exchange := events.NewExchange(events.WithExchangeLogger(log))
+
+	// Setup grpc services
+	backendService := transport.NewBackendService(&app.BackendService{
+		Repo:     repository.NewVolumeRepo(repo),
+		Exchange: exchange,
+		Logger:   log,
+	})
+
+	validator, err := protovalidate.New()
+	if err != nil {
+		log.Error("Failed to create protovalidate validator", "error", err)
+		os.Exit(1)
 	}
 
-	// Load multikube configuration file if provided
-	var mkCfg *mkconfig.RuntimeConfig
-	var extCfg *configv1.Config
-	var err error
-	if configPath != "" {
-		extCfg, err = mkconfig.LoadFromFile(configPath)
+	var serverOpts []transport.NewServerOption
+
+	// Load in certificates either from flags or auto-generated
+	cert, err := generateCertificates()
+	if err != nil {
+		log.Error("error loading x509 certificates", "error", err)
+		os.Exit(1)
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	// Enable mTLS for gRPC server, if CA cert provided
+	if tlsCACertificate != "" {
+		caCert, err := os.ReadFile(tlsCACertificate)
 		if err != nil {
-			log.Printf("Warning: could not load config file %s: %v", configPath, err)
+			log.Error("error reading CA certificate file", "error", err)
 			os.Exit(1)
 		}
-		rtCfg, err := mkconfig.Convert(extCfg)
-		if err != nil {
-			log.Fatalf("Invalid configuration in %s: %v", configPath, err)
+		certPool := x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(caCert) {
+			log.Error("error appending CA certificate to pool", "caCert", tlsCACertificate)
+			os.Exit(1)
 		}
-		log.Printf("Loaded configuration from %s (%d backends, %d routes)", configPath, len(rtCfg.Backends), len(rtCfg.Routes))
-		mkCfg = rtCfg
+
+		tlsConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			ClientAuth:   tls.RequireAndVerifyClientCert, // ← mTLS
+			ClientCAs:    certPool,
+		}
+		log.Info("mutual TLS enabled for gRPC server")
 	}
 
-	b := bytes.NewBuffer(nil)
-	err = mkconfig.ExportAllKubeconfigs(extCfg, b)
+	serverOpts = append(serverOpts,
+		// transport.WithGrpcOption(metricsOpts),
+		transport.WithGrpcOption(grpc.UnaryInterceptor(protovalidate_middleware.UnaryServerInterceptor(validator))),
+		transport.WithExchange(exchange),
+		transport.WithLogger(log),
+		transport.WithDB(repo),
+	)
+	errChan := make(chan error)
+
+	// Setup server
+	srv, err := transport.NewServer(serverOpts...)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("error setting up gRPC server", "error", err)
+		os.Exit(1)
 	}
 
-	// Read provided kubeconfig file
-	c, err := clientcmd.Load(b.Bytes())
-	if err != nil {
-		log.Fatal(err)
+	// Register services to gRPC server
+	srv.RegisterService(
+		backendService,
+	)
+
+	// Only allow one of the flags rs256-public-key and oidc-issuer-url
+	if rs256PublicKey != "" && oidcIssuerURL != "" {
+		log.Error("Only one of `--rs256-public-key` or `--oidc-issue-url` cat be set")
+		os.Exit(1)
 	}
+
+	go serveTCP(serverAddress, srv, errChan)
+	go serveUnix(srv, errChan)
 
 	// Create the proxy
-	p, err := proxy.New(c)
+	// TODO: Proxy is configured through unimplemented controller
+	p, err := proxy.New(nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("error setting up proxy", "error", err)
+		os.Exit(1)
 	}
 	p.CacheTTL(cacheTTL)
 
@@ -218,58 +328,34 @@ func main() {
 		p.Use(proxy.WithRS256(rs256Config))
 	}
 
-	if mkCfg.Auth.JWT.RS256.PublicKey != "" {
-		rs256Config := proxy.RS256Config{
-			PublicKey: readPublicKey(mkCfg.Auth.JWT.RS256.PublicKey),
-		}
-		p.Use(proxy.WithRS256(rs256Config))
-	}
-
 	// Create the server
-	var s *server.Server
-	if mkCfg != nil {
-		// Build server from config file.
-		var err error
-		s, err = server.NewServerFromConfig(mkCfg, p.Chain())
-		if err != nil {
-			log.Fatalf("Failed to create server from config: %v", err)
-		}
-	} else {
-		// Fall back to CLI flags.
-		s = &server.Server{
-			EnabledListeners: enabledListeners,
-			CleanupTimeout:   cleanupTimeout,
-			MaxHeaderSize:    maxHeaderSize,
-			SocketPath:       socketPath,
-			Host:             host,
-			Port:             port,
-			ListenLimit:      listenLimit,
-			KeepAlive:        keepAlive,
-			ReadTimeout:      readTimeout,
-			WriteTimeout:     writeTimeout,
-			// TLSConfig:        tlsConfig,
-			TLSHost: tlsHost,
-			TLSPort: tlsPort,
-			// TLSCertificate:    cert,
-			// TLSCertificateKey: tlsCertificateKey,
-			// TLSCACertificate:  tlsCACertificate,
-			TLSListenLimit:  tlsListenLimit,
-			TLSKeepAlive:    tlsKeepAlive,
-			TLSReadTimeout:  tlsReadTimeout,
-			TLSWriteTimeout: tlsWriteTimeout,
-			Handler:         p.Chain(),
-		}
+	s := &server.Server{
+		EnabledListeners: enabledListeners,
+		CleanupTimeout:   cleanupTimeout,
+		MaxHeaderSize:    maxHeaderSize,
+		SocketPath:       socketPath,
+		ListenLimit:      listenLimit,
+		KeepAlive:        keepAlive,
+		ReadTimeout:      readTimeout,
+		WriteTimeout:     writeTimeout,
+		TLSAddress:       proxyAddress,
+		TLSConfig:        tlsConfig,
+		TLSListenLimit:   tlsListenLimit,
+		TLSKeepAlive:     tlsKeepAlive,
+		TLSReadTimeout:   tlsReadTimeout,
+		TLSWriteTimeout:  tlsWriteTimeout,
+		Handler:          p.Chain(),
 	}
 
 	// Metrics server
 	ms := server.NewServer()
-	ms.Port = metricsPort
-	ms.Host = metricsHost
+	ms.Address = metricsAddress
 	ms.Name = "metrics"
 	ms.Handler = promhttp.Handler()
 	go func() {
 		if err := ms.Serve(); err != nil {
-			log.Fatal(err)
+			log.Error("error setting up metrics server", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -289,7 +375,7 @@ func main() {
 	//nolint:all
 	tracer, closer, err := cfg.New("multikube", config.Logger(jaeger.StdLogger))
 	if err != nil {
-		log.Fatal(err)
+		log.Warn("error setting up tracer", "error", err)
 	}
 	opentracing.SetGlobalTracer(tracer)
 	defer func() { _ = closer.Close() }()
@@ -297,7 +383,8 @@ func main() {
 	// Listen and serve!
 	err = s.Serve()
 	if err != nil {
-		log.Fatal(err)
+		log.Error("error serving proxy", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -319,13 +406,117 @@ func readCert(p string) *x509.Certificate {
 func readPublicKey(p string) *rsa.PublicKey {
 	f, err := os.ReadFile(p)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("error reading public keyl", "error", err)
 		return nil
 	}
 	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
 	if err != nil {
-		log.Fatal(err)
+		log.Error("error parsing rsa public key from pem", "error", err)
 		return nil
 	}
 	return pubkey
+}
+
+func serveUnix(s *transport.Server, errChan chan error) {
+	// Remove the socket file if it already exists
+	if _, err := os.Stat(socketPath); err == nil {
+		if err := os.RemoveAll(socketPath); err != nil {
+			errChan <- fmt.Errorf("failed to remove existing Unix socket: %v", err)
+			return
+		}
+	}
+
+	// Create socket dir if doesn't exist
+	dirPath := filepath.Dir(socketPath)
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(dirPath, 0o755); err != nil {
+			errChan <- fmt.Errorf("failed to create socket directory: %v", err)
+			return
+		}
+	}
+	unixListener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		errChan <- fmt.Errorf("error setting up Unix socket listener: %v", err)
+		return
+	}
+
+	log.Info("server listening", "socket", socketPath)
+	if err := s.Serve(unixListener); err != nil {
+		errChan <- fmt.Errorf("error serving server: %v", err)
+		return
+	}
+}
+
+func serveTCP(addr string, s *transport.Server, errChan chan error) {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		errChan <- fmt.Errorf("error setting up server listener: %v", err)
+		return
+	}
+	log.Info("server listening", "address", addr)
+	if err := s.Serve(l); err != nil {
+		errChan <- fmt.Errorf("error serving server: %v", err)
+		return
+	}
+}
+
+func generateCertificates() (tls.Certificate, error) {
+	if tlsCertificate != "" && tlsCertificateKey != "" {
+		return tls.LoadX509KeyPair(tlsCertificate, tlsCertificateKey)
+	}
+
+	cert := tls.Certificate{}
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return cert, err
+	}
+
+	// Valid for 1 year
+	notBefore := time.Now()
+	notAfter := notBefore.Add(365 * 24 * time.Hour) // Valid for 1 year
+
+	parent := &x509.Certificate{
+		KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+			x509.ExtKeyUsageClientAuth,
+		},
+		IsCA:                  false,
+		BasicConstraintsValid: true,
+		DNSNames:              []string{"localhost", "voiyd-node"},
+		IPAddresses: []net.IP{
+			net.IPv4(127, 0, 0, 1),
+		},
+		Subject: pkix.Name{
+			CommonName:         "voiyd-node",
+			Country:            []string{"SE"},
+			Province:           []string{"Halland"},
+			Locality:           []string{"Varberg"},
+			Organization:       []string{"voiyd-node"},
+			OrganizationalUnit: []string{"voiyd"},
+		},
+		SerialNumber: serial,
+		NotAfter:     notAfter,
+		NotBefore:    notBefore,
+	}
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return cert, err
+	}
+
+	certData, err := x509.CreateCertificate(rand.Reader, parent, parent, &key.PublicKey, key)
+	if err != nil {
+		return cert, err
+	}
+
+	cert = tls.Certificate{
+		Certificate: [][]byte{certData}, // Raw DER bytes from x509.CreateCertificate
+		PrivateKey:  key,                // *ecdsa.PrivateKey directly
+	}
+
+	log.Info("generated x509 key pair")
+
+	return cert, nil
 }

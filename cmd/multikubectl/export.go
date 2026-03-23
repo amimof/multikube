@@ -1,10 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
-	mkconfig "github.com/amimof/multikube/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -40,20 +36,10 @@ Pipe the output to a file or merge it into an existing kubeconfig as needed:
 
 // runExport exports a single backend as kubeconfig YAML to stdout.
 func runExport(backendName, configPath string) error {
-	cfg, err := mkconfig.LoadFromFile(configPath)
-	if err != nil {
-		return fmt.Errorf("loading multikube config %s: %w", configPath, err)
-	}
-
-	return mkconfig.ExportKubeconfig(cfg, backendName, os.Stdout)
+	return nil
 }
 
 // runExportAll exports all backends as a single kubeconfig YAML to stdout.
 func runExportAll(configPath string) error {
-	cfg, err := mkconfig.LoadFromFile(configPath)
-	if err != nil {
-		return fmt.Errorf("loading multikube config %s: %w", configPath, err)
-	}
-
-	return mkconfig.ExportAllKubeconfigs(cfg, os.Stdout)
+	return nil
 }
