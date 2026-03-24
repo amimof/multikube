@@ -13,6 +13,7 @@ func newConfigCmd() *cobra.Command {
 
 	cmd.AddCommand(newImportCmd())
 	cmd.AddCommand(newExportCmd())
+	cmd.AddCommand(newInitCmd())
 
 	return cmd
 }

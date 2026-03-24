@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -14,15 +15,17 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"buf.build/go/protovalidate"
 	"github.com/SermoDigital/jose/crypto"
+	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/events"
-	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/repository"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/dgraph-io/badger/v4"
@@ -33,7 +36,9 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/config"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/amimof/multikube/internal/app"
 	transport "github.com/amimof/multikube/internal/transport/grpc"
@@ -195,6 +200,10 @@ func main() {
 	}
 	log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: lvl, AddSource: true}))
 
+	// Setup signal handlers
+	exit := make(chan os.Signal, 1)
+	signal.Notify(exit, os.Interrupt, syscall.SIGTERM)
+
 	// Setup badgerdb and repo
 	db, err := badger.Open(badger.DefaultOptions(path.Join(dataPath, "db")))
 	if err != nil {
@@ -261,6 +270,13 @@ func main() {
 		log.Info("mutual TLS enabled for gRPC server")
 	}
 
+	creds := credentials.NewTLS(tlsConfig)
+	serverOpts = append(serverOpts,
+		transport.WithGrpcOption(grpc.Creds(creds),
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		),
+	)
+
 	serverOpts = append(serverOpts,
 		// transport.WithGrpcOption(metricsOpts),
 		transport.WithGrpcOption(grpc.UnaryInterceptor(protovalidate_middleware.UnaryServerInterceptor(validator))),
@@ -282,6 +298,11 @@ func main() {
 		backendService,
 	)
 
+	// Context
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// Only allow one of the flags rs256-public-key and oidc-issuer-url
 	if rs256PublicKey != "" && oidcIssuerURL != "" {
 		log.Error("Only one of `--rs256-public-key` or `--oidc-issue-url` cat be set")
@@ -291,42 +312,59 @@ func main() {
 	go serveTCP(serverAddress, srv, errChan)
 	go serveUnix(srv, errChan)
 
+	// Used by clientset and the gateway to connect internally
+	socketAddr := fmt.Sprintf("unix://%s", socketPath)
+
+	// Setup a clientset for the controllers
+	cs, err := client.New(socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}))
+	if err != nil {
+		log.Error("error creating clientset", "error", err.Error())
+	}
+	defer func() {
+		if err := cs.Close(); err != nil {
+			log.Error("error closing clientset connection", "error", err)
+		}
+	}()
+
+	// Setup controller
+	// TODO: Setup runtime controllers here
+
 	// Create the proxy
 	// TODO: Proxy is configured through unimplemented controller
-	p, err := proxy.New(nil)
-	if err != nil {
-		log.Error("error setting up proxy", "error", err)
-		os.Exit(1)
-	}
-	p.CacheTTL(cacheTTL)
-
-	p.Use(
-		proxy.WithEmpty(),
-		proxy.WithLogging(),
-		proxy.WithJWT(),
-		proxy.WithHeader(),
-	)
+	// p, err := proxy.New(nil)
+	// if err != nil {
+	// 	log.Error("error setting up proxy", "error", err)
+	// 	os.Exit(1)
+	// }
+	// p.CacheTTL(cacheTTL)
+	//
+	// p.Use(
+	// 	proxy.WithEmpty(),
+	// 	proxy.WithLogging(),
+	// 	proxy.WithJWT(),
+	// 	proxy.WithHeader(),
+	// )
 
 	// Add JWK validation middleware if issuer url is provided on cmd line
-	if oidcIssuerURL != "" {
-		oidcConfig := proxy.OIDCConfig{
-			OIDCIssuerURL:          oidcIssuerURL,
-			OIDCPollInterval:       oidcPollInterval,
-			OIDCUsernameClaim:      oidcUsernameClaim,
-			OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
-			OIDCCa:                 readCert(oidcCaFile),
-		}
-		// middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
-		p.Use(proxy.WithOIDC(oidcConfig))
-	}
+	// if oidcIssuerURL != "" {
+	// 	oidcConfig := proxy.OIDCConfig{
+	// 		OIDCIssuerURL:          oidcIssuerURL,
+	// 		OIDCPollInterval:       oidcPollInterval,
+	// 		OIDCUsernameClaim:      oidcUsernameClaim,
+	// 		OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
+	// 		OIDCCa:                 readCert(oidcCaFile),
+	// 	}
+	// 	// middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
+	// 	p.Use(proxy.WithOIDC(oidcConfig))
+	// }
 
 	// // Add RS256 public key validation middleware if public key provided
-	if rs256PublicKey != "" {
-		rs256Config := proxy.RS256Config{
-			PublicKey: readPublicKey(rs256PublicKey),
-		}
-		p.Use(proxy.WithRS256(rs256Config))
-	}
+	// if rs256PublicKey != "" {
+	// 	rs256Config := proxy.RS256Config{
+	// 		PublicKey: readPublicKey(rs256PublicKey),
+	// 	}
+	// 	p.Use(proxy.WithRS256(rs256Config))
+	// }
 
 	// Create the server
 	s := &server.Server{
@@ -344,14 +382,19 @@ func main() {
 		TLSKeepAlive:     tlsKeepAlive,
 		TLSReadTimeout:   tlsReadTimeout,
 		TLSWriteTimeout:  tlsWriteTimeout,
-		Handler:          p.Chain(),
+		Logger:           log,
+		// Handler:          p.Chain(),
 	}
+
+	// Listen and serve!
+	go serveProxyServer(s, errChan)
 
 	// Metrics server
 	ms := server.NewServer()
 	ms.Address = metricsAddress
 	ms.Name = "metrics"
 	ms.Handler = promhttp.Handler()
+	ms.Logger = log
 	go func() {
 		if err := ms.Serve(); err != nil {
 			log.Error("error setting up metrics server", "error", err)
@@ -377,15 +420,37 @@ func main() {
 	if err != nil {
 		log.Warn("error setting up tracer", "error", err)
 	}
+
 	opentracing.SetGlobalTracer(tracer)
 	defer func() { _ = closer.Close() }()
-
-	// Listen and serve!
-	err = s.Serve()
-	if err != nil {
-		log.Error("error serving proxy", "error", err)
-		os.Exit(1)
+	select {
+	case <-exit:
+		log.Info("received shutdown signal")
+		cancel()
+	case e := <-errChan:
+		log.Error("fatal error in server component", "error", e)
+		cancel()
+	case <-ctx.Done():
+		log.Info("context cancelled externally")
 	}
+
+	// Shut down server with force shutdown as fallback
+	serverShutdownDone := make(chan struct{})
+	go func() {
+		srv.Shutdown()
+		close(serverShutdownDone)
+	}()
+
+	select {
+	case <-serverShutdownDone:
+		log.Info("server shut down gracefully")
+	case <-time.After(10 * time.Second):
+		log.Warn("timeout exceeded, forcing shutdown")
+		srv.ForceShutdown()
+	}
+
+	close(exit)
+	close(errChan)
 }
 
 // Reads an x509 certificate from the filesystem and returns an instance of x509.Certiticate. Returns nil on errors
@@ -456,6 +521,14 @@ func serveTCP(addr string, s *transport.Server, errChan chan error) {
 	log.Info("server listening", "address", addr)
 	if err := s.Serve(l); err != nil {
 		errChan <- fmt.Errorf("error serving server: %v", err)
+		return
+	}
+}
+
+func serveProxyServer(ps *server.Server, errChan chan error) {
+	err := ps.Serve()
+	if err != nil {
+		errChan <- fmt.Errorf("error serving proxy: %v", err)
 		return
 	}
 }

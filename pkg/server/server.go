@@ -2,7 +2,7 @@ package server
 
 import (
 	"crypto/tls"
-	"log"
+	"fmt"
 	"net"
 	"net/http"
 	"slices"
@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/amimof/multikube/pkg/logger"
 	"github.com/tylerb/graceful"
 )
 
@@ -37,6 +38,7 @@ type Server struct {
 	TLSWriteTimeout  time.Duration
 	CleanupTimeout   time.Duration
 	MaxHeaderSize    uint64
+	Logger           logger.Logger
 	Handler          http.Handler
 
 	shutdown      chan struct{}
@@ -58,6 +60,7 @@ func NewServer() *Server {
 		KeepAlive:        3 * time.Minute,
 		ReadTimeout:      30 * time.Second,
 		WriteTimeout:     30 * time.Second,
+		Logger:           logger.ConsoleLogger{},
 	}
 }
 
@@ -73,6 +76,7 @@ func NewServerTLS() *Server {
 		TLSKeepAlive:     3 * time.Minute,
 		TLSReadTimeout:   30 * time.Second,
 		TLSWriteTimeout:  30 * time.Second,
+		Logger:           logger.ConsoleLogger{},
 	}
 }
 
@@ -168,13 +172,15 @@ func (s *Server) Serve() error {
 		domainSocket.Handler = s.Handler
 
 		wg.Add(2)
-		log.Printf("Serving %s at unix://%s", s.Name, s.SocketPath)
+		sockAddr := fmt.Sprintf("unix://%s", s.SocketPath)
+		s.Logger.Info("listener serving", "name", s.Name, "address", sockAddr)
 		go func(l net.Listener) {
 			defer wg.Done()
 			if err := domainSocket.Serve(l); err != nil {
-				log.Fatalf("%v", err)
+				s.Logger.Error("error serving", "error", err, "name", s.Name, "addresss", sockAddr)
+				return
 			}
-			log.Printf("Stopped serving %s at unix://%s", s.Name, s.SocketPath)
+			s.Logger.Info("stopped serving", "name", s.Name, "address", sockAddr)
 		}(s.domainSocketL)
 		go s.handleShutdown(&wg, domainSocket)
 	}
@@ -194,16 +200,23 @@ func (s *Server) Serve() error {
 			httpServer.Timeout = s.CleanupTimeout
 		}
 
+		if s.Name == "" {
+			s.Name = "http"
+		}
+
 		httpServer.Handler = s.Handler
 
 		wg.Add(2)
-		log.Printf("Serving %s at http://%s", s.Name, s.httpServerL.Addr())
+		httpAddr := fmt.Sprintf("http://%s", s.httpServerL.Addr())
+		fmt.Println(s.Logger)
+		s.Logger.Info("listener serving", "name", s.Name, "address", httpAddr)
 		go func(l net.Listener) {
 			defer wg.Done()
 			if err := httpServer.Serve(l); err != nil {
-				log.Printf("%v", err)
+				s.Logger.Error("error serving", "error", err, "name", s.Name, "address", httpAddr)
+				return
 			}
-			log.Printf("Stopped serving %s at http://%s", s.Name, l.Addr())
+			s.Logger.Info("stopped serving", "name", s.Name, "address", httpAddr)
 		}(s.httpServerL)
 		go s.handleShutdown(&wg, httpServer)
 	}
@@ -222,6 +235,10 @@ func (s *Server) Serve() error {
 		}
 		if int64(s.CleanupTimeout) > 0 {
 			httpsServer.Timeout = s.CleanupTimeout
+		}
+
+		if s.Name == "" {
+			s.Name = "https"
 		}
 
 		httpsServer.Handler = s.Handler
@@ -287,13 +304,15 @@ func (s *Server) Serve() error {
 		}
 
 		wg.Add(2)
-		log.Printf("Serving %s at https://%s", s.Name, s.httpsServerL.Addr())
+		httpsAddr := fmt.Sprintf("https://%s", s.httpsServerL.Addr())
+		s.Logger.Info("listener serving", "name", s.Name, "address", httpsAddr)
 		go func(l net.Listener) {
 			defer wg.Done()
 			if err := httpsServer.Serve(l); err != nil {
-				log.Fatalf("%v", err)
+				s.Logger.Error("error serving", "error", err, "name", s.Name, "address", httpsAddr)
+				return
 			}
-			log.Printf("Stopped serving %s at https://%s", s.Name, l.Addr())
+			s.Logger.Info("stopped serving", "name", s.Name, "address", httpsAddr)
 		}(tls.NewListener(s.httpsServerL, httpsServer.TLSConfig))
 		go s.handleShutdown(&wg, httpsServer)
 	}
@@ -310,11 +329,11 @@ func (s *Server) handleShutdown(wg *sync.WaitGroup, server *graceful.Server) {
 			atomic.AddInt32(&s.shuttingDown, 1)
 			server.Stop(s.CleanupTimeout)
 			<-server.StopChan()
-			log.Printf("Shutting down")
+			s.Logger.Info("shutting down server")
 			return
 		case <-server.StopChan():
 			atomic.AddInt32(&s.shuttingDown, 1)
-			log.Printf("Shutting down")
+			s.Logger.Info("shutting down server")
 			return
 		}
 	}
