@@ -1,17 +1,13 @@
 package proxy
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/amimof/multikube/pkg/cache"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
@@ -36,18 +32,19 @@ type Proxy struct {
 func New(c *api.Config) (*Proxy, error) {
 	transports := make(map[string]http.RoundTripper)
 
-	for ctxKey := range c.Contexts {
-		cluster := getClusterByContextName(c, ctxKey)
-		auth := getAuthByContextName(c, ctxKey)
-		tlsConfig, err := configureTLS(auth, cluster)
-		if err != nil {
-			continue
-		}
-		transports[ctxKey] = &Transport{
-			TLSClientConfig: tlsConfig,
-			Cache:           cache.New(),
-		}
-	}
+	// TODO: Implement lazy initialization
+	// for ctxKey := range c.Contexts {
+	// 	cluster := getClusterByContextName(c, ctxKey)
+	// 	auth := getAuthByContextName(c, ctxKey)
+	// 	tlsConfig, err := configureTLS(auth, cluster)
+	// 	if err != nil {
+	// 		continue
+	// 	}
+	// 	transports[ctxKey] = &Transport{
+	// 		TLSClientConfig: tlsConfig,
+	// 		Cache:           cache.New(),
+	// 	}
+	// }
 
 	return &Proxy{
 		kubeConfig: c,
@@ -141,50 +138,50 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // configureTLS composes a TLS configuration (tls.Config) from the provided Options parameter.
 // This is useful when building HTTP requests (for example with the net/http package)
 // and the TLS data is configured elsewhere.
-func configureTLS(a *api.AuthInfo, c *api.Cluster) (*tls.Config, error) {
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: c.InsecureSkipTLSVerify,
-	}
-
-	// Load CA from file
-	if c.CertificateAuthority != "" {
-		caCert, err := os.ReadFile(c.CertificateAuthority)
-		if err != nil {
-			return nil, err
-		}
-
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-		tlsConfig.RootCAs = caCertPool
-	}
-
-	// Load CA from block
-	if c.CertificateAuthorityData != nil {
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(c.CertificateAuthorityData)
-		tlsConfig.RootCAs = caCertPool
-	}
-
-	// Load certs from file
-	if a.ClientCertificate != "" && a.ClientKey != "" {
-		cert, err := tls.LoadX509KeyPair(a.ClientCertificate, a.ClientKey)
-		if err != nil {
-			return nil, err
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
-	}
-
-	// Load certs from block
-	if a.ClientCertificateData != nil && a.ClientKeyData != nil {
-		cert, err := tls.X509KeyPair(a.ClientCertificateData, a.ClientKeyData)
-		if err != nil {
-			return nil, err
-		}
-		tlsConfig.Certificates = []tls.Certificate{cert}
-	}
-
-	return tlsConfig, nil
-}
+// func configureTLS(a *api.AuthInfo, c *api.Cluster) (*tls.Config, error) {
+// 	tlsConfig := &tls.Config{
+// 		InsecureSkipVerify: c.InsecureSkipTLSVerify,
+// 	}
+//
+// 	// Load CA from file
+// 	if c.CertificateAuthority != "" {
+// 		caCert, err := os.ReadFile(c.CertificateAuthority)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+//
+// 		caCertPool := x509.NewCertPool()
+// 		caCertPool.AppendCertsFromPEM(caCert)
+// 		tlsConfig.RootCAs = caCertPool
+// 	}
+//
+// 	// Load CA from block
+// 	if c.CertificateAuthorityData != nil {
+// 		caCertPool := x509.NewCertPool()
+// 		caCertPool.AppendCertsFromPEM(c.CertificateAuthorityData)
+// 		tlsConfig.RootCAs = caCertPool
+// 	}
+//
+// 	// Load certs from file
+// 	if a.ClientCertificate != "" && a.ClientKey != "" {
+// 		cert, err := tls.LoadX509KeyPair(a.ClientCertificate, a.ClientKey)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		tlsConfig.Certificates = []tls.Certificate{cert}
+// 	}
+//
+// 	// Load certs from block
+// 	if a.ClientCertificateData != nil && a.ClientKeyData != nil {
+// 		cert, err := tls.X509KeyPair(a.ClientCertificateData, a.ClientKeyData)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		tlsConfig.Certificates = []tls.Certificate{cert}
+// 	}
+//
+// 	return tlsConfig, nil
+// }
 
 // parseURL is a helper function that tries to parse a string and return an url.URL.
 // Will return nil if errors occur.

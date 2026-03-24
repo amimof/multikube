@@ -23,12 +23,6 @@ type (
 	NewExchangeOption func(*Exchange)
 )
 
-type Handler interface {
-	Handle(context.Context, *eventv1.Envelope) error
-}
-
-type HandlerFunc func(context.Context, *eventv1.Envelope) error
-
 type Exchange struct {
 	topics             map[eventv1.Event][]chan *eventv1.Envelope
 	persistentHandlers map[eventv1.Event][]HandlerFunc

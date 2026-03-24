@@ -5,9 +5,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -21,8 +23,11 @@ import (
 	"time"
 
 	"buf.build/go/protovalidate"
+	"github.com/SermoDigital/jose/crypto"
 	"github.com/amimof/multikube/pkg/client"
+	"github.com/amimof/multikube/pkg/controller"
 	"github.com/amimof/multikube/pkg/events"
+	"github.com/amimof/multikube/pkg/proxy"
 	"github.com/amimof/multikube/pkg/repository"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/dgraph-io/badger/v4"
@@ -323,45 +328,51 @@ func main() {
 		}
 	}()
 
-	// Setup controller
-	// TODO: Setup runtime controllers here
-
 	// Create the proxy
-	// TODO: Proxy is configured through unimplemented controller
-	// p, err := proxy.New(nil)
-	// if err != nil {
-	// 	log.Error("error setting up proxy", "error", err)
-	// 	os.Exit(1)
-	// }
-	// p.CacheTTL(cacheTTL)
-	//
-	// p.Use(
-	// 	proxy.WithEmpty(),
-	// 	proxy.WithLogging(),
-	// 	proxy.WithJWT(),
-	// 	proxy.WithHeader(),
-	// )
+	p, err := proxy.New(nil)
+	if err != nil {
+		log.Error("error setting up proxy", "error", err)
+		os.Exit(1)
+	}
+	p.CacheTTL(cacheTTL)
+
+	p.Use(
+		proxy.WithEmpty(),
+		proxy.WithLogging(),
+		proxy.WithJWT(),
+		proxy.WithHeader(),
+	)
 
 	// Add JWK validation middleware if issuer url is provided on cmd line
-	// if oidcIssuerURL != "" {
-	// 	oidcConfig := proxy.OIDCConfig{
-	// 		OIDCIssuerURL:          oidcIssuerURL,
-	// 		OIDCPollInterval:       oidcPollInterval,
-	// 		OIDCUsernameClaim:      oidcUsernameClaim,
-	// 		OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
-	// 		OIDCCa:                 readCert(oidcCaFile),
-	// 	}
-	// 	// middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
-	// 	p.Use(proxy.WithOIDC(oidcConfig))
-	// }
+	if oidcIssuerURL != "" {
+		oidcConfig := proxy.OIDCConfig{
+			OIDCIssuerURL:          oidcIssuerURL,
+			OIDCPollInterval:       oidcPollInterval,
+			OIDCUsernameClaim:      oidcUsernameClaim,
+			OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
+			OIDCCa:                 readCert(oidcCaFile),
+		}
+		// middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
+		p.Use(proxy.WithOIDC(oidcConfig))
+	}
 
-	// // Add RS256 public key validation middleware if public key provided
-	// if rs256PublicKey != "" {
-	// 	rs256Config := proxy.RS256Config{
-	// 		PublicKey: readPublicKey(rs256PublicKey),
-	// 	}
-	// 	p.Use(proxy.WithRS256(rs256Config))
-	// }
+	// Add RS256 public key validation middleware if public key provided
+	if rs256PublicKey != "" {
+		rs256Config := proxy.RS256Config{
+			PublicKey: readPublicKey(rs256PublicKey),
+		}
+		p.Use(proxy.WithRS256(rs256Config))
+	}
+
+	// Setup controller
+	ctrl := controller.New(
+		cs,
+		controller.WithLogger(log),
+		controller.WithExchange(exchange),
+		controller.WithProxy(p),
+	)
+	go ctrl.Run(ctx)
+	log.Info("started proxy Controller")
 
 	// Create the server
 	s := &server.Server{
@@ -380,7 +391,7 @@ func main() {
 		TLSReadTimeout:   tlsReadTimeout,
 		TLSWriteTimeout:  tlsWriteTimeout,
 		Logger:           log,
-		// Handler:          p.Chain(),
+		Handler:          p.Chain(),
 	}
 
 	// Listen and serve!
@@ -451,33 +462,33 @@ func main() {
 }
 
 // Reads an x509 certificate from the filesystem and returns an instance of x509.Certiticate. Returns nil on errors
-// func readCert(p string) *x509.Certificate {
-// 	signer, err := os.ReadFile(p)
-// 	if err != nil {
-// 		return nil
-// 	}
-// 	block, _ := pem.Decode(signer)
-// 	cert, err := x509.ParseCertificate(block.Bytes)
-// 	if err != nil {
-// 		return nil
-// 	}
-// 	return cert
-// }
-//
-// // Reads a RSA public key file from the filesystem and parses it into an instance of rsa.PublicKey
-// func readPublicKey(p string) *rsa.PublicKey {
-// 	f, err := os.ReadFile(p)
-// 	if err != nil {
-// 		log.Error("error reading public keyl", "error", err)
-// 		return nil
-// 	}
-// 	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
-// 	if err != nil {
-// 		log.Error("error parsing rsa public key from pem", "error", err)
-// 		return nil
-// 	}
-// 	return pubkey
-// }
+func readCert(p string) *x509.Certificate {
+	signer, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	block, _ := pem.Decode(signer)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil
+	}
+	return cert
+}
+
+// Reads a RSA public key file from the filesystem and parses it into an instance of rsa.PublicKey
+func readPublicKey(p string) *rsa.PublicKey {
+	f, err := os.ReadFile(p)
+	if err != nil {
+		log.Error("error reading public keyl", "error", err)
+		return nil
+	}
+	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
+	if err != nil {
+		log.Error("error parsing rsa public key from pem", "error", err)
+		return nil
+	}
+	return pubkey
+}
 
 func serveUnix(s *transport.Server, errChan chan error) {
 	// Remove the socket file if it already exists
