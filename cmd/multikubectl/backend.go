@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/amimof/multikube/pkg/client"
+	"github.com/amimof/multikube/pkg/cmdutil"
 )
 
 func newBackendCmd(cfg *client.Config) *cobra.Command {
@@ -74,14 +75,12 @@ func runBackendCmd(cmd *cobra.Command, cfg *client.Config) error {
 		logrus.Fatal(err)
 	}
 
-	_, _ = fmt.Fprintf(wr, "%s\t%s\t%s\t%s\t%s\t%s\n", "NAME", "GENERATION", "PHASE", "REASON", "NODE", "AGE")
+	_, _ = fmt.Fprintf(wr, "%s\t%s\t%s\n", "NAME", "GENERATION", "AGE")
 	for _, c := range tasks {
-		_, _ = fmt.Fprintf(wr, "%s\t%d\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(wr, "%s\t%d\t%s\n",
 			c.GetMeta().GetName(),
 			c.GetMeta().GetGeneration(),
-			// c.GetStatus().GetReason().GetValue(),
-			// c.GetStatus().GetNode().GetValue(),
-			// cmdutil.FormatDuration(time.Since(c.GetMeta().GetCreated().AsTime())),
+			cmdutil.FormatDuration(time.Since(c.GetMeta().GetCreated().AsTime())),
 		)
 	}
 
