@@ -22,10 +22,6 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type EventServiceClient interface {
-	// rpc Get(GetRequest) returns (GetResponse) {}
-	// rpc List(ListRequest) returns (ListResponse) {}
-	// rpc Delete(DeleteRequest) returns (DeleteResponse) {}
-	// rpc Create(CreateRequest) returns (CreateResponse) {}
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (EventService_SubscribeClient, error)
 	Publish(ctx context.Context, in *PublishRequest, opts ...grpc.CallOption) (*PublishResponse, error)
 }
@@ -83,10 +79,6 @@ func (c *eventServiceClient) Publish(ctx context.Context, in *PublishRequest, op
 // All implementations must embed UnimplementedEventServiceServer
 // for forward compatibility
 type EventServiceServer interface {
-	// rpc Get(GetRequest) returns (GetResponse) {}
-	// rpc List(ListRequest) returns (ListResponse) {}
-	// rpc Delete(DeleteRequest) returns (DeleteResponse) {}
-	// rpc Create(CreateRequest) returns (CreateResponse) {}
 	Subscribe(*SubscribeRequest, EventService_SubscribeServer) error
 	Publish(context.Context, *PublishRequest) (*PublishResponse, error)
 	mustEmbedUnimplementedEventServiceServer()

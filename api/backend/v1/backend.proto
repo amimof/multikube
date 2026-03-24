@@ -4,9 +4,9 @@ package backend.v1;
 
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
-import "google/protobuf/wrappers.proto";
 import "meta/v1/meta.proto";
 
 option go_package = "github.com/amimof/multikube/api/backend/v1;backend";
@@ -71,7 +71,14 @@ message Backend {
   BackendConfig config = 3;
 }
 
-message BackendConfig {}
+message BackendConfig {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  string server = 2 [(buf.validate.field).string.min_len = 1];
+  string ca_ref = 3;
+  string auth_ref = 4;
+  bool insecure_skip_tls_verify = 5;
+  google.protobuf.Duration cache_ttl = 6;
+}
 
 message GetRequest {
   option (buf.validate.message).oneof = {
