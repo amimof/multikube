@@ -463,7 +463,27 @@
       }
     },
     "v1BackendConfig": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "server": {
+          "type": "string"
+        },
+        "caRef": {
+          "type": "string"
+        },
+        "authRef": {
+          "type": "string"
+        },
+        "insecureSkipTlsVerify": {
+          "type": "boolean"
+        },
+        "cacheTtl": {
+          "type": "string"
+        }
+      }
     },
     "v1CreateResponse": {
       "type": "object",

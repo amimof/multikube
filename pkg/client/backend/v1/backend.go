@@ -35,6 +35,7 @@ func WithClient(client backendv1.BackendServiceClient) CreateOption {
 }
 
 type ClientV1 interface {
+	Create(context.Context, *backendv1.Backend, ...CreateOption) error
 	Update(context.Context, string, *backendv1.Backend) error
 	Patch(context.Context, string, *backendv1.Backend) error
 	Get(context.Context, string) (*backendv1.Backend, error)
