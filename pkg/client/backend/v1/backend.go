@@ -50,7 +50,7 @@ type clientV1 struct {
 
 func (c *clientV1) Create(ctx context.Context, ctr *backendv1.Backend, opts ...CreateOption) error {
 	tracer := otel.Tracer("client-v1")
-	ctx, span := tracer.Start(ctx, "client.task.Update")
+	ctx, span := tracer.Start(ctx, "client.backend.Update")
 	defer span.End()
 
 	if ctr.Version == "" {
@@ -70,7 +70,7 @@ func (c *clientV1) Create(ctx context.Context, ctr *backendv1.Backend, opts ...C
 
 func (c *clientV1) Update(ctx context.Context, id string, ctr *backendv1.Backend) error {
 	tracer := otel.Tracer("client-v1")
-	ctx, span := tracer.Start(ctx, "client.task.Update")
+	ctx, span := tracer.Start(ctx, "client.backend.Update")
 	defer span.End()
 
 	uid, err := keys.ParseStr(id)
@@ -87,7 +87,7 @@ func (c *clientV1) Update(ctx context.Context, id string, ctr *backendv1.Backend
 
 func (c *clientV1) Patch(ctx context.Context, id string, ctr *backendv1.Backend) error {
 	tracer := otel.Tracer("client-v1")
-	ctx, span := tracer.Start(ctx, "client.task.Patch")
+	ctx, span := tracer.Start(ctx, "client.backend.Patch")
 	defer span.End()
 
 	uid, err := keys.ParseStr(id)
@@ -104,7 +104,7 @@ func (c *clientV1) Patch(ctx context.Context, id string, ctr *backendv1.Backend)
 
 func (c *clientV1) Get(ctx context.Context, id string) (*backendv1.Backend, error) {
 	tracer := otel.Tracer("client-v1")
-	ctx, span := tracer.Start(ctx, "client.task.Get")
+	ctx, span := tracer.Start(ctx, "client.backend.Get")
 	defer span.End()
 
 	uid, err := keys.ParseStr(id)
@@ -121,7 +121,7 @@ func (c *clientV1) Get(ctx context.Context, id string) (*backendv1.Backend, erro
 
 func (c *clientV1) List(ctx context.Context, l ...labels.Label) ([]*backendv1.Backend, error) {
 	tracer := otel.Tracer("client-v1")
-	ctx, span := tracer.Start(ctx, "client.task.List")
+	ctx, span := tracer.Start(ctx, "client.backend.List")
 	defer span.End()
 
 	mergedLabels := util.MergeLabels(l...)
@@ -134,7 +134,7 @@ func (c *clientV1) List(ctx context.Context, l ...labels.Label) ([]*backendv1.Ba
 
 func (c *clientV1) Delete(ctx context.Context, id string) error {
 	tracer := otel.Tracer("client-v1")
-	ctx, span := tracer.Start(ctx, "client.task.Delete")
+	ctx, span := tracer.Start(ctx, "client.backend.Delete")
 	defer span.End()
 
 	uid, err := keys.ParseStr(id)

@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+package certificate.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "meta/v1/meta.proto";
+
+option go_package = "github.com/amimof/multikube/api/certificate/v1;certificate";
+
+service CertificateService {
+  rpc List(ListRequest) returns (ListResponse) {
+    option (google.api.http) = {get: "/api/v1/certificates"};
+  }
+  rpc Get(GetRequest) returns (GetResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/certificates/{uid}"
+      additional_bindings: {get: "/api/v1/certificates/{name}"}
+    };
+  }
+  rpc Create(CreateRequest) returns (CreateResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/certificates"
+      body: "certificate"
+    };
+  }
+  rpc Update(UpdateRequest) returns (UpdateResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/certificates/{uid}"
+      body: "certificate"
+      additional_bindings: {
+        put: "/api/v1/certificates/{name}"
+        body: "certificate"
+      }
+    };
+  }
+  rpc Patch(PatchRequest) returns (PatchResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/certificates/{uid}"
+      body: "certificate"
+      additional_bindings: {
+        patch: "/api/v1/certificates/{name}"
+        body: "certificate"
+      }
+    };
+  }
+  rpc Delete(DeleteRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/certificates/{uid}"
+      additional_bindings: {delete: "/api/v1/certificates/{name}"}
+    };
+  }
+  // rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse) {
+  //   option (google.api.http) = {
+  //     put: "/api/v1/certificates/{uid}/status"
+  //     additional_bindings: {put: "/api/v1/certificates/{name}/status"}
+  //   };
+  // }
+}
+
+message Certificate {
+  string version = 1 [
+    (buf.validate.field).string.min_len = 4,
+    (buf.validate.field).string.pattern = "^[a-z0-9]+(?:[._-][a-z0-9]+)*/[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+    (buf.validate.field).required = true
+  ];
+  meta.v1.Meta meta = 2 [(buf.validate.field).required = true];
+  CertificateConfig config = 3;
+  CertificateStatus status = 4;
+}
+
+message CertificateStatus {}
+
+message CertificateConfig {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  option (buf.validate.message).oneof = {
+    fields: [
+      "certificate",
+      "certificate_data"
+    ]
+    required: true
+  };
+  string certificate = 2;
+  string certificate_data = 3;
+  option (buf.validate.message).oneof = {
+    fields: [
+      "key",
+      "key_data"
+    ]
+    required: true
+  };
+  string key = 4;
+  string key_data = 5;
+}
+
+message GetRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetResponse {
+  Certificate certificate = 1;
+}
+
+message CreateRequest {
+  Certificate certificate = 1 [(buf.validate.field).required = true];
+}
+
+message CreateResponse {
+  Certificate certificate = 1;
+}
+
+message DeleteRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  bool purge = 3;
+}
+
+message UpdateRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  Certificate certificate = 3 [(buf.validate.field).required = true];
+  google.protobuf.FieldMask update_mask = 4;
+}
+
+message UpdateResponse {
+  Certificate certificate = 1;
+}
+
+message ListRequest {
+  int32 limit = 1;
+  map<string, string> selector = 2;
+}
+
+message ListResponse {
+  repeated Certificate certificates = 1;
+}
+
+// message UpdateStatusRequest {
+//   option (buf.validate.message).oneof = {
+//     fields: [
+//       "uid",
+//       "name"
+//     ]
+//   };
+//   string uid = 1 [(buf.validate.field).string.min_len = 1];
+//   string name = 2 [(buf.validate.field).string.min_len = 1];
+//   google.protobuf.FieldMask update_mask = 3 [(buf.validate.field).required = true];
+//   Status status = 4 [(buf.validate.field).required = true];
+// }
+
+// message UpdateStatusResponse {
+//   string id = 1;
+// }
+
+message PatchRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  Certificate certificate = 3 [(buf.validate.field).required = true];
+  google.protobuf.FieldMask update_mask = 4;
+}
+
+message PatchResponse {
+  Certificate certificate = 1;
+}

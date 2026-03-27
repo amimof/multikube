@@ -69,6 +69,7 @@ message Backend {
   ];
   meta.v1.Meta meta = 2 [(buf.validate.field).required = true];
   BackendConfig config = 3;
+  BackendStatus status = 4;
 }
 
 message BackendConfig {
@@ -78,6 +79,10 @@ message BackendConfig {
   string auth_ref = 4;
   bool insecure_skip_tls_verify = 5;
   google.protobuf.Duration cache_ttl = 6;
+}
+
+message BackendStatus {
+  bool healthy = 1;
 }
 
 message GetRequest {

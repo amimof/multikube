@@ -459,6 +459,9 @@
         },
         "config": {
           "$ref": "#/definitions/v1BackendConfig"
+        },
+        "status": {
+          "$ref": "#/definitions/v1BackendStatus"
         }
       }
     },
@@ -482,6 +485,14 @@
         },
         "cacheTtl": {
           "type": "string"
+        }
+      }
+    },
+    "v1BackendStatus": {
+      "type": "object",
+      "properties": {
+        "healthy": {
+          "type": "boolean"
         }
       }
     },

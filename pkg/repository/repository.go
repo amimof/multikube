@@ -15,7 +15,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
+	cav1 "github.com/amimof/multikube/api/ca/v1"
+	certv1 "github.com/amimof/multikube/api/certificate/v1"
 	metav1 "github.com/amimof/multikube/api/meta/v1"
+	routev1 "github.com/amimof/multikube/api/route/v1"
 )
 
 var (
@@ -41,12 +44,36 @@ type DB interface {
 	Update(ctx context.Context, fn func(txn Txn) error) error
 }
 
-var VolumeCodec = ProtoCodec[*backendv1.Backend]{
+var BackendCodec = ProtoCodec[*backendv1.Backend]{
 	New: func() *backendv1.Backend { return &backendv1.Backend{} },
 }
 
-func NewVolumeRepo[T *backendv1.Backend](db DB) *Repo[*backendv1.Backend] {
-	return NewRepo(db, VolumeCodec, []byte("volume/"), []byte("i/volume/"), []byte("i/idx/volume"))
+func NewBackendRepo[T *backendv1.Backend](db DB) *Repo[*backendv1.Backend] {
+	return NewRepo(db, BackendCodec, []byte("backend/"), []byte("i/backend/"), []byte("i/idx/backend"))
+}
+
+var CertificateAuthorityCodec = ProtoCodec[*cav1.CertificateAuthority]{
+	New: func() *cav1.CertificateAuthority { return &cav1.CertificateAuthority{} },
+}
+
+func NewCertificateAuthorityRepo[T *cav1.CertificateAuthority](db DB) *Repo[*cav1.CertificateAuthority] {
+	return NewRepo(db, CertificateAuthorityCodec, []byte("certificateauthority/"), []byte("i/certificateauthority/"), []byte("i/idx/certificateauthority"))
+}
+
+var CertificateCodec = ProtoCodec[*certv1.Certificate]{
+	New: func() *certv1.Certificate { return &certv1.Certificate{} },
+}
+
+func NewCertificateRepo[T *certv1.Certificate](db DB) *Repo[*certv1.Certificate] {
+	return NewRepo(db, CertificateCodec, []byte("certificate/"), []byte("i/certificate/"), []byte("i/idx/certificate"))
+}
+
+var RouteCodec = ProtoCodec[*routev1.Route]{
+	New: func() *routev1.Route { return &routev1.Route{} },
+}
+
+func NewRouteRepo[T *routev1.Route](db DB) *Repo[*routev1.Route] {
+	return NewRepo(db, RouteCodec, []byte("route/"), []byte("i/route/"), []byte("i/idx/route"))
 }
 
 type Codec[T proto.Message] interface {
@@ -259,10 +286,10 @@ func (r *Repo[T]) Create(ctx context.Context, resource T) (T, error) {
 	var res T
 
 	u := uuid.New()
-	// resource.GetMeta().Uid = u.String()
-	// resource.GetMeta().Created = timestamppb.Now()
-	// resource.GetMeta().Updated = timestamppb.Now()
-	// resource.GetMeta().ResourceVersion = 1
+	resource.GetMeta().Uid = u.String()
+	resource.GetMeta().Created = timestamppb.Now()
+	resource.GetMeta().Updated = timestamppb.Now()
+	resource.GetMeta().ResourceVersion = 1
 
 	uid, err := keys.UUID(u)
 	if err != nil {
