@@ -138,10 +138,21 @@ func newRouteWithJWT(name, backendRef, pathPrefix, claim, value string) *routev1
 	}
 }
 
-func newCA(name, certPEM string) *cav1.CertificateAuthority {
+// newCA creates a CertificateAuthority whose certificate field is a reference
+// to a Certificate object by name (the new semantics after the compile fix).
+func newCA(name, certRef string) *cav1.CertificateAuthority {
 	return &cav1.CertificateAuthority{
 		Meta:   &metav1.Meta{Name: name},
-		Config: &cav1.CertificateAuthorityConfig{Certificate: certPEM},
+		Config: &cav1.CertificateAuthorityConfig{Certificate: certRef},
+	}
+}
+
+// newCAInline creates a CertificateAuthority with inline PEM via certificate_data
+// (the fallback field, kept until it is removed from the proto).
+func newCAInline(name, certPEM string) *cav1.CertificateAuthority {
+	return &cav1.CertificateAuthority{
+		Meta:   &metav1.Meta{Name: name},
+		Config: &cav1.CertificateAuthorityConfig{CertificateData: certPEM},
 	}
 }
 
@@ -406,10 +417,14 @@ func TestCompile_CA_Resolution(t *testing.T) {
 		Backends: map[string]*backendv1.Backend{
 			"be": newBackendWithTLS("be", upstream.URL, "myca", "", false, true),
 		},
-		Routes:       map[string]*routev1.Route{},
-		Certificates: map[string]*certificatev1.Certificate{},
+		Routes: map[string]*routev1.Route{},
+		// "myca-cert" is a Certificate object holding the PEM inline.
+		// "myca" is a CertificateAuthority that references it by name.
+		Certificates: map[string]*certificatev1.Certificate{
+			"myca-cert": newCert("myca-cert", testCertPEM, testKeyPEM),
+		},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
-			"myca": newCA("myca", testCertPEM),
+			"myca": newCA("myca", "myca-cert"),
 		},
 	})
 	require.NoError(t, err)
@@ -476,7 +491,7 @@ func TestCompile_InvalidCACert_Error(t *testing.T) {
 		Routes:       map[string]*routev1.Route{},
 		Certificates: map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
-			"bad": newCA("bad", "not-a-pem"),
+			"bad": newCAInline("bad", "not-a-pem"),
 		},
 	})
 	require.Error(t, err)
