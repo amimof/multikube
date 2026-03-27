@@ -4,4 +4,4 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-var tracer = otel.GetTracerProvider().Tracer("voiyd-server")
+var tracer = otel.GetTracerProvider().Tracer("multikube-server")

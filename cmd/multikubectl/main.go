@@ -25,6 +25,7 @@ var (
 	tlsCert      string
 	tlsCertKey   string
 	otelEndpoint string
+	outputFormat string
 	rootCmd      = cobra.Command{
 		Use:   "multikubectl",
 		Short: "CLI for managing multikube configuration",
@@ -99,13 +100,11 @@ func main() {
 	rootCmd.PersistentFlags().BoolVar(&insecure, "insecure", false, "Skip TLS certificate verification")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "number for the log level verbosity (debug, info, warn, error, fatal, panic)")
 
-	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newGetCmd(&cfg))
+	rootCmd.AddCommand(newCreateCmd(&cfg))
 	rootCmd.AddCommand(newConfigCmd())
+	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newKubeconfigCmd())
-	rootCmd.AddCommand(newBackendCmd(&cfg))
-	rootCmd.AddCommand(newCACmd(&cfg))
-	rootCmd.AddCommand(newCertificateCmd(&cfg))
-	rootCmd.AddCommand(newRouteCmd(&cfg))
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

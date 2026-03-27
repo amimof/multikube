@@ -44,8 +44,8 @@ func IdentityUnaryInterceptor(p IdentityProvider) grpc.UnaryClientInterceptor {
 		if id, ok := p.Get(ctx); ok && id.UID != "" {
 			md, _ := metadata.FromOutgoingContext(ctx)
 			md = md.Copy()
-			md.Set("x-voiyd-node-uid", id.UID)
-			md.Set("x-voiyd-node-name", id.Name)
+			md.Set("x-multikube-node-uid", id.UID)
+			md.Set("x-multikube-node-name", id.Name)
 			ctx = metadata.NewOutgoingContext(ctx, md)
 		}
 		return invoker(ctx, method, req, reply, cc, opts...)
@@ -64,8 +64,8 @@ func IdentityStreamInterceptor(p IdentityProvider) grpc.StreamClientInterceptor 
 		if id, ok := p.Get(ctx); ok && id.UID != "" {
 			md, _ := metadata.FromOutgoingContext(ctx)
 			md = md.Copy()
-			md.Set("x-voiyd-node-uid", id.UID)
-			md.Set("x-voiyd-node-name", id.Name)
+			md.Set("x-multikube-node-uid", id.UID)
+			md.Set("x-multikube-node-name", id.Name)
 			ctx = metadata.NewOutgoingContext(ctx, md)
 		}
 		return streamer(ctx, desc, cc, method, opts...)
