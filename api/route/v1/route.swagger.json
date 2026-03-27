@@ -1,0 +1,602 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "route/v1/route.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "RouteService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/routes": {
+      "get": {
+        "operationId": "RouteService_List",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "selector",
+            "description": "This is a request variable of the map type. The query format is \"map_name[key]=value\", e.g. If the map name is Age, the key type is string, and the value type is integer, the query parameter is expressed as Age[\"bob\"]=18",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      },
+      "post": {
+        "operationId": "RouteService_Create",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "route",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      }
+    },
+    "/api/v1/routes/{name}": {
+      "get": {
+        "operationId": "RouteService_Get2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      },
+      "delete": {
+        "operationId": "RouteService_Delete2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      },
+      "put": {
+        "operationId": "RouteService_Update2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "route",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "updateMask",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      },
+      "patch": {
+        "operationId": "RouteService_Patch2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PatchResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "route",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      }
+    },
+    "/api/v1/routes/{uid}": {
+      "get": {
+        "operationId": "RouteService_Get",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      },
+      "delete": {
+        "operationId": "RouteService_Delete",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      },
+      "put": {
+        "operationId": "RouteService_Update",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "route",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "updateMask",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      },
+      "patch": {
+        "operationId": "RouteService_Patch",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PatchResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "route",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1Route"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1CreateResponse": {
+      "type": "object",
+      "properties": {
+        "route": {
+          "$ref": "#/definitions/v1Route"
+        }
+      }
+    },
+    "v1GetResponse": {
+      "type": "object",
+      "properties": {
+        "route": {
+          "$ref": "#/definitions/v1Route"
+        }
+      }
+    },
+    "v1HeaderMatch": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "v1JWTMatch": {
+      "type": "object",
+      "properties": {
+        "claim": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ListResponse": {
+      "type": "object",
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Route"
+          }
+        }
+      }
+    },
+    "v1Match": {
+      "type": "object",
+      "properties": {
+        "sni": {
+          "type": "string"
+        },
+        "header": {
+          "$ref": "#/definitions/v1HeaderMatch"
+        },
+        "pathPrefix": {
+          "type": "string"
+        },
+        "jwt": {
+          "$ref": "#/definitions/v1JWTMatch"
+        }
+      }
+    },
+    "v1Meta": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "created": {
+          "type": "string",
+          "format": "date"
+        },
+        "updated": {
+          "type": "string",
+          "format": "date"
+        },
+        "generation": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "resourceVersion": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "uid": {
+          "type": "string"
+        }
+      }
+    },
+    "v1PatchResponse": {
+      "type": "object",
+      "properties": {
+        "route": {
+          "$ref": "#/definitions/v1Route"
+        }
+      }
+    },
+    "v1Route": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        },
+        "config": {
+          "$ref": "#/definitions/v1RouteConfig"
+        },
+        "status": {
+          "$ref": "#/definitions/v1RouteStatus"
+        }
+      }
+    },
+    "v1RouteConfig": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/definitions/v1Match"
+        },
+        "backendRef": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RouteStatus": {
+      "type": "object"
+    },
+    "v1UpdateResponse": {
+      "type": "object",
+      "properties": {
+        "route": {
+          "$ref": "#/definitions/v1Route"
+        }
+      }
+    }
+  }
+}

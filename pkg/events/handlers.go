@@ -10,6 +10,7 @@ import (
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 	eventsv1 "github.com/amimof/multikube/api/event/v1"
+	routev1 "github.com/amimof/multikube/api/route/v1"
 )
 
 type Handler interface {
@@ -19,6 +20,7 @@ type Handler interface {
 type (
 	HandlerFunc        func(context.Context, *eventsv1.Envelope) error
 	BackendHandlerFunc func(context.Context, *backendv1.Backend) error
+	RouteHandlerFunc   func(context.Context, *routev1.Route) error
 )
 
 // getCallerInfo gets the file, line, and function name of the caller
@@ -95,6 +97,22 @@ func HandleBackends(h ...BackendHandlerFunc) HandlerFunc {
 				return err
 			}
 			if err := ih(ctx, &backend); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func HandleRoutes(h ...RouteHandlerFunc) HandlerFunc {
+	return func(ctx context.Context, ev *eventsv1.Envelope) error {
+		for _, ih := range h {
+			var route routev1.Route
+			err := ev.GetObject().UnmarshalTo(&route)
+			if err != nil {
+				return err
+			}
+			if err := ih(ctx, &route); err != nil {
 				return err
 			}
 		}

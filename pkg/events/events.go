@@ -19,6 +19,21 @@ const (
 	BackendDelete = eventv1.Event_EVENT_BACKEND_DELETE
 	BackendUpdate = eventv1.Event_EVENT_BACKEND_UPDATE
 	BackendPatch  = eventv1.Event_EVENT_BACKEND_PATCH
+
+	CertificateAuthorityCreate = eventv1.Event_EVENT_CERTIFICATEAUTHORITY_CREATE
+	CertificateAuthorityDelete = eventv1.Event_EVENT_CERTIFICATEAUTHORITY_DELETE
+	CertificateAuthorityUpdate = eventv1.Event_EVENT_CERTIFICATEAUTHORITY_UPDATE
+	CertificateAuthorityPatch  = eventv1.Event_EVENT_CERTIFICATEAUTHORITY_PATCH
+
+	CertificateCreate = eventv1.Event_EVENT_CERTIFICATE_CREATE
+	CertificateDelete = eventv1.Event_EVENT_CERTIFICATE_DELETE
+	CertificateUpdate = eventv1.Event_EVENT_CERTIFICATE_UPDATE
+	CertificatePatch  = eventv1.Event_EVENT_CERTIFICATE_PATCH
+
+	RouteCreate = eventv1.Event_EVENT_ROUTE_CREATE
+	RouteDelete = eventv1.Event_EVENT_ROUTE_DELETE
+	RouteUpdate = eventv1.Event_EVENT_ROUTE_UPDATE
+	RoutePatch  = eventv1.Event_EVENT_ROUTE_PATCH
 )
 
 type Subscriber interface {

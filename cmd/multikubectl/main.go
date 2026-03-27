@@ -103,6 +103,9 @@ func main() {
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newKubeconfigCmd())
 	rootCmd.AddCommand(newBackendCmd(&cfg))
+	rootCmd.AddCommand(newCACmd(&cfg))
+	rootCmd.AddCommand(newCertificateCmd(&cfg))
+	rootCmd.AddCommand(newRouteCmd(&cfg))
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

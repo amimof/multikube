@@ -25,9 +25,11 @@ import (
 	"buf.build/go/protovalidate"
 	"github.com/SermoDigital/jose/crypto"
 	"github.com/amimof/multikube/pkg/client"
+	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/controller"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/proxy"
+	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
 	"github.com/amimof/multikube/pkg/repository"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/dgraph-io/badger/v4"
@@ -113,7 +115,6 @@ func parseSlogLevel(lvl string) (slog.Level, error) {
 func init() {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		// decide how your app should handle this
 		panic(fmt.Errorf("could not determine home directory: %w", err))
 	}
 
@@ -122,7 +123,7 @@ func init() {
 	pflag.StringVar(&socketPath, "socket-path", "/var/run/multikube.sock", "the unix socket to listen on")
 	pflag.StringVar(&serverAddress, "server-address", "0.0.0.0:5743", "Address to listen the TCP server on")
 	pflag.StringVar(&metricsAddress, "metrics-address", "0.0.0.0:8888", "Address to listen the metrics server on")
-	pflag.StringVar(&proxyAddress, "gateway-address", "0.0.0.0:8443", "Address to listen the http proxy server on")
+	pflag.StringVar(&proxyAddress, "proxy-address", "0.0.0.0:8443", "Address to listen the http proxy server on")
 	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
@@ -227,7 +228,23 @@ func main() {
 
 	// Setup grpc services
 	backendService := transport.NewBackendService(&app.BackendService{
-		Repo:     repository.NewVolumeRepo(repo),
+		Repo:     repository.NewBackendRepo(repo),
+		Exchange: exchange,
+		Logger:   log,
+	})
+
+	caService := transport.NewCertificateAuthorityService(&app.CertificateAuthorityService{
+		Repo:     repository.NewCertificateAuthorityRepo(repo),
+		Exchange: exchange,
+		Logger:   log,
+	})
+	certService := transport.NewCertificateService(&app.CertificateService{
+		Repo:     repository.NewCertificateRepo(repo),
+		Exchange: exchange,
+		Logger:   log,
+	})
+	routeService := transport.NewRouteService(&app.RouteService{
+		Repo:     repository.NewRouteRepo(repo),
 		Exchange: exchange,
 		Logger:   log,
 	})
@@ -298,6 +315,9 @@ func main() {
 	// Register services to gRPC server
 	srv.RegisterService(
 		backendService,
+		caService,
+		certService,
+		routeService,
 	)
 
 	// Context
@@ -315,13 +335,14 @@ func main() {
 	go serveUnix(srv, errChan)
 
 	// Used by clientset and the gateway to connect internally
-	socketAddr := fmt.Sprintf("unix://%s", socketPath)
+	socketAddr := fmt.Sprintf("unix:///%s", socketPath)
 
 	// Setup a clientset for the controllers
-	cs, err := client.New(socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}))
+	cs, err := client.New(socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}), client.WithGrpcDialOption(grpc.WithAuthority("localhost")))
 	if err != nil {
 		log.Error("error creating clientset", "error", err.Error())
 	}
+
 	defer func() {
 		if err := cs.Close(); err != nil {
 			log.Error("error closing clientset connection", "error", err)
@@ -365,14 +386,20 @@ func main() {
 	}
 
 	// Setup controller
+	runtimeStore := proxyv2.NewRuntimeStore()
+	compiler := compile.NewCompiler()
 	ctrl := controller.New(
 		cs,
 		controller.WithLogger(log),
 		controller.WithExchange(exchange),
 		controller.WithProxy(p),
+		controller.WithCompiler(compiler),
+		controller.WithRuntime(runtimeStore),
 	)
 	go ctrl.Run(ctx)
 	log.Info("started proxy Controller")
+
+	handler := proxyv2.NewProxy(runtimeStore)
 
 	// Create the server
 	s := &server.Server{
@@ -391,7 +418,8 @@ func main() {
 		TLSReadTimeout:   tlsReadTimeout,
 		TLSWriteTimeout:  tlsWriteTimeout,
 		Logger:           log,
-		Handler:          p.Chain(),
+		// Handler:          p.Chain(),
+		Handler: handler,
 	}
 
 	// Listen and serve!
