@@ -102,6 +102,9 @@ func main() {
 
 	rootCmd.AddCommand(newGetCmd(&cfg))
 	rootCmd.AddCommand(newCreateCmd(&cfg))
+	rootCmd.AddCommand(newConfigCmd())
+	rootCmd.AddCommand(newVersionCmd())
+	rootCmd.AddCommand(newKubeconfigCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
