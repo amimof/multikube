@@ -5,7 +5,7 @@ import (
 	"slices"
 )
 
-const DefaultLabelPrefix = "voiyd.io"
+const DefaultLabelPrefix = "multikube.io"
 
 var DefaultContainerLabels = []string{LabelPrefix("uuid").String()}
 

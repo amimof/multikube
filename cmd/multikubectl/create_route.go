@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"text/tabwriter"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,44 +15,7 @@ import (
 	"github.com/amimof/multikube/pkg/cmdutil"
 )
 
-func newRouteCmd(cfg *client.Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:     "route",
-		Aliases: []string{"routes"},
-		Short:   "Manage routes",
-		Long:    `Manage routes`,
-	}
-	cmd.AddCommand(newRouteListCmd(cfg))
-	cmd.AddCommand(newRouteCreateCmd(cfg))
-
-	return cmd
-}
-
-func newRouteListCmd(cfg *client.Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List routes registered with the multikube API server",
-		Long: `Retrieve and display all routes currently registered with
-the multikube API server.
-
-The command connects to the API server whose address is resolved from the
-current server entry in the multikube configuration file and prints a
-summary table with each route's name, generation, and age.`,
-		Example: `  # List all routes using the default configuration
-  multikubectl route list
-
-  # List routes using a custom configuration file
-  multikubectl route list --config /etc/multikube/config.yaml`,
-		Args: cobra.NoArgs,
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
-			return runRouteListCmd(cmd, cfg)
-		}),
-	}
-
-	return cmd
-}
-
-func newRouteCreateCmd(cfg *client.Config) *cobra.Command {
+func newCreateRouteCmd(cfg *client.Config) *cobra.Command {
 	var (
 		backendRef  string
 		pathPrefix  string
@@ -67,13 +28,11 @@ func newRouteCreateCmd(cfg *client.Config) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "create <name>",
+		Use:   "route [NAME]",
 		Short: "Create a new route",
-		Long: `Create a new route and register it with the multikube API server.
+		Long: `Create a new route and register it with the server
 
-The NAME argument is required and sets the route's name. Use --backend-ref to
-associate the route with a backend. Match criteria can be set via --sni,
---path-prefix, --header-name/--header-value, or --jwt-claim/--jwt-value.`,
+The NAME argument is required and sets the route's name.`,
 		Example: `  # Create a route pointing to a backend
   multikubectl route create my-route --backend-ref my-cluster
 
@@ -96,7 +55,7 @@ associate the route with a backend. Match criteria can be set via --sni,
     --label env=production --label team=platform`,
 		Args: cobra.ExactArgs(1),
 		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
-			return runRouteCreateCmd(cmd, args, cfg, backendRef, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue, labels)
+			return runCreateCreateCmd(cmd, args, cfg, backendRef, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue, labels)
 		}),
 	}
 
@@ -112,8 +71,8 @@ associate the route with a backend. Match criteria can be set via --sni,
 	return cmd
 }
 
-// runRouteCreateCmd creates a new route via the multikube API server.
-func runRouteCreateCmd(
+// runCreateCreateCmd creates a new route via the multikube API server.
+func runCreateCreateCmd(
 	cmd *cobra.Command,
 	args []string,
 	cfg *client.Config,
@@ -179,51 +138,6 @@ func runRouteCreateCmd(
 	}
 
 	fmt.Printf("route %q created\n", name)
-
-	return nil
-}
-
-// runRouteListCmd lists all routes registered with the multikube API server
-// and prints them as a formatted table to stdout.
-func runRouteListCmd(cmd *cobra.Command, cfg *client.Config) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
-	tracer := otel.Tracer("multikubectl")
-	ctx, span := tracer.Start(ctx, "multikubectl.route.list")
-	defer span.End()
-
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
-	wr := tabwriter.NewWriter(os.Stdout, 8, 8, 8, '\t', tabwriter.AlignRight)
-
-	routes, err := c.RouteV1().List(ctx)
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
-	_, _ = fmt.Fprintf(wr, "%s\t%s\t%s\n", "NAME", "GENERATION", "AGE")
-	for _, route := range routes {
-		_, _ = fmt.Fprintf(wr, "%s\t%d\t%s\n",
-			route.GetMeta().GetName(),
-			route.GetMeta().GetGeneration(),
-			cmdutil.FormatDuration(time.Since(route.GetMeta().GetCreated().AsTime())),
-		)
-	}
-
-	_ = wr.Flush()
 
 	return nil
 }

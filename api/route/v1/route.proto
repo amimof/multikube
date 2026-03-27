@@ -81,6 +81,14 @@ message RouteConfig {
 }
 
 message Match {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "sni",
+      "header",
+      "path_prefix",
+      "jwt"
+    ]
+  };
   string sni = 1;
   HeaderMatch header = 2;
   string path_prefix = 3;
