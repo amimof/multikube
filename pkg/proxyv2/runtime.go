@@ -63,9 +63,7 @@ func (p *BackendPool) Next(r *http.Request) (*BackendRuntime, bool) {
 
 func (p *BackendPool) healthyTargets() []*BackendRuntime {
 	out := make([]*BackendRuntime, 0, len(p.Targets))
-	for _, t := range p.Targets {
-		out = append(out, t)
-	}
+	out = append(out, p.Targets...)
 	return out
 }
 
