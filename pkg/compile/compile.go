@@ -1,16 +1,14 @@
-// Package compile transforms API proto objects into a proxy runtime configuration.
 package compile
 
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"sort"
-	"strings"
+	"sync/atomic"
 	"time"
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
@@ -31,51 +29,46 @@ type State struct {
 
 // Compiler compiles a State into a proxy Runtime.
 // It holds no shared state and each Compile call is self-contained.
-type Compiler struct{}
+type Compiler struct {
+	version atomic.Uint64
+}
 
-// NewCompiler returns a new Compiler.
+// NewCompiler returns a new Compiler2.
 func NewCompiler() *Compiler {
 	return &Compiler{}
 }
 
-// Compile converts the contents of a ControllerCache into a [*proxy.Runtime] that
+// Compile converts the contents of a State into a *proxy.RuntimeConfig that
 // the proxy can use to match and forward requests.
-func (c *Compiler) Compile(st *State) (*proxy.Runtime, error) {
-	// compile TLS client certificates first — CAs may reference them
+func (c *Compiler) Compile(st *State) (*proxy.RuntimeConfig, error) {
+	// compile TLS client certificates first; CAs may reference them.
 	tlsCerts, err := compileCerts(st.Certificates)
 	if err != nil {
 		return nil, fmt.Errorf("compile certs: %w", err)
 	}
 
-	// compile CA certificates into x509 cert pools
+	// compile CA certificate pools.
 	caPools, err := compileCAs(st.CertificateAuthorities, st.Certificates)
 	if err != nil {
 		return nil, fmt.Errorf("compile CAs: %w", err)
 	}
 
-	// compile backends into BackendPools, one Forwarder per backend
-	pools, forwarders, err := compileBackends(st.Backends, caPools, tlsCerts)
+	// compile backends into BackendRuntimes and per-backend Forwarders.
+	backends, forwarders, err := compileBackends2(st.Backends, caPools, tlsCerts)
 	if err != nil {
 		return nil, fmt.Errorf("compile backends: %w", err)
 	}
 
-	// compile routes into per-SNI VirtualHostRuntimes
-	exactHosts, wildcardHosts, err := compileRoutes(st.Routes, pools, forwarders)
+	// compile routes into CompiledRoutes.
+	routes, err := compileRoutes2(st.Routes, backends, forwarders)
 	if err != nil {
 		return nil, fmt.Errorf("compile routes: %w", err)
 	}
 
-	listener := &proxy.ListenerRuntime{
-		Name:          "default",
-		ExactHosts:    exactHosts,
-		WildcardHosts: wildcardHosts,
-	}
-
-	return &proxy.Runtime{
-		Version: 1,
-		Listeners: map[string]*proxy.ListenerRuntime{
-			"default": listener,
-		},
+	return &proxy.RuntimeConfig{
+		Version:  c.version.Add(1),
+		Backends: backends,
+		Routes:   routes,
 	}, nil
 }
 
@@ -151,55 +144,51 @@ func compileCert(cert *certificatev1.Certificate) (tls.Certificate, error) {
 	return tlsCert, nil
 }
 
-// compileBackends returns two parallel maps: BackendPool and Forwarder, keyed
-// by backend name. Each backend gets its own Forwarder built around a
-// per-backend TLS transport so that mTLS can be configured independently.
-func compileBackends(
+// compileBackends2 builds a BackendRuntime and a Forwarder for every healthy
+// backend. Unhealthy backends are silently skipped.
+func compileBackends2(
 	backends map[string]*backendv1.Backend,
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
-) (map[string]*proxy.BackendPool, map[string]*proxy.Forwarder, error) {
-	pools := make(map[string]*proxy.BackendPool, len(backends))
-	forwarders := make(map[string]*proxy.Forwarder, len(backends))
+) (map[string]*proxy.BackendRuntime, map[string]*proxy.Forwarder, error) {
+	out := make(map[string]*proxy.BackendRuntime, len(backends))
+	fwds := make(map[string]*proxy.Forwarder, len(backends))
 
 	for name, be := range backends {
-		pool, fwd, err := compileBackend(be, caPools, tlsCerts)
+
+		// TODO: Check for healthyness but only if it's cheap
+		// if !be.GetStatus().GetHealthy() {
+		// 	continue
+		// }
+
+		br, fwd, err := compileBackend2(be, caPools, tlsCerts)
 		if err != nil {
 			return nil, nil, fmt.Errorf("backend %q: %w", name, err)
 		}
-		// nil pool means the backend is unhealthy and was skipped.
-		if pool == nil {
-			continue
-		}
-		pools[name] = pool
-		forwarders[name] = fwd
+
+		out[name] = br
+		fwds[name] = fwd
 	}
 
-	return pools, forwarders, nil
+	return out, fwds, nil
 }
 
-// compileBackend compiles a single Backend into a BackendPool and its dedicated
-// Forwarder. Returns (nil, nil, nil) for unhealthy backends so they are skipped.
-func compileBackend(
+// compileBackend2 converts a single Backend proto into a BackendRuntime and its
+// dedicated Forwarder.
+func compileBackend2(
 	be *backendv1.Backend,
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
-) (*proxy.BackendPool, *proxy.Forwarder, error) {
-	if !be.GetStatus().GetHealthy() {
-		return nil, nil, nil
-	}
-
+) (*proxy.BackendRuntime, *proxy.Forwarder, error) {
 	serverURL, err := url.Parse(be.GetConfig().GetServer())
 	if err != nil {
 		return nil, nil, fmt.Errorf("parsing server URL %q: %w", be.GetConfig().GetServer(), err)
 	}
 
-	// Build per-backend TLS configuration.
 	tlsCfg := &tls.Config{
-		InsecureSkipVerify: be.GetConfig().GetInsecureSkipTlsVerify(),
+		InsecureSkipVerify: be.GetConfig().GetInsecureSkipTlsVerify(), //nolint:gosec // user-controlled
 	}
 
-	// Resolve optional CA reference.
 	if ref := be.GetConfig().GetCaRef(); ref != "" {
 		pool, ok := caPools[ref]
 		if !ok {
@@ -208,7 +197,6 @@ func compileBackend(
 		tlsCfg.RootCAs = pool
 	}
 
-	// Resolve optional client certificate reference.
 	if ref := be.GetConfig().GetAuthRef(); ref != "" {
 		cert, ok := tlsCerts[ref]
 		if !ok {
@@ -217,129 +205,115 @@ func compileBackend(
 		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
 
+	var cacheTTL time.Duration
+	if pb := be.GetConfig().GetCacheTtl(); pb != nil {
+		cacheTTL = pb.AsDuration()
+	}
+
 	transport := buildTLSTransport(tlsCfg)
 	fwd := proxy.NewForwarder(transport)
 
-	target := &proxy.BackendTarget{
-		ID:     be.GetMeta().GetName(),
-		URL:    serverURL,
-		Weight: 1,
-	}
-	target.Healthy.Store(true)
-
-	pool := &proxy.BackendPool{
-		Name:    be.GetMeta().GetName(),
-		Targets: []*proxy.BackendTarget{target},
+	br := &proxy.BackendRuntime{
+		Name:      be.GetMeta().GetName(),
+		URL:       serverURL,
+		CacheTTL:  cacheTTL,
+		TLSConfig: tlsCfg,
+		Transport: transport,
+		// AuthInjector left nil until an implementation exists.
 	}
 
-	return pool, fwd, nil
+	return br, fwd, nil
 }
 
-// compileRoutes builds per-SNI VirtualHostRuntimes from the route list.
-// It returns the ExactHosts map and WildcardHosts slice ready for a ListenerRuntime.
-func compileRoutes(
+// compileRoutes2 classifies each route into the correct CompiledRoutes bucket
+// and builds an http.Handler for it.
+func compileRoutes2(
 	routes map[string]*routev1.Route,
-	pools map[string]*proxy.BackendPool,
+	backends map[string]*proxy.BackendRuntime,
 	forwarders map[string]*proxy.Forwarder,
-) (map[string]*proxy.VirtualHostRuntime, []proxy.WildcardHostRuntime, error) {
-	exactHosts := map[string]*proxy.VirtualHostRuntime{}
-	// wildcardVHosts accumulates wildcard vhosts by suffix before converting to a slice.
-	wildcardVHosts := map[string]*proxy.VirtualHostRuntime{}
+) (proxy.CompiledRoutes, error) {
+	cr := proxy.CompiledRoutes{
+		SNIExact: make(map[string][]*proxy.RouteRuntime),
+	}
 
 	for name, route := range routes {
 		ref := route.GetConfig().GetBackendRef()
-		pool, ok := pools[ref]
+
+		br, ok := backends[ref]
 		if !ok {
-			// Backend not found or unhealthy – skip this route.
+			// Backend missing or unhealthy, skip silently.
 			continue
 		}
+
 		fwd, ok := forwarders[ref]
 		if !ok {
 			continue
 		}
 
-		match := route.GetConfig().GetMatch()
-		pathPrefix := match.GetPathPrefix()
-		pathType := compilePathType(pathPrefix)
-
-		// Base handler: forward to the backend pool.
+		// Build a single-target BackendPool so the Forwarder can pick a target.
+		pool := backendPoolFromRuntime(br)
 		handler := fwd.Handler(pool)
 
-		// Wrap with JWT middleware if a JWT match is configured.
-		if jwt := match.GetJwt(); jwt != nil && jwt.GetClaim() != "" {
-			handler = jwtMiddleware(jwt.GetClaim(), jwt.GetValue())(handler)
-		}
-
-		compiled := &proxy.CompiledRoute{
+		rr := &proxy.RouteRuntime{
 			Name:        name,
-			PathType:    pathType,
-			Path:        pathPrefix,
 			BackendPool: pool,
 			Handler:     handler,
 		}
 
-		// Compile optional header match.
-		if hm := match.GetHeader(); hm != nil && hm.GetName() != "" {
-			compiled.Headers = []proxy.HeaderMatch{
-				{Name: hm.GetName(), Value: hm.GetValue()},
+		match := route.GetConfig().GetMatch()
+
+		switch {
+		case match.GetHeader().GetName() != "":
+			hm := match.GetHeader()
+			rr.Kind = proxy.RouteMatchKindHeader
+			rr.Header = &proxy.HeaderRuntime{
+				Name:      hm.GetName(),
+				Canonical: textproto.CanonicalMIMEHeaderKey(hm.GetName()),
+				Value:     hm.GetValue(),
 			}
+			cr.Headers = append(cr.Headers, rr)
+
+		case match.GetPath() != "":
+			rr.Kind = proxy.RouteMatchKindPath
+			rr.Path = match.GetPath()
+			cr.Paths = append(cr.Paths, rr)
+
+		case match.GetPathPrefix() != "":
+			rr.Kind = proxy.RouteMatchKindPathPrefix
+			rr.PathPrefix = match.GetPathPrefix()
+			cr.PathPrefixes = append(cr.PathPrefixes, rr)
+
+		case match.GetSni() != "":
+			rr.Kind = proxy.RouteMatchKindSNI
+			rr.SNI = match.GetSni()
+			cr.SNIExact[rr.SNI] = append(cr.SNIExact[rr.SNI], rr)
+
+		default:
+			if cr.Default != nil {
+				return proxy.CompiledRoutes{}, fmt.Errorf(
+					"route %q: multiple default routes not allowed (conflicts with %q)",
+					name, cr.Default.Name,
+				)
+			}
+			cr.Default = rr
 		}
-
-		// Determine which virtual host this route belongs to based on SNI.
-		key, isWildcard := sniKey(match.GetSni())
-
-		if isWildcard {
-			vh := getOrCreateVHost(wildcardVHosts, key)
-			placeRoute(vh, compiled)
-		} else {
-			vh := getOrCreateVHost(exactHosts, key)
-			placeRoute(vh, compiled)
-		}
 	}
 
-	// Sort prefix paths in every virtual host by descending path length
-	// so that the most specific prefix wins.
-	for _, vh := range exactHosts {
-		sortPrefixPaths(vh)
-	}
-	for _, vh := range wildcardVHosts {
-		sortPrefixPaths(vh)
-	}
-
-	// Convert wildcardVHosts map into the slice expected by ListenerRuntime.
-	wildcardSlice := make([]proxy.WildcardHostRuntime, 0, len(wildcardVHosts))
-	for suffix, vh := range wildcardVHosts {
-		wildcardSlice = append(wildcardSlice, proxy.WildcardHostRuntime{
-			Suffix: suffix,
-			VHost:  vh,
-		})
-	}
-	// Sort wildcard entries by descending suffix length for deterministic behaviour.
-	sort.Slice(wildcardSlice, func(i, j int) bool {
-		return len(wildcardSlice[i].Suffix) > len(wildcardSlice[j].Suffix)
+	// Sort path-prefix routes by descending length so the most specific prefix wins.
+	sort.Slice(cr.PathPrefixes, func(i, j int) bool {
+		return len(cr.PathPrefixes[i].PathPrefix) > len(cr.PathPrefixes[j].PathPrefix)
 	})
 
-	return exactHosts, wildcardSlice, nil
+	return cr, nil
 }
 
-// placeRoute inserts a CompiledRoute into the correct bucket of a VirtualHostRuntime.
-func placeRoute(vh *proxy.VirtualHostRuntime, route *proxy.CompiledRoute) {
-	switch route.PathType {
-	case proxy.PathExact:
-		vh.ExactPaths[route.Path] = append(vh.ExactPaths[route.Path], route)
-	case proxy.PathPrefix:
-		vh.PrefixPaths = append(vh.PrefixPaths, route)
-	default: // PathAny / catch-all
-		vh.CatchAll = append(vh.CatchAll, route)
+// backendPoolFromRuntime wraps a BackendRuntime in a single-target BackendPool
+// compatible with the existing Forwarder.Handler signature.
+func backendPoolFromRuntime(br *proxy.BackendRuntime) *proxy.BackendPool {
+	return &proxy.BackendPool{
+		Name:    br.Name,
+		Targets: []*proxy.BackendRuntime{br},
 	}
-}
-
-// sortPrefixPaths sorts a VirtualHostRuntime's PrefixPaths by descending path
-// length so that the longest (most specific) prefix matches first.
-func sortPrefixPaths(vh *proxy.VirtualHostRuntime) {
-	sort.Slice(vh.PrefixPaths, func(i, j int) bool {
-		return len(vh.PrefixPaths[i].Path) > len(vh.PrefixPaths[j].Path)
-	})
 }
 
 // buildTLSTransport constructs an *http.Transport using the supplied tls.Config.
@@ -350,93 +324,4 @@ func buildTLSTransport(cfg *tls.Config) http.RoundTripper {
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
 	}
-}
-
-// compilePathType maps a path_prefix string to a PathMatchType.
-// A non-empty path prefix means prefix matching; an empty one is a catch-all.
-func compilePathType(pathPrefix string) proxy.PathMatchType {
-	if pathPrefix != "" {
-		return proxy.PathPrefix
-	}
-	return proxy.PathAny
-}
-
-// jwtMiddleware returns an HTTP middleware that validates that the JWT Bearer
-// token in the Authorization header contains the expected claim value.
-// Token signature is NOT verified. Only claim presence and value are checked.
-func jwtMiddleware(claim, value string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			const bearerPrefix = "Bearer "
-			if !strings.HasPrefix(authHeader, bearerPrefix) {
-				http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
-				return
-			}
-
-			tokenStr := strings.TrimPrefix(authHeader, bearerPrefix)
-			parts := strings.Split(tokenStr, ".")
-			if len(parts) != 3 {
-				http.Error(w, "malformed JWT", http.StatusUnauthorized)
-				return
-			}
-
-			// Decode the payload (second segment); add padding as required.
-			seg := parts[1]
-			if rem := len(seg) % 4; rem != 0 {
-				seg += strings.Repeat("=", 4-rem)
-			}
-			payloadBytes, err := base64.URLEncoding.DecodeString(seg)
-			if err != nil {
-				http.Error(w, "invalid JWT payload encoding", http.StatusUnauthorized)
-				return
-			}
-
-			var claims map[string]any
-			if err := json.Unmarshal(payloadBytes, &claims); err != nil {
-				http.Error(w, "invalid JWT payload JSON", http.StatusUnauthorized)
-				return
-			}
-
-			got, ok := claims[claim]
-			if !ok {
-				http.Error(w, fmt.Sprintf("JWT claim %q not found", claim), http.StatusUnauthorized)
-				return
-			}
-
-			// Normalise to string for comparison; encoding/json uses float64 for numbers.
-			if fmt.Sprintf("%v", got) != value {
-				http.Error(w, fmt.Sprintf("JWT claim %q value mismatch", claim), http.StatusUnauthorized)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// sniKey classifies an SNI string:
-func sniKey(sni string) (key string, isWildcard bool) {
-	if sni == "" {
-		return "*", false
-	}
-	if strings.HasPrefix(sni, "*.") {
-		return sni[1:], true // "*.example.com" → ".example.com"
-	}
-	return sni, false
-}
-
-// getOrCreateVHost returns the VirtualHostRuntime stored at key in m, creating
-// and inserting a new empty one if absent.
-func getOrCreateVHost(m map[string]*proxy.VirtualHostRuntime, key string) *proxy.VirtualHostRuntime {
-	vh, ok := m[key]
-	if !ok {
-		vh = &proxy.VirtualHostRuntime{
-			ExactPaths:  map[string][]*proxy.CompiledRoute{},
-			PrefixPaths: []*proxy.CompiledRoute{},
-			CatchAll:    []*proxy.CompiledRoute{},
-		}
-		m[key] = vh
-	}
-	return vh
 }

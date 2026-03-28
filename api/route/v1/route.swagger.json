@@ -507,6 +507,9 @@
         "header": {
           "$ref": "#/definitions/v1HeaderMatch"
         },
+        "path": {
+          "type": "string"
+        },
         "pathPrefix": {
           "type": "string"
         },

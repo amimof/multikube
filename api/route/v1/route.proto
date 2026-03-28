@@ -85,14 +85,16 @@ message Match {
     fields: [
       "sni",
       "header",
+      "path",
       "path_prefix",
       "jwt"
     ]
   };
   string sni = 1;
   HeaderMatch header = 2;
-  string path_prefix = 3;
-  JWTMatch jwt = 4;
+  string path = 4;
+  string path_prefix = 5;
+  JWTMatch jwt = 6;
 }
 
 message HeaderMatch {

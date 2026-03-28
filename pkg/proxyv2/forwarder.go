@@ -42,7 +42,7 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 	})
 }
 
-func cloneRequestForTarget(in *http.Request, target *BackendTarget) *http.Request {
+func cloneRequestForTarget(in *http.Request, target *BackendRuntime) *http.Request {
 	out := in.Clone(in.Context())
 	out.URL.Scheme = target.URL.Scheme
 	out.URL.Host = target.URL.Host
