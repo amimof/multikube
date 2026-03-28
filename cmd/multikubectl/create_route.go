@@ -18,6 +18,7 @@ import (
 func newCreateRouteCmd(cfg *client.Config) *cobra.Command {
 	var (
 		backendRef  string
+		path        string
 		pathPrefix  string
 		sni         string
 		headerName  string
@@ -55,12 +56,13 @@ The NAME argument is required and sets the route's name.`,
     --label env=production --label team=platform`,
 		Args: cobra.ExactArgs(1),
 		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
-			return runCreateCreateCmd(cmd, args, cfg, backendRef, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue, labels)
+			return runCreateCreateCmd(cmd, args, cfg, backendRef, path, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue, labels)
 		}),
 	}
 
 	cmd.Flags().StringVar(&backendRef, "backend-ref", "", "Reference to the backend this route targets")
 	cmd.Flags().StringVar(&pathPrefix, "path-prefix", "", "Path prefix to match on incoming requests")
+	cmd.Flags().StringVar(&path, "path", "", "Exact path to match on incoming requests")
 	cmd.Flags().StringVar(&sni, "sni", "", "Server Name Indication (SNI) value to match")
 	cmd.Flags().StringVar(&headerName, "header-name", "", "HTTP header name to match")
 	cmd.Flags().StringVar(&headerValue, "header-value", "", "HTTP header value to match (used together with --header-name)")
@@ -76,7 +78,7 @@ func runCreateCreateCmd(
 	cmd *cobra.Command,
 	args []string,
 	cfg *client.Config,
-	backendRef, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue string,
+	backendRef, path, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue string,
 	labelStrs []string,
 ) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
@@ -104,6 +106,7 @@ func runCreateCreateCmd(
 
 	match := &routev1.Match{
 		Sni:        sni,
+		Path:       path,
 		PathPrefix: pathPrefix,
 	}
 

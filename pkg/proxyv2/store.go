@@ -5,22 +5,23 @@ import (
 )
 
 type RuntimeStore struct {
-	current atomic.Pointer[Runtime]
+	current atomic.Pointer[RuntimeConfig]
 }
 
 func NewRuntimeStore() *RuntimeStore {
 	s := &RuntimeStore{}
-	s.current.Store(&Runtime{
-		Version:   0,
-		Listeners: map[string]*ListenerRuntime{},
+	s.current.Store(&RuntimeConfig{
+		Version:  0,
+		Routes:   CompiledRoutes{},
+		Backends: make(map[string]*BackendRuntime),
 	})
 	return s
 }
 
-func (s *RuntimeStore) Load() *Runtime {
+func (s *RuntimeStore) Load() *RuntimeConfig {
 	return s.current.Load()
 }
 
-func (s *RuntimeStore) Store(rt *Runtime) {
+func (s *RuntimeStore) Store(rt *RuntimeConfig) {
 	s.current.Store(rt)
 }
