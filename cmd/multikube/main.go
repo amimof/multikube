@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -24,7 +23,6 @@ import (
 	"time"
 
 	"buf.build/go/protovalidate"
-	"github.com/SermoDigital/jose/crypto"
 	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/controller"
@@ -514,19 +512,19 @@ func readCert(p string) *x509.Certificate {
 }
 
 // Reads a RSA public key file from the filesystem and parses it into an instance of rsa.PublicKey
-func readPublicKey(p string) *rsa.PublicKey {
-	f, err := os.ReadFile(p)
-	if err != nil {
-		log.Error("error reading public keyl", "error", err)
-		return nil
-	}
-	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
-	if err != nil {
-		log.Error("error parsing rsa public key from pem", "error", err)
-		return nil
-	}
-	return pubkey
-}
+// func readPublicKey(p string) *rsa.PublicKey {
+// 	f, err := os.ReadFile(p)
+// 	if err != nil {
+// 		log.Error("error reading public keyl", "error", err)
+// 		return nil
+// 	}
+// 	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
+// 	if err != nil {
+// 		log.Error("error parsing rsa public key from pem", "error", err)
+// 		return nil
+// 	}
+// 	return pubkey
+// }
 
 func serveUnix(s *transport.Server, errChan chan error) {
 	// Remove the socket file if it already exists
