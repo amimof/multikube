@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,21 +10,68 @@ import (
 
 type Proxy struct {
 	runtime *RuntimeStore
+	pubKey  *ecdsa.PublicKey
 }
 
-func NewProxy(runtime *RuntimeStore) *Proxy {
-	return &Proxy{runtime: runtime}
+// NewProxy creates a Proxy that serves requests from the given runtime store.
+// If pubKey is non-nil, JWT extraction and policy enforcement are enabled.
+func NewProxy(runtime *RuntimeStore, opts ...ProxyOption) *Proxy {
+	p := &Proxy{runtime: runtime}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+type ProxyOption func(*Proxy)
+
+// WithPublicKey enables JWT extraction and policy enforcement using the given
+// ECDSA public key.
+func WithPublicKey(key *ecdsa.PublicKey) ProxyOption {
+	return func(p *Proxy) {
+		p.pubKey = key
+	}
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rt := p.runtime.Load()
 
+	// JWT extraction. If a public key is configured, we require and validate a JWT.
+	var principal *Principal
+	if p.pubKey != nil {
+		var flat map[string]string
+		var err error
+		principal, flat, err = ExtractJWT(r, p.pubKey)
+		if err != nil {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		ctx := WithPrincipal(r.Context(), principal)
+		ctx = WithJWTClaims(ctx, flat)
+		r = r.WithContext(ctx)
+	}
+
+	// Route matching
 	route, ok := rt.Match(r)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 
+	// Policy enforcement. Only enforce when policies are present and a public key is configured.
+	if p.pubKey != nil && len(rt.Policies) > 0 {
+		var backend *BackendRuntime
+		if route.BackendPool != nil {
+			backend, _ = route.BackendPool.Next(r)
+		}
+		k8sReq := ParseK8sRequest(r)
+		if EvalPolicies(rt.Policies, principal, backend, k8sReq) == EvalDeny {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	// Dispatch
 	handler := route.Handler
 	if route.Timeout > 0 {
 		handler = timeoutMiddleware(route.Timeout)(handler)

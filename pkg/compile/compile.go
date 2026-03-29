@@ -14,6 +14,7 @@ import (
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 	cav1 "github.com/amimof/multikube/api/ca/v1"
 	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
+	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 	proxy "github.com/amimof/multikube/pkg/proxyv2"
 )
@@ -25,6 +26,7 @@ type State struct {
 	Routes                 map[string]*routev1.Route
 	Certificates           map[string]*certificatev1.Certificate
 	CertificateAuthorities map[string]*cav1.CertificateAuthority
+	Policies               map[string]*policyv1.Policy
 }
 
 // Compiler compiles a State into a proxy Runtime.
@@ -69,6 +71,7 @@ func (c *Compiler) Compile(st *State) (*proxy.RuntimeConfig, error) {
 		Version:  c.version.Add(1),
 		Backends: backends,
 		Routes:   routes,
+		Policies: compilePolicies(st.Policies),
 	}, nil
 }
 
@@ -215,6 +218,7 @@ func compileBackend2(
 
 	br := &proxy.BackendRuntime{
 		Name:      be.GetMeta().GetName(),
+		Labels:    be.GetMeta().GetLabels(),
 		URL:       serverURL,
 		CacheTTL:  cacheTTL,
 		TLSConfig: tlsCfg,
@@ -324,4 +328,14 @@ func buildTLSTransport(cfg *tls.Config) http.RoundTripper {
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
 	}
+}
+
+// compilePolicies converts a map of Policy proto objects into a slice for the
+// RuntimeConfig. Policy evaluation is done at request time from this slice.
+func compilePolicies(policies map[string]*policyv1.Policy) []*policyv1.Policy {
+	out := make([]*policyv1.Policy, 0, len(policies))
+	for _, p := range policies {
+		out = append(out, p)
+	}
+	return out
 }

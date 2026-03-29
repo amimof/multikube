@@ -30,6 +30,7 @@ multikube create routes
 	cmd.AddCommand(newCreateRouteCmd(cfg))
 	cmd.AddCommand(newCreateCertificateCmd(cfg))
 	cmd.AddCommand(newCreateCACmd(cfg))
+	cmd.AddCommand(newCreatePolicyCmd(cfg))
 
 	return cmd
 }

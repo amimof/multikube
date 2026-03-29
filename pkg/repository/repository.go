@@ -18,6 +18,7 @@ import (
 	cav1 "github.com/amimof/multikube/api/ca/v1"
 	certv1 "github.com/amimof/multikube/api/certificate/v1"
 	metav1 "github.com/amimof/multikube/api/meta/v1"
+	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 )
 
@@ -74,6 +75,14 @@ var RouteCodec = ProtoCodec[*routev1.Route]{
 
 func NewRouteRepo[T *routev1.Route](db DB) *Repo[*routev1.Route] {
 	return NewRepo(db, RouteCodec, []byte("route/"), []byte("i/route/"), []byte("i/idx/route"))
+}
+
+var PolicyCodec = ProtoCodec[*policyv1.Policy]{
+	New: func() *policyv1.Policy { return &policyv1.Policy{} },
+}
+
+func NewPolicyRepo[T *policyv1.Policy](db DB) *Repo[*policyv1.Policy] {
+	return NewRepo(db, PolicyCodec, []byte("policy/"), []byte("i/policy/"), []byte("i/idx/policy"))
 }
 
 type Codec[T proto.Message] interface {

@@ -34,6 +34,11 @@ const (
 	RouteDelete = eventv1.Event_EVENT_ROUTE_DELETE
 	RouteUpdate = eventv1.Event_EVENT_ROUTE_UPDATE
 	RoutePatch  = eventv1.Event_EVENT_ROUTE_PATCH
+
+	PolicyCreate = eventv1.Event_EVENT_POLICY_CREATE
+	PolicyDelete = eventv1.Event_EVENT_POLICY_DELETE
+	PolicyUpdate = eventv1.Event_EVENT_POLICY_UPDATE
+	PolicyPatch  = eventv1.Event_EVENT_POLICY_PATCH
 )
 
 type Subscriber interface {

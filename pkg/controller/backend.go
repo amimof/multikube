@@ -12,12 +12,12 @@ import (
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/logger"
-	"github.com/amimof/multikube/pkg/proxy"
 	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 	cav1 "github.com/amimof/multikube/api/ca/v1"
 	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
+	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 )
 
@@ -27,7 +27,6 @@ type Controller struct {
 	clientset *client.ClientSet
 	tracer    trace.Tracer
 	exchange  *events.Exchange
-	proxy     *proxy.Proxy
 	compiler  *compile.Compiler
 	runtime   *proxyv2.RuntimeStore
 	cache     *compile.State
@@ -52,12 +51,6 @@ func WithRuntime(runtime *proxyv2.RuntimeStore) NewOption {
 func WithLogger(l logger.Logger) NewOption {
 	return func(c *Controller) {
 		c.logger = l
-	}
-}
-
-func WithProxy(p *proxy.Proxy) NewOption {
-	return func(c *Controller) {
-		c.proxy = p
 	}
 }
 
@@ -88,6 +81,36 @@ func (c *Controller) onRouteCreate(_ context.Context, r *routev1.Route) error {
 	c.cache.Routes[r.GetMeta().GetName()] = r
 
 	// Compile
+	return c.compileRuntime()
+}
+
+func (c *Controller) onPolicyCreate(_ context.Context, p *policyv1.Policy) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on create handler", "policy", p.GetMeta().GetName())
+
+	c.cache.Policies[p.GetMeta().GetName()] = p
+
+	return c.compileRuntime()
+}
+
+func (c *Controller) onPolicyUpdate(_ context.Context, p *policyv1.Policy) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on update handler", "policy", p.GetMeta().GetName())
+
+	c.cache.Policies[p.GetMeta().GetName()] = p
+
+	return c.compileRuntime()
+}
+
+func (c *Controller) onPolicyDelete(_ context.Context, p *policyv1.Policy) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on delete handler", "policy", p.GetMeta().GetName())
+
+	delete(c.cache.Policies, p.GetMeta().GetName())
+
 	return c.compileRuntime()
 }
 
@@ -139,6 +162,14 @@ func (c *Controller) onInit(ctx context.Context) error {
 		c.cache.Routes[route.GetMeta().GetName()] = route
 	}
 
+	policies, err := c.clientset.PolicyV1().List(ctx)
+	if err != nil {
+		return fmt.Errorf("error listing policies: %v", err)
+	}
+	for _, policy := range policies {
+		c.cache.Policies[policy.GetMeta().GetName()] = policy
+	}
+
 	return c.compileRuntime()
 }
 
@@ -154,6 +185,10 @@ func (c *Controller) Run(ctx context.Context) {
 	// c.exchange.On(events.BackendUpdate, events.HandleErrors(c.logger, events.HandleBackends(c.onUpdate)))
 	// c.exchange.On(events.BackendPatch, events.HandleErrors(c.logger, events.HandleBackends(c.onPatch)))
 	c.exchange.On(events.RouteCreate, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteCreate)))
+	c.exchange.On(events.PolicyCreate, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyCreate)))
+	c.exchange.On(events.PolicyUpdate, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyUpdate)))
+	c.exchange.On(events.PolicyPatch, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyUpdate)))
+	c.exchange.On(events.PolicyDelete, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyDelete)))
 
 	// Block until context is cancelled
 	<-ctx.Done()
@@ -169,6 +204,7 @@ func New(cs *client.ClientSet, opts ...NewOption) *Controller {
 			Routes:                 map[string]*routev1.Route{},
 			Certificates:           map[string]*certificatev1.Certificate{},
 			CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+			Policies:               map[string]*policyv1.Policy{},
 		},
 	}
 	for _, opt := range opts {

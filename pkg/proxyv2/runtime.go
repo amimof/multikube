@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	policyv1 "github.com/amimof/multikube/api/policy/v1"
 )
 
 type RuntimeConfig struct {
@@ -16,6 +18,7 @@ type RuntimeConfig struct {
 
 	Routes   CompiledRoutes
 	Backends map[string]*BackendRuntime
+	Policies []*policyv1.Policy
 }
 
 type CompiledRoutes struct {
@@ -96,7 +99,8 @@ type JWTRuntime struct {
 }
 
 type BackendRuntime struct {
-	Name string
+	Name   string
+	Labels map[string]string
 
 	URL *url.URL
 
@@ -206,6 +210,7 @@ type contextKey string
 const (
 	ctxKeyJWTClaims contextKey = "jwt_claims"
 	ctxKeySNI       contextKey = "sni"
+	ctxKeyPrincipal contextKey = "principal"
 )
 
 func JWTClaimsFromContext(ctx context.Context) (map[string]string, bool) {
@@ -218,4 +223,26 @@ func SNIFromContext(ctx context.Context) (string, bool) {
 	v := ctx.Value(ctxKeySNI)
 	sni, ok := v.(string)
 	return sni, ok
+}
+
+// Principal represents the authenticated identity extracted from a JWT.
+type Principal struct {
+	User            string
+	Groups          []string
+	ServiceAccounts []string
+	Claims          map[string]string
+}
+
+func PrincipalFromContext(ctx context.Context) (*Principal, bool) {
+	v := ctx.Value(ctxKeyPrincipal)
+	p, ok := v.(*Principal)
+	return p, ok
+}
+
+func WithPrincipal(ctx context.Context, p *Principal) context.Context {
+	return context.WithValue(ctx, ctxKeyPrincipal, p)
+}
+
+func WithJWTClaims(ctx context.Context, claims map[string]string) context.Context {
+	return context.WithValue(ctx, ctxKeyJWTClaims, claims)
 }

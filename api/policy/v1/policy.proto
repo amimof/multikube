@@ -1,0 +1,263 @@
+syntax = "proto3";
+
+package policy.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "meta/v1/meta.proto";
+
+option go_package = "github.com/amimof/multikube/api/policy/v1;policy";
+
+service PolicyService {
+  rpc List(ListRequest) returns (ListResponse) {
+    option (google.api.http) = {get: "/api/v1/policys"};
+  }
+  rpc Get(GetRequest) returns (GetResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/policys/{uid}"
+      additional_bindings: {get: "/api/v1/policys/{name}"}
+    };
+  }
+  rpc Create(CreateRequest) returns (CreateResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/policys"
+      body: "policy"
+    };
+  }
+  rpc Update(UpdateRequest) returns (UpdateResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/policys/{uid}"
+      body: "policy"
+      additional_bindings: {
+        put: "/api/v1/policys/{name}"
+        body: "policy"
+      }
+    };
+  }
+  rpc Patch(PatchRequest) returns (PatchResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/policys/{uid}"
+      body: "policy"
+      additional_bindings: {
+        patch: "/api/v1/policys/{name}"
+        body: "policy"
+      }
+    };
+  }
+  rpc Delete(DeleteRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/policys/{uid}"
+      additional_bindings: {delete: "/api/v1/policys/{name}"}
+    };
+  }
+  // rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse) {
+  //   option (google.api.http) = {
+  //     put: "/api/v1/policys/{uid}/status"
+  //     additional_bindings: {put: "/api/v1/policys/{name}/status"}
+  //   };
+  // }
+}
+
+message Policy {
+  string version = 1 [
+    (buf.validate.field).string.min_len = 4,
+    (buf.validate.field).string.pattern = "^[a-z0-9]+(?:[._-][a-z0-9]+)*/[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+    (buf.validate.field).required = true
+  ];
+  meta.v1.Meta meta = 2 [(buf.validate.field).required = true];
+  PolicyConfig config = 3;
+  PolicyStatus status = 4;
+}
+
+message PolicyStatus {}
+
+message PolicyConfig {
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+  repeated Rule rules = 2;
+}
+
+message Rule {
+  Effect effect = 1;
+  repeated SubjectSelector subjects = 2;
+  repeated ClusterSelector clusters = 3;
+  repeated ResourceSelector resources = 4;
+  repeated Action actions = 5;
+  repeated Condition conditions = 6;
+}
+
+enum Effect {
+  EFFECT_UNSPECIFIED = 0;
+  EFFECT_ALLOW = 1;
+  EFFECT_DENY = 2;
+}
+
+message SubjectSelector {
+  repeated string users = 1;
+  repeated string groups = 2;
+  repeated string service_accounts = 3;
+  repeated Claim claims = 4;
+}
+
+message Claim {
+  string name = 1;
+  string value = 2;
+}
+
+message ClusterSelector {
+  repeated string names = 1;
+  map<string, string> labels = 2;
+}
+
+message ResourceSelector {
+  string api_group = 1;
+  string resource = 2;
+  string sub_resource = 3;
+  repeated string namespaces = 4;
+  repeated string names = 5;
+  // repeated string verbs = 6;
+
+  LabelSelector label_selector = 7;
+  // For the future
+  // FieldSelector field_selector = 8;
+}
+
+message LabelSelector {
+  map<string, string> match_labels = 1;
+  // repeated MatchExpression match_expressions = 2;
+}
+
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  ACTION_GET = 1;
+  ACTION_LIST = 2;
+  ACTION_WATCH = 3;
+  ACTION_CREATE = 4;
+  ACTION_UPDATE = 5;
+  ACTION_PATCH = 6;
+  ACTION_DELETE = 7;
+  ACTION_DELETECOLLECTION = 8;
+  ACTION_PROXY = 9;
+  ACTION_EXEC = 10;
+  ACTION_LOGS = 11;
+  ACTION_PORTFORWARD = 12;
+}
+
+message Condition {
+  ConditionType type = 1;
+}
+
+enum ConditionType {
+  CONDITION_TYPE_UNSPECIFIED = 0;
+  CONDITION_TYPE_TIMEWINDOW = 1;
+  CONDITION_TYPE_WEEKDAY = 2;
+  CONDITION_TYPE_SOURCEIP = 3;
+  CONDITION_TYPE_CLAIM = 4;
+}
+
+message TimeWindowCondition {
+  repeated Weekday days_of_week = 1;
+  uint32 start_hour = 2;
+  uint32 end_hour = 3;
+  string timezone = 4;
+}
+
+enum Weekday {
+  WEEKDAY_UNSPECIFIED = 0;
+  WEEKDAY_MONDAY = 1;
+  WEEKDAY_TUESDAY = 2;
+  WEEKDAY_WEDNESDAY = 3;
+  WEEKDAY_THURSDAY = 4;
+  WEEKDAY_FRIDAY = 5;
+  WEEKDAY_SATURDAY = 6;
+  WEEKDAY_SUNDAY = 7;
+}
+
+message SourceIPCondition {
+  repeated string cidrs = 1;
+}
+
+message ClaimCondition {
+  string claim = 1;
+  repeated string values = 2;
+}
+
+message GetRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetResponse {
+  Policy policy = 1;
+}
+
+message CreateRequest {
+  Policy policy = 1 [(buf.validate.field).required = true];
+}
+
+message CreateResponse {
+  Policy policy = 1;
+}
+
+message DeleteRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  bool purge = 3;
+}
+
+message UpdateRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  Policy policy = 3 [(buf.validate.field).required = true];
+  google.protobuf.FieldMask update_mask = 4;
+}
+
+message UpdateResponse {
+  Policy policy = 1;
+}
+
+message ListRequest {
+  int32 limit = 1;
+  map<string, string> selector = 2;
+}
+
+message ListResponse {
+  repeated Policy policys = 1;
+}
+
+message PatchRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  Policy policy = 3 [(buf.validate.field).required = true];
+  google.protobuf.FieldMask update_mask = 4;
+}
+
+message PatchResponse {
+  Policy policy = 1;
+}

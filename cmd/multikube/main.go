@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -33,6 +34,7 @@ import (
 	"github.com/amimof/multikube/pkg/repository"
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/dgraph-io/badger/v4"
+	"github.com/golang-jwt/jwt"
 	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
@@ -87,11 +89,12 @@ var (
 	tlsCertificateKey      string
 	tlsCACertificate       string
 
-	rs256PublicKey string
-	kubeconfigPath string
-	cacheTTL       time.Duration
-	dataPath       string
-	logLevel       string
+	rs256PrivateKey string
+	rs256PublicKey  string
+	kubeconfigPath  string
+	cacheTTL        time.Duration
+	dataPath        string
+	logLevel        string
 
 	log *slog.Logger
 )
@@ -127,6 +130,7 @@ func init() {
 	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
+	pflag.StringVar(&rs256PrivateKey, "rs256-private-key", "", "the RS256 private key used to sign JWT's")
 	pflag.StringVar(&rs256PublicKey, "rs256-public-key", "", "the RS256 public key used to validate the signature of client JWT's")
 	pflag.StringVar(&kubeconfigPath, "kubeconfig", "/etc/multikube/kubeconfig", "absolute path to a kubeconfig file")
 	pflag.StringVar(&oidcIssuerURL, "oidc-issuer-url", "", "The URL of the OpenID issuer, only HTTPS scheme will be accepted. If set, it will be used to verify the OIDC JSON Web Token (JWT)")
@@ -226,6 +230,13 @@ func main() {
 	// Setup event exchange bus
 	exchange := events.NewExchange(events.WithExchangeLogger(log))
 
+	// Setup RS256 key pairs
+	rs256PrivKey, err := generateSigningKey()
+	if err != nil {
+		log.Error("error parsing rs256 key", "error", err)
+		os.Exit(1)
+	}
+
 	// Setup grpc services
 	backendService := transport.NewBackendService(&app.BackendService{
 		Repo:     repository.NewBackendRepo(repo),
@@ -245,6 +256,12 @@ func main() {
 	})
 	routeService := transport.NewRouteService(&app.RouteService{
 		Repo:     repository.NewRouteRepo(repo),
+		Exchange: exchange,
+		Logger:   log,
+	})
+
+	policyService := transport.NewPolicyService(&app.PolicyService{
+		Repo:     repository.NewPolicyRepo(repo),
 		Exchange: exchange,
 		Logger:   log,
 	})
@@ -318,6 +335,7 @@ func main() {
 		caService,
 		certService,
 		routeService,
+		policyService,
 	)
 
 	// Context
@@ -326,6 +344,7 @@ func main() {
 	defer cancel()
 
 	// Only allow one of the flags rs256-public-key and oidc-issuer-url
+	// TODO: Remove these from flags. They are now in the API instead
 	if rs256PublicKey != "" && oidcIssuerURL != "" {
 		log.Error("Only one of `--rs256-public-key` or `--oidc-issue-url` cat be set")
 		os.Exit(1)
@@ -377,14 +396,6 @@ func main() {
 		p.Use(proxy.WithOIDC(oidcConfig))
 	}
 
-	// Add RS256 public key validation middleware if public key provided
-	if rs256PublicKey != "" {
-		rs256Config := proxy.RS256Config{
-			PublicKey: readPublicKey(rs256PublicKey),
-		}
-		p.Use(proxy.WithRS256(rs256Config))
-	}
-
 	// Setup controller
 	runtimeStore := proxyv2.NewRuntimeStore()
 	compiler := compile.NewCompiler()
@@ -392,14 +403,13 @@ func main() {
 		cs,
 		controller.WithLogger(log),
 		controller.WithExchange(exchange),
-		controller.WithProxy(p),
 		controller.WithCompiler(compiler),
 		controller.WithRuntime(runtimeStore),
 	)
 	go ctrl.Run(ctx)
 	log.Info("started proxy Controller")
 
-	handler := proxyv2.NewProxy(runtimeStore)
+	handler := proxyv2.NewProxy(runtimeStore, proxyv2.WithPublicKey(&rs256PrivKey.PublicKey))
 
 	// Create the server
 	s := &server.Server{
@@ -628,4 +638,86 @@ func generateCertificates() (tls.Certificate, error) {
 	log.Info("generated x509 key pair")
 
 	return cert, nil
+}
+
+func generateSigningKey() (*ecdsa.PrivateKey, error) {
+	b, err := os.ReadFile(rs256PrivateKey)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			if err != nil {
+				return nil, err
+			}
+
+			pemKey, err := encodePem(key)
+			if err != nil {
+				return nil, err
+			}
+
+			pemKeyB, err := pemKey.Bytes()
+			if err != nil {
+				return nil, err
+			}
+
+			err = os.WriteFile(path.Join(dataPath, "sign.pem"), pemKeyB, 0o755)
+			if err != nil {
+				return nil, err
+			}
+
+			_, err = generateVerifyKey(key)
+			if err != nil {
+				return nil, err
+			}
+
+			return pemKey, nil
+		}
+		return nil, err
+	}
+
+	return ecdsa.ParseRawPrivateKey(elliptic.P256(), b)
+}
+
+func generateVerifyKey(key *ecdsa.PrivateKey) (*ecdsa.PublicKey, error) {
+	b, err := os.ReadFile(rs256PublicKey)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			pemPub, err := encodePubPem(&key.PublicKey)
+			if err != nil {
+				return nil, err
+			}
+
+			pemPubB, err := pemPub.Bytes()
+			if err != nil {
+				return nil, err
+			}
+
+			err = os.WriteFile(path.Join(dataPath, "verify.pem"), pemPubB, 0o755)
+			if err != nil {
+				return nil, err
+			}
+
+			return pemPub, nil
+		}
+		return nil, err
+	}
+
+	return ecdsa.ParseUncompressedPublicKey(elliptic.P256(), b)
+}
+
+func encodePem(key *ecdsa.PrivateKey) (*ecdsa.PrivateKey, error) {
+	pkcs8Der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		panic(err)
+	}
+	pkcs8Pem := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Der})
+	return jwt.ParseECPrivateKeyFromPEM(pkcs8Pem)
+}
+
+func encodePubPem(key *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
+	pkcs8Der, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		panic(err)
+	}
+	pkcs8Pem := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pkcs8Der})
+	return jwt.ParseECPublicKeyFromPEM(pkcs8Pem)
 }

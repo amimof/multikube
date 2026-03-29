@@ -72,4 +72,4 @@ Examples are found under [docs/examples](https://github.com/amimof/multikube/blo
 
 ## Contributing
 
-Multikube has not yet exited alpha. It is still under heavy development. All help in any form is highly appreciated and your are welcome participate in developing together. To contribute submit a Pull Request. If you want to provide feedback, open up a Github Issue or contact me personally.
+Multikube is still evolving, so feedback and ideas are very welcome. If something is unclear, missing, or could work better, feel free to open an issue or start a discussion. Suggestions, design feedback, and pull requests are all appreciated 💜

@@ -86,7 +86,11 @@
         "EVENT_ROUTE_CREATE",
         "EVENT_ROUTE_DELETE",
         "EVENT_ROUTE_UPDATE",
-        "EVENT_ROUTE_PATCH"
+        "EVENT_ROUTE_PATCH",
+        "EVENT_POLICY_CREATE",
+        "EVENT_POLICY_DELETE",
+        "EVENT_POLICY_UPDATE",
+        "EVENT_POLICY_PATCH"
       ],
       "default": "EVENT_UNSPECIFIED"
     },
