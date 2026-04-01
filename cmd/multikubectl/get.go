@@ -29,6 +29,7 @@ multikube get routes
 	cmd.AddCommand(newGetRouteCmd(cfg))
 	cmd.AddCommand(newGetCertificateCmd(cfg))
 	cmd.AddCommand(newGetCACmd(cfg))
+	cmd.AddCommand(newGetCredentialCmd(cfg))
 	cmd.AddCommand(newGetPolicyCmd(cfg))
 
 	return cmd

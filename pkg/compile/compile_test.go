@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 	cav1 "github.com/amimof/multikube/api/ca/v1"
 	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
+	credentialv1 "github.com/amimof/multikube/api/credential/v1"
 	metav1 "github.com/amimof/multikube/api/meta/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 	proxy "github.com/amimof/multikube/pkg/proxyv2"
@@ -106,6 +108,36 @@ func newCAInline(name, certPEM string) *cav1.CertificateAuthority {
 	}
 }
 
+func newTokenCredential(name, token string) *credentialv1.Credential {
+	return &credentialv1.Credential{
+		Meta: &metav1.Meta{Name: name},
+		Config: &credentialv1.CredentialConfig{
+			Token: token,
+		},
+	}
+}
+
+func newBasicCredential(name, username, password string) *credentialv1.Credential {
+	return &credentialv1.Credential{
+		Meta: &metav1.Meta{Name: name},
+		Config: &credentialv1.CredentialConfig{
+			Basic: &credentialv1.CredentialBasic{
+				Username: username,
+				Password: password,
+			},
+		},
+	}
+}
+
+func newClientCertCredential(name, certRef string) *credentialv1.Credential {
+	return &credentialv1.Credential{
+		Meta: &metav1.Meta{Name: name},
+		Config: &credentialv1.CredentialConfig{
+			ClientCertificateRef: certRef,
+		},
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Tests — Compiler.Compile happy paths
 // ---------------------------------------------------------------------------
@@ -117,6 +149,7 @@ func TestCompile_EmptyState(t *testing.T) {
 		Routes:                 map[string]*routev1.Route{},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -139,6 +172,7 @@ func TestCompile_VersionIncrement(t *testing.T) {
 			Routes:                 map[string]*routev1.Route{},
 			Certificates:           map[string]*certificatev1.Certificate{},
 			CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+			Credentials:            map[string]*credentialv1.Credential{},
 		}
 	}
 
@@ -167,6 +201,7 @@ func TestCompile_DefaultRoute(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -203,6 +238,7 @@ func TestCompile_HeaderRoute(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -235,6 +271,7 @@ func TestCompile_PathRoute(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -268,6 +305,7 @@ func TestCompile_PathPrefixRoute_SortedLongestFirst(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -297,6 +335,7 @@ func TestCompile_SNIRoute(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -309,6 +348,44 @@ func TestCompile_SNIRoute(t *testing.T) {
 	}
 	if routes[0].Kind != proxy.RouteMatchKindSNI {
 		t.Errorf("expected kind SNI, got %v", routes[0].Kind)
+	}
+}
+
+func TestCompile_JWTRoute(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": newBackend("be", srv.URL),
+		},
+		Routes: map[string]*routev1.Route{
+			"r": newRoute("r", "be", &routev1.Match{
+				Jwt: &routev1.JWTMatch{Claim: "team", Value: "platform"},
+			}),
+		},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	rc, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rc.Routes.JWT) != 1 {
+		t.Fatalf("expected 1 jwt route, got %d", len(rc.Routes.JWT))
+	}
+	rr := rc.Routes.JWT[0]
+	if rr.Kind != proxy.RouteMatchKindJWT {
+		t.Errorf("expected kind JWT, got %v", rr.Kind)
+	}
+	if rr.JWT == nil || rr.JWT.Claim != "team" || rr.JWT.Value != "platform" {
+		t.Errorf("unexpected jwt match: %+v", rr.JWT)
+	}
+	if rr.Handler == nil {
+		t.Fatal("expected handler to be set")
 	}
 }
 
@@ -331,6 +408,7 @@ func TestCompile_MultipleDefaultRoutes_Error(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	_, err := c.Compile(st)
@@ -348,6 +426,7 @@ func TestCompile_MissingBackendRef_RouteSkipped(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -378,6 +457,7 @@ func TestCompile_BackendPool_SingleTarget(t *testing.T) {
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -412,6 +492,7 @@ func TestCompile_CA_InlinePEM(t *testing.T) {
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
 			"myca": newCAInline("myca", certPEM),
 		},
+		Credentials: map[string]*credentialv1.Credential{},
 	}
 	_ = keyPEM // only the cert PEM is needed for a CA pool
 
@@ -435,6 +516,7 @@ func TestCompile_CA_CertificateRef(t *testing.T) {
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
 			"myca": newCAFromRef("myca", "mycert"),
 		},
+		Credentials: map[string]*credentialv1.Credential{},
 	}
 
 	rc, err := c.Compile(st)
@@ -453,6 +535,7 @@ func TestCompile_CA_MissingCertRef_Error(t *testing.T) {
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
 			"myca": newCAFromRef("myca", "does-not-exist"),
 		},
+		Credentials: map[string]*credentialv1.Credential{},
 	}
 
 	_, err := c.Compile(st)
@@ -470,6 +553,7 @@ func TestCompile_CA_InvalidPEM_Error(t *testing.T) {
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
 			"myca": newCAInline("myca", "not-valid-pem"),
 		},
+		Credentials: map[string]*credentialv1.Credential{},
 	}
 
 	_, err := c.Compile(st)
@@ -494,6 +578,7 @@ func TestCompile_Certificate_MissingCert_Error(t *testing.T) {
 			},
 		},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	_, err := c.Compile(st)
@@ -516,10 +601,205 @@ func TestCompile_Certificate_MissingKey_Error(t *testing.T) {
 			},
 		},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
 	_, err := c.Compile(st)
 	if err == nil {
 		t.Fatal("expected error for missing key PEM, got nil")
+	}
+}
+
+func TestCompile_BackendTokenCredential_AttachesAuthInjector(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Server:                srv.URL,
+					InsecureSkipTlsVerify: true,
+					AuthRef:               "cred",
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials: map[string]*credentialv1.Credential{
+			"cred": newTokenCredential("cred", "secret-token"),
+		},
+	}
+
+	rc, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	backend := rc.Backends["be"]
+	if backend == nil {
+		t.Fatal("expected backend runtime")
+	}
+	if backend.AuthInjector == nil {
+		t.Fatal("expected auth injector")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
+	if err := backend.AuthInjector.Apply(req); err != nil {
+		t.Fatalf("apply auth injector: %v", err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer secret-token" {
+		t.Fatalf("expected bearer auth header, got %q", got)
+	}
+}
+
+func TestCompile_BackendBasicCredential_AttachesAuthInjector(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Server:                srv.URL,
+					InsecureSkipTlsVerify: true,
+					AuthRef:               "cred",
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials: map[string]*credentialv1.Credential{
+			"cred": newBasicCredential("cred", "alice", "secret"),
+		},
+	}
+
+	rc, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	backend := rc.Backends["be"]
+	if backend == nil {
+		t.Fatal("expected backend runtime")
+	}
+	if backend.AuthInjector == nil {
+		t.Fatal("expected auth injector")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
+	if err := backend.AuthInjector.Apply(req); err != nil {
+		t.Fatalf("apply auth injector: %v", err)
+	}
+	if got := req.Header.Get("Authorization"); len(got) < 6 || got[:6] != "Basic " {
+		t.Fatalf("expected basic auth header, got %q", got)
+	}
+}
+
+func TestCompile_BackendClientCertificateCredential_AttachesTLSCert(t *testing.T) {
+	certPEM, keyPEM := selfSignedPEM(t)
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Server:                srv.URL,
+					InsecureSkipTlsVerify: true,
+					AuthRef:               "cred",
+				},
+			},
+		},
+		Routes: map[string]*routev1.Route{},
+		Certificates: map[string]*certificatev1.Certificate{
+			"client-cert": newCertificate("client-cert", certPEM, keyPEM),
+		},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials: map[string]*credentialv1.Credential{
+			"cred": newClientCertCredential("cred", "client-cert"),
+		},
+	}
+
+	rc, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	backend := rc.Backends["be"]
+	if backend == nil {
+		t.Fatal("expected backend runtime")
+	}
+	if len(backend.TLSConfig.Certificates) != 1 {
+		t.Fatalf("expected one tls certificate, got %d", len(backend.TLSConfig.Certificates))
+	}
+	if backend.AuthInjector != nil {
+		t.Fatal("expected no auth injector for client certificate credential")
+	}
+}
+
+func TestCompile_BackendMissingCredentialRef_Error(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Server:                srv.URL,
+					InsecureSkipTlsVerify: true,
+					AuthRef:               "missing",
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	_, err := c.Compile(st)
+	if err == nil {
+		t.Fatal("expected error for missing credential ref, got nil")
+	}
+}
+
+func TestCompile_BackendClientCredentialMissingCertificate_Error(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Server:                srv.URL,
+					InsecureSkipTlsVerify: true,
+					AuthRef:               "cred",
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials: map[string]*credentialv1.Credential{
+			"cred": newClientCertCredential("cred", "missing-cert"),
+		},
+	}
+
+	_, err := c.Compile(st)
+	if err == nil {
+		t.Fatal("expected error for missing certificate ref, got nil")
 	}
 }

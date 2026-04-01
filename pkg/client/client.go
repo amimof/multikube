@@ -23,8 +23,10 @@ import (
 	backendv1 "github.com/amimof/multikube/pkg/client/backend/v1"
 	cav1 "github.com/amimof/multikube/pkg/client/ca/v1"
 	certificatev1 "github.com/amimof/multikube/pkg/client/certificate/v1"
+	credentialv1 "github.com/amimof/multikube/pkg/client/credential/v1"
 	policyv1 "github.com/amimof/multikube/pkg/client/policy/v1"
 	routev1 "github.com/amimof/multikube/pkg/client/route/v1"
+	tokenv1 "github.com/amimof/multikube/pkg/client/token/v1"
 )
 
 var DefaultTLSConfig = &tls.Config{
@@ -136,8 +138,10 @@ type ClientSet struct {
 	backendV1Client     backendv1.ClientV1
 	caV1Client          cav1.ClientV1
 	certificateV1Client certificatev1.ClientV1
+	credentialV1Client  credentialv1.ClientV1
 	routeV1Client       routev1.ClientV1
 	policyV1Client      policyv1.ClientV1
+	tokenV1Client       tokenv1.ClientV1
 	mu                  sync.Mutex
 	grpcOpts            []grpc.DialOption
 	tlsConfig           *tls.Config
@@ -157,12 +161,20 @@ func (c *ClientSet) CertificateV1() certificatev1.ClientV1 {
 	return c.certificateV1Client
 }
 
+func (c *ClientSet) CredentialV1() credentialv1.ClientV1 {
+	return c.credentialV1Client
+}
+
 func (c *ClientSet) RouteV1() routev1.ClientV1 {
 	return c.routeV1Client
 }
 
 func (c *ClientSet) PolicyV1() policyv1.ClientV1 {
 	return c.policyV1Client
+}
+
+func (c *ClientSet) TokenV1() tokenv1.ClientV1 {
+	return c.tokenV1Client
 }
 
 func (c *ClientSet) State() connectivity.State {
@@ -247,8 +259,10 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	c.backendV1Client = backendv1.NewClientV1WithConn(conn)
 	c.caV1Client = cav1.NewClientV1WithConn(conn)
 	c.certificateV1Client = certificatev1.NewClientV1WithConn(conn)
+	c.credentialV1Client = credentialv1.NewClientV1WithConn(conn)
 	c.routeV1Client = routev1.NewClientV1WithConn(conn)
 	c.policyV1Client = policyv1.NewClientV1WithConn(conn)
+	c.tokenV1Client = tokenv1.NewClientV1WithConn(conn)
 
 	return c, nil
 }

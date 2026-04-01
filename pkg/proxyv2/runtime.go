@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -185,7 +186,8 @@ func (cr *CompiledRoutes) matchJWT(r *http.Request) (*RouteRuntime, bool) {
 		if route.JWT == nil {
 			continue
 		}
-		if value, ok := claims[route.JWT.Claim]; ok && value == route.JWT.Value {
+		if value, ok := claims[route.JWT.Claim]; ok && strings.EqualFold(fmt.Sprintf("%v", value), route.JWT.Value) {
+			fmt.Println(route.JWT.Claim)
 			return route, true
 		}
 	}
@@ -213,9 +215,9 @@ const (
 	ctxKeyPrincipal contextKey = "principal"
 )
 
-func JWTClaimsFromContext(ctx context.Context) (map[string]string, bool) {
+func JWTClaimsFromContext(ctx context.Context) (map[string]any, bool) {
 	v := ctx.Value(ctxKeyJWTClaims)
-	claims, ok := v.(map[string]string)
+	claims, ok := v.(map[string]any)
 	return claims, ok
 }
 
@@ -227,10 +229,14 @@ func SNIFromContext(ctx context.Context) (string, bool) {
 
 // Principal represents the authenticated identity extracted from a JWT.
 type Principal struct {
+	Subject         string
 	User            string
 	Groups          []string
+	Issuer          string
+	Audience        []string
 	ServiceAccounts []string
-	Claims          map[string]string
+	Claims          map[string]any
+	ExpiresAt       time.Time
 }
 
 func PrincipalFromContext(ctx context.Context) (*Principal, bool) {
@@ -243,6 +249,6 @@ func WithPrincipal(ctx context.Context, p *Principal) context.Context {
 	return context.WithValue(ctx, ctxKeyPrincipal, p)
 }
 
-func WithJWTClaims(ctx context.Context, claims map[string]string) context.Context {
+func WithJWTClaims(ctx context.Context, claims map[string]any) context.Context {
 	return context.WithValue(ctx, ctxKeyJWTClaims, claims)
 }

@@ -208,7 +208,6 @@ func (s *Server) Serve() error {
 
 		wg.Add(2)
 		httpAddr := fmt.Sprintf("http://%s", s.httpServerL.Addr())
-		fmt.Println(s.Logger)
 		s.Logger.Info("listener serving", "name", s.Name, "address", httpAddr)
 		go func(l net.Listener) {
 			defer wg.Done()

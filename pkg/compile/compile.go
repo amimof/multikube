@@ -3,6 +3,7 @@ package compile
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/textproto"
@@ -14,6 +15,7 @@ import (
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 	cav1 "github.com/amimof/multikube/api/ca/v1"
 	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
+	credentialv1 "github.com/amimof/multikube/api/credential/v1"
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 	proxy "github.com/amimof/multikube/pkg/proxyv2"
@@ -27,6 +29,7 @@ type State struct {
 	Certificates           map[string]*certificatev1.Certificate
 	CertificateAuthorities map[string]*cav1.CertificateAuthority
 	Policies               map[string]*policyv1.Policy
+	Credentials            map[string]*credentialv1.Credential
 }
 
 // Compiler compiles a State into a proxy Runtime.
@@ -55,8 +58,13 @@ func (c *Compiler) Compile(st *State) (*proxy.RuntimeConfig, error) {
 		return nil, fmt.Errorf("compile CAs: %w", err)
 	}
 
+	compiledCreds, err := compileCredentials(st.Credentials)
+	if err != nil {
+		return nil, fmt.Errorf("compile credentials: %w", err)
+	}
+
 	// compile backends into BackendRuntimes and per-backend Forwarders.
-	backends, forwarders, err := compileBackends2(st.Backends, caPools, tlsCerts)
+	backends, forwarders, err := compileBackends2(st.Backends, caPools, tlsCerts, compiledCreds)
 	if err != nil {
 		return nil, fmt.Errorf("compile backends: %w", err)
 	}
@@ -130,12 +138,18 @@ func compileCerts(certs map[string]*certificatev1.Certificate) (map[string]tls.C
 
 // compileCert builds a tls.Certificate from a Certificate object.
 func compileCert(cert *certificatev1.Certificate) (tls.Certificate, error) {
-	certPEM := cert.GetConfig().GetCertificate()
+	certPEM := cert.GetConfig().GetCertificateData()
+	if certPEM == "" {
+		certPEM = cert.GetConfig().GetCertificate()
+	}
 	if certPEM == "" {
 		return tls.Certificate{}, fmt.Errorf("certificate has no inline PEM data")
 	}
 
-	keyPEM := cert.GetConfig().GetKey()
+	keyPEM := cert.GetConfig().GetKeyData()
+	if keyPEM == "" {
+		keyPEM = cert.GetConfig().GetKey()
+	}
 	if keyPEM == "" {
 		return tls.Certificate{}, fmt.Errorf("key has no inline PEM data")
 	}
@@ -147,12 +161,52 @@ func compileCert(cert *certificatev1.Certificate) (tls.Certificate, error) {
 	return tlsCert, nil
 }
 
+type compiledCredential struct {
+	clientCertificateRef string
+	authInjector         proxy.RequestAuthInjector
+}
+
+func compileCredentials(credentials map[string]*credentialv1.Credential) (map[string]compiledCredential, error) {
+	if credentials == nil {
+		return map[string]compiledCredential{}, nil
+	}
+	out := make(map[string]compiledCredential, len(credentials))
+	for name, credential := range credentials {
+		compiled, err := compileCredential(credential)
+		if err != nil {
+			return nil, fmt.Errorf("credential %q: %w", name, err)
+		}
+		out[name] = compiled
+	}
+	return out, nil
+}
+
+func compileCredential(credential *credentialv1.Credential) (compiledCredential, error) {
+	config := credential.GetConfig()
+	if config == nil {
+		return compiledCredential{}, fmt.Errorf("missing config")
+	}
+
+	switch {
+	case config.GetClientCertificateRef() != "":
+		return compiledCredential{clientCertificateRef: config.GetClientCertificateRef()}, nil
+	case config.GetToken() != "":
+		return compiledCredential{authInjector: bearerTokenInjector{token: config.GetToken()}}, nil
+	case config.GetBasic() != nil:
+		basic := config.GetBasic()
+		return compiledCredential{authInjector: basicAuthInjector{username: basic.GetUsername(), password: basic.GetPassword()}}, nil
+	default:
+		return compiledCredential{}, fmt.Errorf("credential has no supported auth material")
+	}
+}
+
 // compileBackends2 builds a BackendRuntime and a Forwarder for every healthy
 // backend. Unhealthy backends are silently skipped.
 func compileBackends2(
 	backends map[string]*backendv1.Backend,
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
+	credentials map[string]compiledCredential,
 ) (map[string]*proxy.BackendRuntime, map[string]*proxy.Forwarder, error) {
 	out := make(map[string]*proxy.BackendRuntime, len(backends))
 	fwds := make(map[string]*proxy.Forwarder, len(backends))
@@ -164,7 +218,7 @@ func compileBackends2(
 		// 	continue
 		// }
 
-		br, fwd, err := compileBackend2(be, caPools, tlsCerts)
+		br, fwd, err := compileBackend2(be, caPools, tlsCerts, credentials)
 		if err != nil {
 			return nil, nil, fmt.Errorf("backend %q: %w", name, err)
 		}
@@ -182,6 +236,7 @@ func compileBackend2(
 	be *backendv1.Backend,
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
+	credentials map[string]compiledCredential,
 ) (*proxy.BackendRuntime, *proxy.Forwarder, error) {
 	serverURL, err := url.Parse(be.GetConfig().GetServer())
 	if err != nil {
@@ -201,11 +256,17 @@ func compileBackend2(
 	}
 
 	if ref := be.GetConfig().GetAuthRef(); ref != "" {
-		cert, ok := tlsCerts[ref]
+		credential, ok := credentials[ref]
 		if !ok {
 			return nil, nil, fmt.Errorf("auth_ref %q not found", ref)
 		}
-		tlsCfg.Certificates = []tls.Certificate{cert}
+		if credential.clientCertificateRef != "" {
+			cert, ok := tlsCerts[credential.clientCertificateRef]
+			if !ok {
+				return nil, nil, fmt.Errorf("auth_ref %q references missing certificate %q", ref, credential.clientCertificateRef)
+			}
+			tlsCfg.Certificates = []tls.Certificate{cert}
+		}
 	}
 
 	var cacheTTL time.Duration
@@ -223,10 +284,33 @@ func compileBackend2(
 		CacheTTL:  cacheTTL,
 		TLSConfig: tlsCfg,
 		Transport: transport,
-		// AuthInjector left nil until an implementation exists.
+	}
+
+	if ref := be.GetConfig().GetAuthRef(); ref != "" {
+		br.AuthInjector = credentials[ref].authInjector
 	}
 
 	return br, fwd, nil
+}
+
+type bearerTokenInjector struct {
+	token string
+}
+
+func (i bearerTokenInjector) Apply(req *http.Request) error {
+	req.Header.Set("Authorization", "Bearer "+i.token)
+	return nil
+}
+
+type basicAuthInjector struct {
+	username string
+	password string
+}
+
+func (i basicAuthInjector) Apply(req *http.Request) error {
+	encoded := base64.StdEncoding.EncodeToString([]byte(i.username + ":" + i.password))
+	req.Header.Set("Authorization", "Basic "+encoded)
+	return nil
 }
 
 // compileRoutes2 classifies each route into the correct CompiledRoutes bucket
@@ -292,6 +376,14 @@ func compileRoutes2(
 			rr.SNI = match.GetSni()
 			cr.SNIExact[rr.SNI] = append(cr.SNIExact[rr.SNI], rr)
 
+		case match.GetJwt().GetClaim() != "":
+			jm := match.GetJwt()
+			rr.Kind = proxy.RouteMatchKindJWT
+			rr.JWT = &proxy.JWTRuntime{
+				Claim: jm.GetClaim(),
+				Value: jm.GetValue(),
+			}
+			cr.JWT = append(cr.JWT, rr)
 		default:
 			if cr.Default != nil {
 				return proxy.CompiledRoutes{}, fmt.Errorf(

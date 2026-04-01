@@ -1,0 +1,246 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "token/v1/token.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "TokenService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/tokens": {
+      "post": {
+        "operationId": "TokenService_Issue",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1IssueResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "token",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1Token"
+            }
+          }
+        ],
+        "tags": [
+          "TokenService"
+        ]
+      }
+    },
+    "/api/v1/tokens/{name}": {
+      "delete": {
+        "operationId": "TokenService_Revoke2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "TokenService"
+        ]
+      }
+    },
+    "/api/v1/tokens/{uid}": {
+      "delete": {
+        "operationId": "TokenService_Revoke",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "purge",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "TokenService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1IssueResponse": {
+      "type": "object",
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "title": "AccessToken string\nExpiresAt   time.Time\nKeyID       string\nTokenType   string"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "keyId": {
+          "type": "string"
+        },
+        "tokenType": {
+          "type": "string"
+        }
+      }
+    },
+    "v1Token": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/v1TokenConfig"
+        }
+      }
+    },
+    "v1TokenConfig": {
+      "type": "object",
+      "properties": {
+        "subject": {
+          "type": "string",
+          "title": "string subject = 1 [(buf.validate.field).string.min_len = 1];\nstring issuer = 2;\nrepeated string groups = 3;\nrepeated string audience = 4;\nstring tenant = 5;\nmap\u003cstring, string\u003e claims = 6;\ngoogle.protobuf.Timestamp auth_time = 7;\ngoogle.protobuf.Duration ttl = 8;"
+        },
+        "username": {
+          "type": "string"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "audience": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "clusters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "serviceAccounts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ttl": {
+          "type": "string"
+        },
+        "extraClaims": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

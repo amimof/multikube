@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -98,7 +99,7 @@ func subjectSelectorMatches(sel *policyv1.SubjectSelector, p *Principal) bool {
 	}
 	// Arbitrary claims
 	for _, claim := range sel.GetClaims() {
-		if v, ok := p.Claims[claim.GetName()]; ok && v == claim.GetValue() {
+		if v, ok := p.Claims[claim.GetName()]; ok && fmt.Sprintf("%v", v) == claim.GetValue() {
 			return true
 		}
 	}

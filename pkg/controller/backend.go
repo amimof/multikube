@@ -17,6 +17,7 @@ import (
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 	cav1 "github.com/amimof/multikube/api/ca/v1"
 	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
+	credentialv1 "github.com/amimof/multikube/api/credential/v1"
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 )
@@ -84,6 +85,26 @@ func (c *Controller) onRouteCreate(_ context.Context, r *routev1.Route) error {
 	return c.compileRuntime()
 }
 
+func (c *Controller) onRouteUpdate(_ context.Context, r *routev1.Route) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on update handler", "route", r.GetMeta().GetName())
+
+	c.cache.Routes[r.GetMeta().GetName()] = r
+
+	return c.compileRuntime()
+}
+
+func (c *Controller) onRouteDelete(_ context.Context, r *routev1.Route) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on delete handler", "route", r.GetMeta().GetName())
+
+	delete(c.cache.Routes, r.GetMeta().GetName())
+
+	return c.compileRuntime()
+}
+
 func (c *Controller) onPolicyCreate(_ context.Context, p *policyv1.Policy) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -110,6 +131,36 @@ func (c *Controller) onPolicyDelete(_ context.Context, p *policyv1.Policy) error
 	c.logger.Info("on delete handler", "policy", p.GetMeta().GetName())
 
 	delete(c.cache.Policies, p.GetMeta().GetName())
+
+	return c.compileRuntime()
+}
+
+func (c *Controller) onCredentialCreate(_ context.Context, ctr *credentialv1.Credential) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on create handler", "credential", ctr.GetMeta().GetName())
+
+	c.cache.Credentials[ctr.GetMeta().GetName()] = ctr
+
+	return c.compileRuntime()
+}
+
+func (c *Controller) onCredentialUpdate(_ context.Context, ctr *credentialv1.Credential) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on update handler", "credential", ctr.GetMeta().GetName())
+
+	c.cache.Credentials[ctr.GetMeta().GetName()] = ctr
+
+	return c.compileRuntime()
+}
+
+func (c *Controller) onCredentialDelete(_ context.Context, ctr *credentialv1.Credential) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on delete handler", "credential", ctr.GetMeta().GetName())
+
+	delete(c.cache.Credentials, ctr.GetMeta().GetName())
 
 	return c.compileRuntime()
 }
@@ -154,6 +205,14 @@ func (c *Controller) onInit(ctx context.Context) error {
 		c.cache.Certificates[cert.GetMeta().GetName()] = cert
 	}
 
+	credentials, err := c.clientset.CredentialV1().List(ctx)
+	if err != nil {
+		return fmt.Errorf("error listing credentials: %v", err)
+	}
+	for _, credential := range credentials {
+		c.cache.Credentials[credential.GetMeta().GetName()] = credential
+	}
+
 	routes, err := c.clientset.RouteV1().List(ctx)
 	if err != nil {
 		return fmt.Errorf("error listing routes: %v", err)
@@ -185,6 +244,13 @@ func (c *Controller) Run(ctx context.Context) {
 	// c.exchange.On(events.BackendUpdate, events.HandleErrors(c.logger, events.HandleBackends(c.onUpdate)))
 	// c.exchange.On(events.BackendPatch, events.HandleErrors(c.logger, events.HandleBackends(c.onPatch)))
 	c.exchange.On(events.RouteCreate, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteCreate)))
+	c.exchange.On(events.RouteUpdate, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteUpdate)))
+	c.exchange.On(events.RoutePatch, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteUpdate)))
+	c.exchange.On(events.RouteDelete, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteDelete)))
+	c.exchange.On(events.CredentialCreate, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialCreate)))
+	c.exchange.On(events.CredentialUpdate, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialUpdate)))
+	c.exchange.On(events.CredentialPatch, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialUpdate)))
+	c.exchange.On(events.CredentialDelete, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialDelete)))
 	c.exchange.On(events.PolicyCreate, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyCreate)))
 	c.exchange.On(events.PolicyUpdate, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyUpdate)))
 	c.exchange.On(events.PolicyPatch, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyUpdate)))
@@ -204,6 +270,7 @@ func New(cs *client.ClientSet, opts ...NewOption) *Controller {
 			Routes:                 map[string]*routev1.Route{},
 			Certificates:           map[string]*certificatev1.Certificate{},
 			CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+			Credentials:            map[string]*credentialv1.Credential{},
 			Policies:               map[string]*policyv1.Policy{},
 		},
 	}

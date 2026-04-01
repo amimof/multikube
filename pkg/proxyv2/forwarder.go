@@ -26,6 +26,12 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 		}
 
 		outReq := cloneRequestForTarget(r, target)
+		if target.AuthInjector != nil {
+			if err := target.AuthInjector.Apply(outReq); err != nil {
+				writeProxyError(w, err)
+				return
+			}
+		}
 		resp, err := f.transport.RoundTrip(outReq)
 		if err != nil {
 			writeProxyError(w, err)

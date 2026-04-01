@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package token.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "meta/v1/meta.proto";
+
+option go_package = "github.com/amimof/multikube/api/token/v1;token";
+
+service TokenService {
+  rpc Issue(IssueRequest) returns (IssueResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/tokens"
+      body: "token"
+    };
+  }
+  rpc Revoke(RevokeRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/tokens/{uid}"
+      additional_bindings: {delete: "/api/v1/tokens/{name}"}
+    };
+  }
+}
+
+message Token {
+  TokenConfig config = 3;
+}
+
+message TokenStatus {}
+
+message TokenConfig {
+  // string subject = 1 [(buf.validate.field).string.min_len = 1];
+  // string issuer = 2;
+  // repeated string groups = 3;
+  // repeated string audience = 4;
+  // string tenant = 5;
+  // map<string, string> claims = 6;
+  // google.protobuf.Timestamp auth_time = 7;
+  // google.protobuf.Duration ttl = 8;
+  string subject = 1;
+  string username = 2;
+  repeated string groups = 3;
+  repeated string audience = 4;
+  repeated string scopes = 5;
+  repeated string clusters = 6;
+  repeated string service_accounts = 7;
+  google.protobuf.Duration ttl = 8;
+  map<string, string> extra_claims = 9;
+}
+
+message IssueRequest {
+  Token token = 1 [(buf.validate.field).required = true];
+}
+
+message IssueResponse {
+  // AccessToken string
+  // ExpiresAt   time.Time
+  // KeyID       string
+  // TokenType   string
+  string access_token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  string key_id = 3;
+  string token_type = 4;
+}
+
+message RevokeRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  bool purge = 3;
+}

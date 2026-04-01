@@ -56,7 +56,7 @@ The NAME argument is required and sets the route's name.`,
     --label env=production --label team=platform`,
 		Args: cobra.ExactArgs(1),
 		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
-			return runCreateCreateCmd(cmd, args, cfg, backendRef, path, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue, labels)
+			return runCreateRouteCmd(cmd, args, cfg, backendRef, path, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue, labels)
 		}),
 	}
 
@@ -73,8 +73,8 @@ The NAME argument is required and sets the route's name.`,
 	return cmd
 }
 
-// runCreateCreateCmd creates a new route via the multikube API server.
-func runCreateCreateCmd(
+// runCreateRouteCmd creates a new route via the multikube API server.
+func runCreateRouteCmd(
 	cmd *cobra.Command,
 	args []string,
 	cfg *client.Config,

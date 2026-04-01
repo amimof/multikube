@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
+	credentialv1 "github.com/amimof/multikube/api/credential/v1"
 	eventsv1 "github.com/amimof/multikube/api/event/v1"
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
@@ -19,10 +20,11 @@ type Handler interface {
 }
 
 type (
-	HandlerFunc        func(context.Context, *eventsv1.Envelope) error
-	BackendHandlerFunc func(context.Context, *backendv1.Backend) error
-	RouteHandlerFunc   func(context.Context, *routev1.Route) error
-	PolicyHandlerFunc  func(context.Context, *policyv1.Policy) error
+	HandlerFunc           func(context.Context, *eventsv1.Envelope) error
+	BackendHandlerFunc    func(context.Context, *backendv1.Backend) error
+	CredentialHandlerFunc func(context.Context, *credentialv1.Credential) error
+	RouteHandlerFunc      func(context.Context, *routev1.Route) error
+	PolicyHandlerFunc     func(context.Context, *policyv1.Policy) error
 )
 
 // getCallerInfo gets the file, line, and function name of the caller
@@ -115,6 +117,22 @@ func HandleRoutes(h ...RouteHandlerFunc) HandlerFunc {
 				return err
 			}
 			if err := ih(ctx, &route); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func HandleCredentials(h ...CredentialHandlerFunc) HandlerFunc {
+	return func(ctx context.Context, ev *eventsv1.Envelope) error {
+		for _, ih := range h {
+			var credential credentialv1.Credential
+			err := ev.GetObject().UnmarshalTo(&credential)
+			if err != nil {
+				return err
+			}
+			if err := ih(ctx, &credential); err != nil {
 				return err
 			}
 		}

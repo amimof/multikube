@@ -39,11 +39,11 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// JWT extraction. If a public key is configured, we require and validate a JWT.
 	var principal *Principal
 	if p.pubKey != nil {
-		var flat map[string]string
+		var flat map[string]any
 		var err error
 		principal, flat, err = ExtractJWT(r, p.pubKey)
 		if err != nil {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
 		ctx := WithPrincipal(r.Context(), principal)

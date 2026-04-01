@@ -39,6 +39,14 @@ const (
 	PolicyDelete = eventv1.Event_EVENT_POLICY_DELETE
 	PolicyUpdate = eventv1.Event_EVENT_POLICY_UPDATE
 	PolicyPatch  = eventv1.Event_EVENT_POLICY_PATCH
+
+	CredentialCreate = eventv1.Event_EVENT_CREDENTIAL_CREATE
+	CredentialDelete = eventv1.Event_EVENT_CREDENTIAL_DELETE
+	CredentialUpdate = eventv1.Event_EVENT_CREDENTIAL_UPDATE
+	CredentialPatch  = eventv1.Event_EVENT_CREDENTIAL_PATCH
+
+	TokenIssue  = eventv1.Event_EVENT_TOKEN_ISSUE
+	TokenRevoke = eventv1.Event_EVENT_TOKEN_REVOKE
 )
 
 type Subscriber interface {

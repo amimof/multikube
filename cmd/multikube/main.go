@@ -241,7 +241,6 @@ func main() {
 		Exchange: exchange,
 		Logger:   log,
 	})
-
 	caService := transport.NewCertificateAuthorityService(&app.CertificateAuthorityService{
 		Repo:     repository.NewCertificateAuthorityRepo(repo),
 		Exchange: exchange,
@@ -257,11 +256,25 @@ func main() {
 		Exchange: exchange,
 		Logger:   log,
 	})
-
 	policyService := transport.NewPolicyService(&app.PolicyService{
 		Repo:     repository.NewPolicyRepo(repo),
 		Exchange: exchange,
 		Logger:   log,
+	})
+	credentialService := transport.NewCredentialService(&app.CredentialService{
+		Repo:     repository.NewCredentialRepo(repo),
+		Exchange: exchange,
+		Logger:   log,
+	})
+	tokenService := transport.NewTokenService(&app.TokenService{
+		Exchange:     exchange,
+		Logger:       log,
+		Issuer:       "https://auth.multikube.io",
+		Key:          rs256PrivKey,
+		DefaultTTL:   time.Hour * 24,
+		MaxTTL:       time.Hour * 72,
+		DefaultAud:   []string{"multikube"},
+		SigningKeyID: "key-2026-04",
 	})
 
 	validator, err := protovalidate.New()
@@ -334,6 +347,8 @@ func main() {
 		certService,
 		routeService,
 		policyService,
+		credentialService,
+		tokenService,
 	)
 
 	// Context

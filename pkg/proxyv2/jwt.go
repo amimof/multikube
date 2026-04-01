@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt"
 )
@@ -13,7 +14,7 @@ import (
 // claims into the request context, and populates a Principal.
 // It returns (principal, flatClaims, error).
 // On error the caller should respond 403 and not forward the request.
-func ExtractJWT(r *http.Request, pubKey *ecdsa.PublicKey) (*Principal, map[string]string, error) {
+func ExtractJWT(r *http.Request, pubKey *ecdsa.PublicKey) (*Principal, map[string]any, error) {
 	raw := bearerToken(r)
 	if raw == "" {
 		return nil, nil, fmt.Errorf("missing Authorization Bearer token")
@@ -38,7 +39,7 @@ func ExtractJWT(r *http.Request, pubKey *ecdsa.PublicKey) (*Principal, map[strin
 	}
 
 	// Build flat string map for route matching (ctxKeyJWTClaims)
-	flat := make(map[string]string, len(mapClaims))
+	flat := make(map[string]any, len(mapClaims))
 	for k, v := range mapClaims {
 		flat[k] = fmt.Sprintf("%v", v)
 	}
@@ -49,7 +50,20 @@ func ExtractJWT(r *http.Request, pubKey *ecdsa.PublicKey) (*Principal, map[strin
 	}
 
 	if sub, ok := mapClaims["sub"].(string); ok {
+		principal.Subject = sub
 		principal.User = sub
+	}
+
+	if iss, ok := mapClaims["iss"].(string); ok {
+		principal.Issuer = iss
+	}
+
+	if aud, ok := mapClaims["aud"]; ok {
+		principal.Audience = toStringSlice(aud)
+	}
+
+	if exp, ok := mapClaims["exp"].(float64); ok {
+		principal.ExpiresAt = time.Unix(int64(exp), 0).UTC()
 	}
 
 	if groups, ok := mapClaims["groups"]; ok {

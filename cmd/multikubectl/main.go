@@ -102,6 +102,7 @@ func main() {
 
 	rootCmd.AddCommand(newGetCmd(&cfg))
 	rootCmd.AddCommand(newCreateCmd(&cfg))
+	rootCmd.AddCommand(newDeleteCmd(&cfg))
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newKubeconfigCmd())
