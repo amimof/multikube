@@ -37,7 +37,7 @@ type IssueResponse struct {
 }
 
 func (s *TokenService) IssueToken(ctx context.Context, req *tokenv1.TokenConfig) (*tokenv1.IssueResponse, error) {
-	ctx, span := tracer.Start(ctx, "token.Issue")
+	_, span := tracer.Start(ctx, "token.Issue")
 	defer span.End()
 
 	if req.Subject == "" {
@@ -126,8 +126,8 @@ func (s *TokenService) IssueToken(ctx context.Context, req *tokenv1.TokenConfig)
 
 // Revoke publishes a delete request and the subscribers are responsible for deleting resources.
 // Once they do, they will update there resource with the status Deleted
-func (l *TokenService) Revoke(ctx context.Context, id keys.ID) error {
-	ctx, span := tracer.Start(ctx, "token.Revoke")
+func (s *TokenService) Revoke(ctx context.Context, id keys.ID) error {
+	_, span := tracer.Start(ctx, "token.Revoke")
 	defer span.End()
 
 	// volume, err := l.Repo.Get(ctx, id)
