@@ -19,9 +19,12 @@ multikube delete backend default-backend prod-backend dev-backend
 `,
 	}
 
-	cmd.AddCommand(newDeleteCertificateCmd(cfg))
 	cmd.AddCommand(newDeleteBackendCmd(cfg))
 	cmd.AddCommand(newDeleteCertificateAuthorityCmd(cfg))
+	cmd.AddCommand(newDeleteCertificateCmd(cfg))
+	cmd.AddCommand(newDeleteCredentialCmd(cfg))
+	cmd.AddCommand(newDeletePolicyCmd(cfg))
+	cmd.AddCommand(newDeleteRouteCmd(cfg))
 
 	return cmd
 }
