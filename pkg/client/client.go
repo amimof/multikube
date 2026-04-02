@@ -35,6 +35,13 @@ var DefaultTLSConfig = &tls.Config{
 
 type NewClientOption func(c *ClientSet) error
 
+func WithRouteClient(routev1Client routev1.ClientV1) NewClientOption {
+	return func(c *ClientSet) error {
+		c.routeV1Client = routev1Client
+		return nil
+	}
+}
+
 func WithIdentity(id *identity.AtomicIdentity) NewClientOption {
 	return func(c *ClientSet) error {
 		c.id = id
@@ -256,13 +263,27 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	}
 
 	c.conn = conn
-	c.backendV1Client = backendv1.NewClientV1WithConn(conn)
-	c.caV1Client = cav1.NewClientV1WithConn(conn)
-	c.certificateV1Client = certificatev1.NewClientV1WithConn(conn)
-	c.credentialV1Client = credentialv1.NewClientV1WithConn(conn)
-	c.routeV1Client = routev1.NewClientV1WithConn(conn)
-	c.policyV1Client = policyv1.NewClientV1WithConn(conn)
-	c.tokenV1Client = tokenv1.NewClientV1WithConn(conn)
+	if c.backendV1Client == nil {
+		c.backendV1Client = backendv1.NewClientV1WithConn(conn)
+	}
+	if c.caV1Client == nil {
+		c.caV1Client = cav1.NewClientV1WithConn(conn)
+	}
+	if c.certificateV1Client == nil {
+		c.certificateV1Client = certificatev1.NewClientV1WithConn(conn)
+	}
+	if c.credentialV1Client == nil {
+		c.credentialV1Client = credentialv1.NewClientV1WithConn(conn)
+	}
+	if c.routeV1Client == nil {
+		c.routeV1Client = routev1.NewClientV1WithConn(conn)
+	}
+	if c.policyV1Client == nil {
+		c.policyV1Client = policyv1.NewClientV1WithConn(conn)
+	}
+	if c.tokenV1Client == nil {
+		c.tokenV1Client = tokenv1.NewClientV1WithConn(conn)
+	}
 
 	return c, nil
 }

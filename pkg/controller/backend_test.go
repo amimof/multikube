@@ -21,6 +21,8 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	mclient "github.com/amimof/multikube/pkg/client"
 )
 
 func TestMergeRouteStatus_OnlyUpdatesTransitionOnPhaseChange(t *testing.T) {
@@ -57,6 +59,11 @@ func TestControllerCompileRuntime_PublishesSnapshotAndStatuses(t *testing.T) {
 	mockRouteService := routeclientv1.NewMockRouteServiceClient(mockCtrl)
 	routeClient := routeclientv1.NewClientV1(routeclientv1.WithClient(mockRouteService))
 
+	client, err := mclient.New("dummy", mclient.WithRouteClient(routeClient))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	statusCalls := map[string]*routev1.UpdateStatusRequest{}
 	var statusCallsMu sync.Mutex
 	recordUpdate := func(_ context.Context, req *routev1.UpdateStatusRequest, _ ...any) (*emptypb.Empty, error) {
@@ -73,10 +80,10 @@ func TestControllerCompileRuntime_PublishesSnapshotAndStatuses(t *testing.T) {
 
 	runtimeStore := proxyv2.NewRuntimeStore()
 	ctrl := &Controller{
-		logger:   logger.NilLogger{},
-		compiler: compile.NewCompiler(),
-		runtime:  runtimeStore,
-		routeV1:  routeClient,
+		logger:    logger.NilLogger{},
+		compiler:  compile.NewCompiler(),
+		runtime:   runtimeStore,
+		clientset: client,
 		cache: &compile.State{
 			Backends: map[string]*backendv1.Backend{
 				"be": {
