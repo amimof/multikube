@@ -152,15 +152,15 @@ func TestCompile_EmptyState(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if rc == nil {
+	if res == nil || res.Runtime == nil {
 		t.Fatal("expected non-nil RuntimeConfig")
 	}
-	if rc.Version != 1 {
-		t.Errorf("expected version 1, got %d", rc.Version)
+	if res.Runtime.Version != 1 {
+		t.Errorf("expected version 1, got %d", res.Runtime.Version)
 	}
 }
 
@@ -177,17 +177,17 @@ func TestCompile_VersionIncrement(t *testing.T) {
 	}
 
 	for i := uint64(1); i <= 3; i++ {
-		rc, err := c.Compile(emptyState())
+		res, err := c.Compile(emptyState())
 		if err != nil {
 			t.Fatalf("compile %d: %v", i, err)
 		}
-		if rc.Version != i {
-			t.Errorf("compile %d: expected version %d, got %d", i, i, rc.Version)
+		if res.Runtime.Version != i {
+			t.Errorf("compile %d: expected version %d, got %d", i, i, res.Runtime.Version)
 		}
 	}
 }
 
-func TestCompile_DefaultRoute(t *testing.T) {
+func TestCompile_RouteWithoutMatcher_Invalid(t *testing.T) {
 	srv := httptest.NewServer(nil)
 	defer srv.Close()
 
@@ -204,21 +204,19 @@ func TestCompile_DefaultRoute(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if rc.Routes.Default == nil {
-		t.Fatal("expected a default route")
+	if len(res.Runtime.Routes.Paths)+len(res.Runtime.Routes.PathPrefixes)+len(res.Runtime.Routes.Headers)+len(res.Runtime.Routes.JWT)+len(res.Runtime.Routes.SNIExact) != 0 {
+		t.Fatal("expected route without matcher to be excluded from runtime")
 	}
-	if rc.Routes.Default.Name != "r" {
-		t.Errorf("expected route name %q, got %q", "r", rc.Routes.Default.Name)
+	status := res.RouteStatuses["r"]
+	if status.Phase != RoutePhaseInvalid {
+		t.Fatalf("expected route phase %q, got %q", RoutePhaseInvalid, status.Phase)
 	}
-	if rc.Routes.Default.BackendPool == nil {
-		t.Error("expected BackendPool to be set")
-	}
-	if rc.Routes.Default.Handler == nil {
-		t.Error("expected Handler to be set")
+	if status.Reason == "" {
+		t.Fatal("expected invalid route reason")
 	}
 }
 
@@ -241,14 +239,14 @@ func TestCompile_HeaderRoute(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(rc.Routes.Headers) != 1 {
-		t.Fatalf("expected 1 header route, got %d", len(rc.Routes.Headers))
+	if len(res.Runtime.Routes.Headers) != 1 {
+		t.Fatalf("expected 1 header route, got %d", len(res.Runtime.Routes.Headers))
 	}
-	rr := rc.Routes.Headers[0]
+	rr := res.Runtime.Routes.Headers[0]
 	if rr.Kind != proxy.RouteMatchKindHeader {
 		t.Errorf("expected kind Header, got %v", rr.Kind)
 	}
@@ -274,14 +272,14 @@ func TestCompile_PathRoute(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(rc.Routes.Paths) != 1 {
-		t.Fatalf("expected 1 path route, got %d", len(rc.Routes.Paths))
+	if len(res.Runtime.Routes.Paths) != 1 {
+		t.Fatalf("expected 1 path route, got %d", len(res.Runtime.Routes.Paths))
 	}
-	rr := rc.Routes.Paths[0]
+	rr := res.Runtime.Routes.Paths[0]
 	if rr.Kind != proxy.RouteMatchKindPath {
 		t.Errorf("expected kind Path, got %v", rr.Kind)
 	}
@@ -308,16 +306,16 @@ func TestCompile_PathPrefixRoute_SortedLongestFirst(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(rc.Routes.PathPrefixes) != 2 {
-		t.Fatalf("expected 2 path-prefix routes, got %d", len(rc.Routes.PathPrefixes))
+	if len(res.Runtime.Routes.PathPrefixes) != 2 {
+		t.Fatalf("expected 2 path-prefix routes, got %d", len(res.Runtime.Routes.PathPrefixes))
 	}
 	// Longest prefix must come first.
-	if rc.Routes.PathPrefixes[0].PathPrefix != "/api/v2" {
-		t.Errorf("expected longest prefix first, got %q", rc.Routes.PathPrefixes[0].PathPrefix)
+	if res.Runtime.Routes.PathPrefixes[0].PathPrefix != "/api/v2" {
+		t.Errorf("expected longest prefix first, got %q", res.Runtime.Routes.PathPrefixes[0].PathPrefix)
 	}
 }
 
@@ -338,13 +336,13 @@ func TestCompile_SNIRoute(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	routes, ok := rc.Routes.SNIExact["myservice.example.com"]
+	routes, ok := res.Runtime.Routes.SNIExact["myservice.example.com"]
 	if !ok || len(routes) != 1 {
-		t.Fatalf("expected 1 SNI route for host, got %v", rc.Routes.SNIExact)
+		t.Fatalf("expected 1 SNI route for host, got %v", res.Runtime.Routes.SNIExact)
 	}
 	if routes[0].Kind != proxy.RouteMatchKindSNI {
 		t.Errorf("expected kind SNI, got %v", routes[0].Kind)
@@ -370,14 +368,14 @@ func TestCompile_JWTRoute(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(rc.Routes.JWT) != 1 {
-		t.Fatalf("expected 1 jwt route, got %d", len(rc.Routes.JWT))
+	if len(res.Runtime.Routes.JWT) != 1 {
+		t.Fatalf("expected 1 jwt route, got %d", len(res.Runtime.Routes.JWT))
 	}
-	rr := rc.Routes.JWT[0]
+	rr := res.Runtime.Routes.JWT[0]
 	if rr.Kind != proxy.RouteMatchKindJWT {
 		t.Errorf("expected kind JWT, got %v", rr.Kind)
 	}
@@ -393,7 +391,7 @@ func TestCompile_JWTRoute(t *testing.T) {
 // Tests — error conditions
 // ---------------------------------------------------------------------------
 
-func TestCompile_MultipleDefaultRoutes_Error(t *testing.T) {
+func TestCompile_ConflictingRoutes_MarkedConflict(t *testing.T) {
 	srv := httptest.NewServer(nil)
 	defer srv.Close()
 
@@ -403,39 +401,49 @@ func TestCompile_MultipleDefaultRoutes_Error(t *testing.T) {
 			"be": newBackend("be", srv.URL),
 		},
 		Routes: map[string]*routev1.Route{
-			"r1": newRoute("r1", "be", nil),
-			"r2": newRoute("r2", "be", nil),
+			"r1": newRoute("r1", "be", &routev1.Match{Path: "/same"}),
+			"r2": newRoute("r2", "be", &routev1.Match{Path: "/same"}),
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	_, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err == nil {
-		t.Fatal("expected error for multiple default routes, got nil")
+		if len(res.Runtime.Routes.Paths) != 0 {
+			t.Fatal("expected conflicting routes to be excluded from runtime")
+		}
+		if res.RouteStatuses["r1"].Phase != RoutePhaseConflict {
+			t.Fatalf("expected r1 conflict status, got %+v", res.RouteStatuses["r1"])
+		}
+		if res.RouteStatuses["r2"].Phase != RoutePhaseConflict {
+			t.Fatalf("expected r2 conflict status, got %+v", res.RouteStatuses["r2"])
+		}
 	}
 }
 
-func TestCompile_MissingBackendRef_RouteSkipped(t *testing.T) {
+func TestCompile_MissingBackendRef_RouteInvalid(t *testing.T) {
 	c := NewCompiler()
 	st := &State{
 		Backends: map[string]*backendv1.Backend{}, // no backends
 		Routes: map[string]*routev1.Route{
-			"r": newRoute("r", "missing-backend", nil),
+			"r": newRoute("r", "missing-backend", &routev1.Match{Path: "/x"}),
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Route must be silently dropped; no default route.
-	if rc.Routes.Default != nil {
-		t.Error("expected no default route when backend is missing")
+	if len(res.Runtime.Routes.Paths) != 0 {
+		t.Fatal("expected missing-backend route to be excluded from runtime")
+	}
+	if res.RouteStatuses["r"].Phase != RoutePhaseInvalid {
+		t.Fatalf("expected invalid phase, got %+v", res.RouteStatuses["r"])
 	}
 }
 
@@ -453,19 +461,22 @@ func TestCompile_BackendPool_SingleTarget(t *testing.T) {
 			"be": newBackend("be", srv.URL),
 		},
 		Routes: map[string]*routev1.Route{
-			"r": newRoute("r", "be", nil),
+			"r": newRoute("r", "be", &routev1.Match{Path: "/pool"}),
 		},
 		Certificates:           map[string]*certificatev1.Certificate{},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	pool := rc.Routes.Default.BackendPool
+	if len(res.Runtime.Routes.Paths) != 1 {
+		t.Fatalf("expected 1 compiled route, got %d", len(res.Runtime.Routes.Paths))
+	}
+	pool := res.Runtime.Routes.Paths[0].BackendPool
 	if pool == nil {
 		t.Fatal("BackendPool is nil")
 	}
@@ -634,12 +645,12 @@ func TestCompile_BackendTokenCredential_AttachesAuthInjector(t *testing.T) {
 		},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	backend := rc.Backends["be"]
+	backend := res.Runtime.Backends["be"]
 	if backend == nil {
 		t.Fatal("expected backend runtime")
 	}
@@ -680,12 +691,12 @@ func TestCompile_BackendBasicCredential_AttachesAuthInjector(t *testing.T) {
 		},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	backend := rc.Backends["be"]
+	backend := res.Runtime.Backends["be"]
 	if backend == nil {
 		t.Fatal("expected backend runtime")
 	}
@@ -729,12 +740,12 @@ func TestCompile_BackendClientCertificateCredential_AttachesTLSCert(t *testing.T
 		},
 	}
 
-	rc, err := c.Compile(st)
+	res, err := c.Compile(st)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	backend := rc.Backends["be"]
+	backend := res.Runtime.Backends["be"]
 	if backend == nil {
 		t.Fatal("expected backend runtime")
 	}

@@ -7,6 +7,8 @@ import "google/api/annotations.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 import "meta/v1/meta.proto";
 
 option go_package = "github.com/amimof/multikube/api/route/v1;route";
@@ -53,12 +55,12 @@ service RouteService {
       additional_bindings: {delete: "/api/v1/routes/{name}"}
     };
   }
-  // rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse) {
-  //   option (google.api.http) = {
-  //     put: "/api/v1/routes/{uid}/status"
-  //     additional_bindings: {put: "/api/v1/routes/{name}/status"}
-  //   };
-  // }
+  rpc UpdateStatus(UpdateStatusRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      put: "/api/v1/routes/{uid}/status"
+      additional_bindings: {put: "/api/v1/routes/{name}/status"}
+    };
+  }
 }
 
 message Route {
@@ -72,11 +74,15 @@ message Route {
   RouteStatus status = 4;
 }
 
-message RouteStatus {}
+message RouteStatus {
+  google.protobuf.StringValue phase = 1;
+  google.protobuf.StringValue reason = 2;
+  google.protobuf.Timestamp last_transition_time = 3;
+}
 
 message RouteConfig {
   string name = 1 [(buf.validate.field).string.min_len = 1];
-  Match match = 2;
+  Match match = 2 [(buf.validate.field).required = true];
   string backend_ref = 3 [(buf.validate.field).string.min_len = 1];
 }
 
@@ -168,22 +174,18 @@ message ListResponse {
   repeated Route routes = 1;
 }
 
-// message UpdateStatusRequest {
-//   option (buf.validate.message).oneof = {
-//     fields: [
-//       "uid",
-//       "name"
-//     ]
-//   };
-//   string uid = 1 [(buf.validate.field).string.min_len = 1];
-//   string name = 2 [(buf.validate.field).string.min_len = 1];
-//   google.protobuf.FieldMask update_mask = 3 [(buf.validate.field).required = true];
-//   Status status = 4 [(buf.validate.field).required = true];
-// }
-
-// message UpdateStatusResponse {
-//   string id = 1;
-// }
+message UpdateStatusRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.FieldMask update_mask = 3 [(buf.validate.field).required = true];
+  RouteStatus status = 4 [(buf.validate.field).required = true];
+}
 
 message PatchRequest {
   option (buf.validate.message).oneof = {

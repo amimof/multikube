@@ -251,6 +251,68 @@
         ]
       }
     },
+    "/api/v1/routes/{name}/status": {
+      "put": {
+        "operationId": "RouteService_UpdateStatus2",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "updateMask",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status.phase",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status.reason",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status.lastTransitionTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      }
+    },
     "/api/v1/routes/{uid}": {
       "get": {
         "operationId": "RouteService_Get",
@@ -411,6 +473,68 @@
             "in": "query",
             "required": false,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "RouteService"
+        ]
+      }
+    },
+    "/api/v1/routes/{uid}/status": {
+      "put": {
+        "operationId": "RouteService_UpdateStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "updateMask",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status.phase",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status.reason",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "status.lastTransitionTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
           }
         ],
         "tags": [
@@ -591,7 +715,19 @@
       }
     },
     "v1RouteStatus": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "lastTransitionTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     },
     "v1UpdateResponse": {
       "type": "object",

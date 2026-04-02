@@ -2,9 +2,14 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/keys"
@@ -20,6 +25,34 @@ type RouteService struct {
 	mu       sync.Mutex
 	Exchange *events.Exchange
 	Logger   logger.Logger
+}
+
+func applyMaskedUpdateRoute(dst, src *routev1.RouteStatus, mask *fieldmaskpb.FieldMask) error {
+	if mask == nil || len(mask.Paths) == 0 {
+		return status.Error(codes.InvalidArgument, "update_mask is required")
+	}
+	for _, p := range mask.Paths {
+		switch p {
+		case "phase":
+			if src.Phase == nil {
+				continue
+			}
+			dst.Phase = src.Phase
+		case "reason":
+			if src.Reason == nil {
+				continue
+			}
+			dst.Reason = src.Reason
+		case "last_transition_time":
+			if src.LastTransitionTime == nil {
+				continue
+			}
+			dst.LastTransitionTime = src.LastTransitionTime
+		default:
+			return fmt.Errorf("unknown mask path %q", p)
+		}
+	}
+	return nil
 }
 
 func (l *RouteService) Get(ctx context.Context, id keys.ID) (*routev1.Route, error) {
@@ -175,6 +208,38 @@ func (l *RouteService) Update(ctx context.Context, id keys.ID, route *routev1.Ro
 			l.Logger.Error("error publishing route update event", "error", err, "name", updated.GetMeta().GetName())
 			return err
 		}
+	}
+
+	return nil
+}
+
+// UpdateStatus implements [routesv1.RouteServieClient]
+func (l *RouteService) UpdateStatus(ctx context.Context, id keys.ID, st *routev1.RouteStatus, mask ...string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	ctx, span := tracer.Start(ctx, "route.UpdateStatus")
+	defer span.End()
+
+	// Get the existing route before updating so we can compare specs
+	existingRoute, err := l.Repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Apply mask safely
+	base := &routev1.RouteStatus{}
+	if existingRoute.Status != nil {
+		base = proto.Clone(existingRoute.Status).(*routev1.RouteStatus)
+	}
+	if err := applyMaskedUpdateRoute(base, st, &fieldmaskpb.FieldMask{Paths: mask}); err != nil {
+		return status.Errorf(codes.InvalidArgument, "bad mask: %v", err)
+	}
+
+	existingRoute.Status = base
+
+	if _, err := l.Repo.Update(ctx, id, existingRoute); err != nil {
+		return err
 	}
 
 	return nil

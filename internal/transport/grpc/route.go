@@ -103,6 +103,20 @@ func (n *RouteService) Patch(ctx context.Context, req *routev1.PatchRequest) (*r
 	return &routev1.PatchResponse{Route: route}, nil
 }
 
+func (n *RouteService) UpdateStatus(ctx context.Context, req *routev1.UpdateStatusRequest) (*emptypb.Empty, error) {
+	uid, err := keys.FromUIDOrName(req.GetUid(), req.GetName())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+
+	err = n.app.UpdateStatus(ctx, uid, req.GetStatus(), req.GetUpdateMask().GetPaths()...)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
 func NewRouteService(app *app.RouteService) *RouteService {
 	return &RouteService{app: app}
 }

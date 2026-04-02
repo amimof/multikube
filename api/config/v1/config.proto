@@ -86,7 +86,7 @@ message Backend {
 
 message Route {
   string name = 1 [(buf.validate.field).string.min_len = 1];
-  Match match = 2;
+  Match match = 2 [(buf.validate.field).required = true];
   string backend_ref = 3 [(buf.validate.field).string.min_len = 1];
 }
 

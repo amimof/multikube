@@ -7,8 +7,11 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/amimof/multikube/pkg/client"
+	routeclientv1 "github.com/amimof/multikube/pkg/client/route/v1"
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/logger"
@@ -31,6 +34,7 @@ type Controller struct {
 	compiler  *compile.Compiler
 	runtime   *proxyv2.RuntimeStore
 	cache     *compile.State
+	routeV1   routeclientv1.ClientV1
 }
 
 type ControllerCache = compile.State
@@ -61,7 +65,7 @@ func WithExchange(e *events.Exchange) NewOption {
 	}
 }
 
-func (c *Controller) onBackendCreate(_ context.Context, b *backendv1.Backend) error {
+func (c *Controller) onBackendCreate(ctx context.Context, b *backendv1.Backend) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on create handler", "backend", b.GetMeta().GetName())
@@ -70,10 +74,10 @@ func (c *Controller) onBackendCreate(_ context.Context, b *backendv1.Backend) er
 	c.cache.Backends[b.GetMeta().GetName()] = b
 
 	// Compile
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onRouteCreate(_ context.Context, r *routev1.Route) error {
+func (c *Controller) onRouteCreate(ctx context.Context, r *routev1.Route) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on create handler", "route", r.GetMeta().GetName())
@@ -82,99 +86,170 @@ func (c *Controller) onRouteCreate(_ context.Context, r *routev1.Route) error {
 	c.cache.Routes[r.GetMeta().GetName()] = r
 
 	// Compile
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onRouteUpdate(_ context.Context, r *routev1.Route) error {
+func (c *Controller) onRouteUpdate(ctx context.Context, r *routev1.Route) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on update handler", "route", r.GetMeta().GetName())
 
 	c.cache.Routes[r.GetMeta().GetName()] = r
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onRouteDelete(_ context.Context, r *routev1.Route) error {
+func (c *Controller) onRouteDelete(ctx context.Context, r *routev1.Route) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on delete handler", "route", r.GetMeta().GetName())
 
 	delete(c.cache.Routes, r.GetMeta().GetName())
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onPolicyCreate(_ context.Context, p *policyv1.Policy) error {
+func (c *Controller) onPolicyCreate(ctx context.Context, p *policyv1.Policy) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on create handler", "policy", p.GetMeta().GetName())
 
 	c.cache.Policies[p.GetMeta().GetName()] = p
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onPolicyUpdate(_ context.Context, p *policyv1.Policy) error {
+func (c *Controller) onPolicyUpdate(ctx context.Context, p *policyv1.Policy) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on update handler", "policy", p.GetMeta().GetName())
 
 	c.cache.Policies[p.GetMeta().GetName()] = p
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onPolicyDelete(_ context.Context, p *policyv1.Policy) error {
+func (c *Controller) onPolicyDelete(ctx context.Context, p *policyv1.Policy) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on delete handler", "policy", p.GetMeta().GetName())
 
 	delete(c.cache.Policies, p.GetMeta().GetName())
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onCredentialCreate(_ context.Context, ctr *credentialv1.Credential) error {
+func (c *Controller) onCredentialCreate(ctx context.Context, ctr *credentialv1.Credential) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on create handler", "credential", ctr.GetMeta().GetName())
 
 	c.cache.Credentials[ctr.GetMeta().GetName()] = ctr
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onCredentialUpdate(_ context.Context, ctr *credentialv1.Credential) error {
+func (c *Controller) onCredentialUpdate(ctx context.Context, ctr *credentialv1.Credential) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on update handler", "credential", ctr.GetMeta().GetName())
 
 	c.cache.Credentials[ctr.GetMeta().GetName()] = ctr
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-func (c *Controller) onCredentialDelete(_ context.Context, ctr *credentialv1.Credential) error {
+func (c *Controller) onCredentialDelete(ctx context.Context, ctr *credentialv1.Credential) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.logger.Info("on delete handler", "credential", ctr.GetMeta().GetName())
 
 	delete(c.cache.Credentials, ctr.GetMeta().GetName())
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
-// Compiles into runtime types and stores in store
-func (c *Controller) compileRuntime() error {
-	rt, err := c.compiler.Compile(c.cache)
+// Compiles into runtime types and stores in store.
+func (c *Controller) compileRuntime(ctx context.Context) error {
+	result, err := c.compiler.Compile(c.cache)
 	if err != nil {
 		return err
 	}
-	rt.Version++
-	c.runtime.Store(rt)
-	c.logger.Info("published runtime snapshot", "version", rt.Version)
+	c.runtime.Store(result.Runtime)
+	c.logger.Info("published runtime snapshot", "version", result.Runtime.Version)
+	if err := c.reconcileRouteStatuses(ctx, result.RouteStatuses); err != nil {
+		c.logger.Error("error reconciling route statuses", "error", err)
+	}
 	return nil
+}
+
+func (c *Controller) reconcileRouteStatuses(ctx context.Context, statuses map[string]compile.RouteCompileStatus) error {
+	routes := c.routeClient()
+	if routes == nil {
+		return nil
+	}
+
+	for name, next := range statuses {
+		route, ok := c.cache.Routes[name]
+		if !ok || route == nil {
+			continue
+		}
+
+		updated, changed := mergeRouteStatus(route, next)
+		if !changed {
+			c.cache.Routes[name] = route
+			continue
+		}
+
+		if err := routes.UpdateStatus(ctx, name, updated.GetStatus(), "phase", "reason", "last_transition_time"); err != nil {
+			return err
+		}
+		c.cache.Routes[name] = updated
+	}
+
+	return nil
+}
+
+func (c *Controller) routeClient() routeclientv1.ClientV1 {
+	if c.routeV1 != nil {
+		return c.routeV1
+	}
+	if c.clientset == nil {
+		return nil
+	}
+	return c.clientset.RouteV1()
+}
+
+func mergeRouteStatus(route *routev1.Route, next compile.RouteCompileStatus) (*routev1.Route, bool) {
+	current := route.GetStatus()
+	phase := ""
+	reason := ""
+	var lastTransition *timestamppb.Timestamp
+	if current != nil {
+		phase = current.GetPhase().GetValue()
+		reason = current.GetReason().GetValue()
+		lastTransition = current.GetLastTransitionTime()
+	}
+
+	if phase == next.Phase && reason == next.Reason {
+		return route, false
+	}
+
+	updated := *route
+	status := &routev1.RouteStatus{
+		LastTransitionTime: lastTransition,
+	}
+	if next.Phase != "" {
+		status.Phase = wrapperspb.String(next.Phase)
+	}
+	if next.Reason != "" {
+		status.Reason = wrapperspb.String(next.Reason)
+	}
+	if phase != next.Phase || lastTransition == nil {
+		status.LastTransitionTime = timestamppb.Now()
+	}
+	updated.Status = status
+	return &updated, true
 }
 
 func (c *Controller) onInit(ctx context.Context) error {
@@ -229,7 +304,7 @@ func (c *Controller) onInit(ctx context.Context) error {
 		c.cache.Policies[policy.GetMeta().GetName()] = policy
 	}
 
-	return c.compileRuntime()
+	return c.compileRuntime(ctx)
 }
 
 func (c *Controller) Run(ctx context.Context) {

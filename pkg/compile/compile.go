@@ -9,6 +9,7 @@ import (
 	"net/textproto"
 	"net/url"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -38,14 +39,29 @@ type Compiler struct {
 	version atomic.Uint64
 }
 
+const (
+	RoutePhaseReady    = "READY"
+	RoutePhaseInvalid  = "INVALID"
+	RoutePhaseConflict = "CONFLICT"
+)
+
+type RouteCompileStatus struct {
+	Phase  string
+	Reason string
+}
+
+type CompileResult struct {
+	Runtime       *proxy.RuntimeConfig
+	RouteStatuses map[string]RouteCompileStatus
+}
+
 // NewCompiler returns a new Compiler2.
 func NewCompiler() *Compiler {
 	return &Compiler{}
 }
 
-// Compile converts the contents of a State into a *proxy.RuntimeConfig that
-// the proxy can use to match and forward requests.
-func (c *Compiler) Compile(st *State) (*proxy.RuntimeConfig, error) {
+// Compile converts the contents of a State into a runtime snapshot and route statuses.
+func (c *Compiler) Compile(st *State) (*CompileResult, error) {
 	// compile TLS client certificates first; CAs may reference them.
 	tlsCerts, err := compileCerts(st.Certificates)
 	if err != nil {
@@ -70,16 +86,24 @@ func (c *Compiler) Compile(st *State) (*proxy.RuntimeConfig, error) {
 	}
 
 	// compile routes into CompiledRoutes.
-	routes, err := compileRoutes2(st.Routes, backends, forwarders)
-	if err != nil {
-		return nil, fmt.Errorf("compile routes: %w", err)
+	routes, statuses := compileRoutes2(st.Routes, backends, forwarders)
+
+	for name := range st.Routes {
+		if _, ok := statuses[name]; !ok {
+			statuses[name] = RouteCompileStatus{Phase: RoutePhaseReady}
+		}
 	}
 
-	return &proxy.RuntimeConfig{
+	rt := &proxy.RuntimeConfig{
 		Version:  c.version.Add(1),
 		Backends: backends,
 		Routes:   routes,
 		Policies: compilePolicies(st.Policies),
+	}
+
+	return &CompileResult{
+		Runtime:       rt,
+		RouteStatuses: statuses,
 	}, nil
 }
 
@@ -313,86 +337,40 @@ func (i basicAuthInjector) Apply(req *http.Request) error {
 	return nil
 }
 
+type routeMatchKey struct {
+	kind  proxy.RouteMatchKind
+	value string
+}
+
 // compileRoutes2 classifies each route into the correct CompiledRoutes bucket
 // and builds an http.Handler for it.
 func compileRoutes2(
 	routes map[string]*routev1.Route,
 	backends map[string]*proxy.BackendRuntime,
 	forwarders map[string]*proxy.Forwarder,
-) (proxy.CompiledRoutes, error) {
+) (proxy.CompiledRoutes, map[string]RouteCompileStatus) {
 	cr := proxy.CompiledRoutes{
 		SNIExact: make(map[string][]*proxy.RouteRuntime),
 	}
+	statuses := make(map[string]RouteCompileStatus, len(routes))
+	matchOwners := map[routeMatchKey]string{}
 
 	for name, route := range routes {
-		ref := route.GetConfig().GetBackendRef()
-
-		br, ok := backends[ref]
-		if !ok {
-			// Backend missing or unhealthy, skip silently.
+		rr, matchKey, status := compileRoute(name, route, backends, forwarders)
+		if status.Phase != "" {
+			statuses[name] = status
 			continue
 		}
 
-		fwd, ok := forwarders[ref]
-		if !ok {
+		if owner, exists := matchOwners[matchKey]; exists {
+			reason := fmt.Sprintf("route matcher conflicts with %q", owner)
+			statuses[name] = RouteCompileStatus{Phase: RoutePhaseConflict, Reason: reason}
+			statuses[owner] = RouteCompileStatus{Phase: RoutePhaseConflict, Reason: fmt.Sprintf("route matcher conflicts with %q", name)}
+			removeCompiledRoute(&cr, matchKey, owner)
 			continue
 		}
-
-		// Build a single-target BackendPool so the Forwarder can pick a target.
-		pool := backendPoolFromRuntime(br)
-		handler := fwd.Handler(pool)
-
-		rr := &proxy.RouteRuntime{
-			Name:        name,
-			BackendPool: pool,
-			Handler:     handler,
-		}
-
-		match := route.GetConfig().GetMatch()
-
-		switch {
-		case match.GetHeader().GetName() != "":
-			hm := match.GetHeader()
-			rr.Kind = proxy.RouteMatchKindHeader
-			rr.Header = &proxy.HeaderRuntime{
-				Name:      hm.GetName(),
-				Canonical: textproto.CanonicalMIMEHeaderKey(hm.GetName()),
-				Value:     hm.GetValue(),
-			}
-			cr.Headers = append(cr.Headers, rr)
-
-		case match.GetPath() != "":
-			rr.Kind = proxy.RouteMatchKindPath
-			rr.Path = match.GetPath()
-			cr.Paths = append(cr.Paths, rr)
-
-		case match.GetPathPrefix() != "":
-			rr.Kind = proxy.RouteMatchKindPathPrefix
-			rr.PathPrefix = match.GetPathPrefix()
-			cr.PathPrefixes = append(cr.PathPrefixes, rr)
-
-		case match.GetSni() != "":
-			rr.Kind = proxy.RouteMatchKindSNI
-			rr.SNI = match.GetSni()
-			cr.SNIExact[rr.SNI] = append(cr.SNIExact[rr.SNI], rr)
-
-		case match.GetJwt().GetClaim() != "":
-			jm := match.GetJwt()
-			rr.Kind = proxy.RouteMatchKindJWT
-			rr.JWT = &proxy.JWTRuntime{
-				Claim: jm.GetClaim(),
-				Value: jm.GetValue(),
-			}
-			cr.JWT = append(cr.JWT, rr)
-		default:
-			if cr.Default != nil {
-				return proxy.CompiledRoutes{}, fmt.Errorf(
-					"route %q: multiple default routes not allowed (conflicts with %q)",
-					name, cr.Default.Name,
-				)
-			}
-			cr.Default = rr
-		}
+		matchOwners[matchKey] = name
+		appendCompiledRoute(&cr, rr)
 	}
 
 	// Sort path-prefix routes by descending length so the most specific prefix wins.
@@ -400,7 +378,130 @@ func compileRoutes2(
 		return len(cr.PathPrefixes[i].PathPrefix) > len(cr.PathPrefixes[j].PathPrefix)
 	})
 
-	return cr, nil
+	return cr, statuses
+}
+
+func compileRoute(
+	name string,
+	route *routev1.Route,
+	backends map[string]*proxy.BackendRuntime,
+	forwarders map[string]*proxy.Forwarder,
+) (*proxy.RouteRuntime, routeMatchKey, RouteCompileStatus) {
+	config := route.GetConfig()
+	if config == nil {
+		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: "missing route config"}
+	}
+
+	match := config.GetMatch()
+	if match == nil {
+		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: "route matcher is required"}
+	}
+
+	ref := config.GetBackendRef()
+
+	br, ok := backends[ref]
+	if !ok {
+		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: fmt.Sprintf("backend_ref %q not found", ref)}
+	}
+
+	fwd, ok := forwarders[ref]
+	if !ok {
+		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: fmt.Sprintf("backend_ref %q has no forwarder", ref)}
+	}
+
+	// Build a single-target BackendPool so the Forwarder can pick a target.
+	pool := backendPoolFromRuntime(br)
+	handler := fwd.Handler(pool)
+
+	rr := &proxy.RouteRuntime{
+		Name:        name,
+		BackendPool: pool,
+		Handler:     handler,
+	}
+
+	switch {
+	case match.GetHeader().GetName() != "":
+		hm := match.GetHeader()
+		rr.Kind = proxy.RouteMatchKindHeader
+		rr.Header = &proxy.HeaderRuntime{
+			Name:      hm.GetName(),
+			Canonical: textproto.CanonicalMIMEHeaderKey(hm.GetName()),
+			Value:     hm.GetValue(),
+		}
+		return rr, routeMatchKey{kind: rr.Kind, value: textproto.CanonicalMIMEHeaderKey(hm.GetName()) + "=" + hm.GetValue()}, RouteCompileStatus{}
+
+	case match.GetPath() != "":
+		rr.Kind = proxy.RouteMatchKindPath
+		rr.Path = match.GetPath()
+		return rr, routeMatchKey{kind: rr.Kind, value: rr.Path}, RouteCompileStatus{}
+
+	case match.GetPathPrefix() != "":
+		rr.Kind = proxy.RouteMatchKindPathPrefix
+		rr.PathPrefix = match.GetPathPrefix()
+		return rr, routeMatchKey{kind: rr.Kind, value: rr.PathPrefix}, RouteCompileStatus{}
+
+	case match.GetSni() != "":
+		rr.Kind = proxy.RouteMatchKindSNI
+		rr.SNI = match.GetSni()
+		return rr, routeMatchKey{kind: rr.Kind, value: strings.ToLower(rr.SNI)}, RouteCompileStatus{}
+
+	case match.GetJwt().GetClaim() != "":
+		jm := match.GetJwt()
+		rr.Kind = proxy.RouteMatchKindJWT
+		rr.JWT = &proxy.JWTRuntime{
+			Claim: jm.GetClaim(),
+			Value: jm.GetValue(),
+		}
+		return rr, routeMatchKey{kind: rr.Kind, value: jm.GetClaim() + "=" + jm.GetValue()}, RouteCompileStatus{}
+	default:
+		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: "route matcher is required"}
+	}
+}
+
+func appendCompiledRoute(cr *proxy.CompiledRoutes, rr *proxy.RouteRuntime) {
+	switch rr.Kind {
+	case proxy.RouteMatchKindPath:
+		cr.Paths = append(cr.Paths, rr)
+	case proxy.RouteMatchKindPathPrefix:
+		cr.PathPrefixes = append(cr.PathPrefixes, rr)
+	case proxy.RouteMatchKindHeader:
+		cr.Headers = append(cr.Headers, rr)
+	case proxy.RouteMatchKindSNI:
+		cr.SNIExact[rr.SNI] = append(cr.SNIExact[rr.SNI], rr)
+	case proxy.RouteMatchKindJWT:
+		cr.JWT = append(cr.JWT, rr)
+	}
+}
+
+func removeCompiledRoute(cr *proxy.CompiledRoutes, key routeMatchKey, name string) {
+	switch key.kind {
+	case proxy.RouteMatchKindPath:
+		cr.Paths = removeRouteRuntime(cr.Paths, name)
+	case proxy.RouteMatchKindPathPrefix:
+		cr.PathPrefixes = removeRouteRuntime(cr.PathPrefixes, name)
+	case proxy.RouteMatchKindHeader:
+		cr.Headers = removeRouteRuntime(cr.Headers, name)
+	case proxy.RouteMatchKindSNI:
+		for sni, routes := range cr.SNIExact {
+			updated := removeRouteRuntime(routes, name)
+			if len(updated) == 0 {
+				delete(cr.SNIExact, sni)
+				continue
+			}
+			cr.SNIExact[sni] = updated
+		}
+	case proxy.RouteMatchKindJWT:
+		cr.JWT = removeRouteRuntime(cr.JWT, name)
+	}
+}
+
+func removeRouteRuntime(routes []*proxy.RouteRuntime, name string) []*proxy.RouteRuntime {
+	for i, route := range routes {
+		if route.Name == name {
+			return append(routes[:i], routes[i+1:]...)
+		}
+	}
+	return routes
 }
 
 // backendPoolFromRuntime wraps a BackendRuntime in a single-target BackendPool
