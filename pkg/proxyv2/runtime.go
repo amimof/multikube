@@ -183,7 +183,6 @@ func (cr *CompiledRoutes) matchJWT(r *http.Request) (*RouteRuntime, bool) {
 			continue
 		}
 		if value, ok := claims[route.JWT.Claim]; ok && strings.EqualFold(fmt.Sprintf("%v", value), route.JWT.Value) {
-			fmt.Println(route.JWT.Claim)
 			return route, true
 		}
 	}

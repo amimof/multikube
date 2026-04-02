@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -235,7 +236,7 @@ func mergeRouteStatus(route *routev1.Route, next compile.RouteCompileStatus) (*r
 		return route, false
 	}
 
-	updated := *route
+	updated := proto.Clone(route).(*routev1.Route)
 	status := &routev1.RouteStatus{
 		LastTransitionTime: lastTransition,
 	}
@@ -249,7 +250,7 @@ func mergeRouteStatus(route *routev1.Route, next compile.RouteCompileStatus) (*r
 		status.LastTransitionTime = timestamppb.Now()
 	}
 	updated.Status = status
-	return &updated, true
+	return updated, true
 }
 
 func (c *Controller) onInit(ctx context.Context) error {
