@@ -11,7 +11,6 @@ func newConfigCmd() *cobra.Command {
 		Long:  "Commands for viewing and modifying multikube configuration files.",
 	}
 
-	cmd.AddCommand(newImportCmd())
 	cmd.AddCommand(newExportCmd())
 	cmd.AddCommand(newInitCmd())
 

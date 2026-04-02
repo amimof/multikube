@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,53 +15,13 @@ import (
 	routev1 "github.com/amimof/multikube/api/route/v1"
 	routeclientv1 "github.com/amimof/multikube/pkg/client/route/v1"
 	"github.com/amimof/multikube/pkg/compile"
-	"github.com/amimof/multikube/pkg/labels"
 	"github.com/amimof/multikube/pkg/logger"
 	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
+	gomock "go.uber.org/mock/gomock"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
-
-type stubRouteClient struct {
-	statuses map[string]*routev1.RouteStatus
-	paths    map[string][]string
-}
-
-func (s *stubRouteClient) Create(context.Context, *routev1.Route, ...routeclientv1.CreateOption) error {
-	return nil
-}
-
-func (s *stubRouteClient) Update(context.Context, string, *routev1.Route) error {
-	return nil
-}
-
-func (s *stubRouteClient) Patch(context.Context, string, *routev1.Route) error {
-	return nil
-}
-
-func (s *stubRouteClient) Get(context.Context, string) (*routev1.Route, error) {
-	return nil, nil
-}
-
-func (s *stubRouteClient) Delete(context.Context, string) error {
-	return nil
-}
-
-func (s *stubRouteClient) List(context.Context, ...labels.Label) ([]*routev1.Route, error) {
-	return nil, nil
-}
-
-func (s *stubRouteClient) UpdateStatus(_ context.Context, id string, status *routev1.RouteStatus, path ...string) error {
-	if s.statuses == nil {
-		s.statuses = map[string]*routev1.RouteStatus{}
-	}
-	if s.paths == nil {
-		s.paths = map[string][]string{}
-	}
-	s.statuses[id] = status
-	s.paths[id] = append([]string(nil), path...)
-	return nil
-}
 
 func TestMergeRouteStatus_OnlyUpdatesTransitionOnPhaseChange(t *testing.T) {
 	initial := time.Now().Add(-time.Hour)
@@ -90,7 +51,26 @@ func TestMergeRouteStatus_OnlyUpdatesTransitionOnPhaseChange(t *testing.T) {
 }
 
 func TestControllerCompileRuntime_PublishesSnapshotAndStatuses(t *testing.T) {
-	routeClient := &stubRouteClient{}
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockRouteService := routeclientv1.NewMockRouteServiceClient(mockCtrl)
+	routeClient := routeclientv1.NewClientV1(routeclientv1.WithClient(mockRouteService))
+
+	statusCalls := map[string]*routev1.UpdateStatusRequest{}
+	var statusCallsMu sync.Mutex
+	recordUpdate := func(_ context.Context, req *routev1.UpdateStatusRequest, _ ...any) (*emptypb.Empty, error) {
+		statusCallsMu.Lock()
+		defer statusCallsMu.Unlock()
+		statusCalls[req.GetName()] = req
+		return &emptypb.Empty{}, nil
+	}
+
+	mockRouteService.EXPECT().
+		UpdateStatus(gomock.Any(), gomock.Any()).
+		DoAndReturn(recordUpdate).
+		Times(2)
+
 	runtimeStore := proxyv2.NewRuntimeStore()
 	ctrl := &Controller{
 		logger:   logger.NilLogger{},
@@ -137,18 +117,22 @@ func TestControllerCompileRuntime_PublishesSnapshotAndStatuses(t *testing.T) {
 	if len(rt.Routes.Paths) != 1 || rt.Routes.Paths[0].Name != "valid" {
 		t.Fatalf("expected valid route to be published, got %+v", rt.Routes.Paths)
 	}
-	status := routeClient.statuses["invalid"]
-	if status == nil || status.GetPhase().GetValue() != compile.RoutePhaseInvalid {
-		t.Fatalf("expected invalid route status update, got %+v", status)
+
+	statusCallsMu.Lock()
+	invalidReq := statusCalls["invalid"]
+	validReq := statusCalls["valid"]
+	statusCallsMu.Unlock()
+
+	if invalidReq == nil || invalidReq.GetStatus().GetPhase().GetValue() != compile.RoutePhaseInvalid {
+		t.Fatalf("expected invalid route status update, got %+v", invalidReq)
 	}
-	if got := routeClient.paths["invalid"]; len(got) != 3 || got[0] != "phase" || got[1] != "reason" || got[2] != "last_transition_time" {
+	if got := invalidReq.GetUpdateMask().GetPaths(); len(got) != 3 || got[0] != "phase" || got[1] != "reason" || got[2] != "last_transition_time" {
 		t.Fatalf("expected status field mask, got %#v", got)
 	}
 	if ctrl.cache.Routes["invalid"].GetStatus().GetPhase().GetValue() != compile.RoutePhaseInvalid {
 		t.Fatalf("expected controller cache to refresh invalid route status, got %+v", ctrl.cache.Routes["invalid"].GetStatus())
 	}
-	ready := routeClient.statuses["valid"]
-	if ready == nil || ready.GetPhase().GetValue() != compile.RoutePhaseReady {
-		t.Fatalf("expected ready route status update, got %+v", ready)
+	if validReq == nil || validReq.GetStatus().GetPhase().GetValue() != compile.RoutePhaseReady {
+		t.Fatalf("expected ready route status update, got %+v", validReq)
 	}
 }

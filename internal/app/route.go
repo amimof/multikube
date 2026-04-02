@@ -163,6 +163,8 @@ func (l *RouteService) Patch(ctx context.Context, id keys.ID, patch *routev1.Rou
 		return err
 	}
 
+	l.mu.Unlock()
+
 	// Only publish if spec is updated
 	if changed {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.RoutePatch, route))
@@ -215,9 +217,6 @@ func (l *RouteService) Update(ctx context.Context, id keys.ID, route *routev1.Ro
 
 // UpdateStatus implements [routesv1.RouteServieClient]
 func (l *RouteService) UpdateStatus(ctx context.Context, id keys.ID, st *routev1.RouteStatus, mask ...string) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	ctx, span := tracer.Start(ctx, "route.UpdateStatus")
 	defer span.End()
 

@@ -12,7 +12,6 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/amimof/multikube/pkg/client"
-	routeclientv1 "github.com/amimof/multikube/pkg/client/route/v1"
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/logger"
@@ -35,7 +34,6 @@ type Controller struct {
 	compiler  *compile.Compiler
 	runtime   *proxyv2.RuntimeStore
 	cache     *compile.State
-	routeV1   routeclientv1.ClientV1
 }
 
 type ControllerCache = compile.State
@@ -185,11 +183,6 @@ func (c *Controller) compileRuntime(ctx context.Context) error {
 }
 
 func (c *Controller) reconcileRouteStatuses(ctx context.Context, statuses map[string]compile.RouteCompileStatus) error {
-	routes := c.routeClient()
-	if routes == nil {
-		return nil
-	}
-
 	for name, next := range statuses {
 		route, ok := c.cache.Routes[name]
 		if !ok || route == nil {
@@ -202,23 +195,13 @@ func (c *Controller) reconcileRouteStatuses(ctx context.Context, statuses map[st
 			continue
 		}
 
-		if err := routes.UpdateStatus(ctx, name, updated.GetStatus(), "phase", "reason", "last_transition_time"); err != nil {
+		if err := c.clientset.RouteV1().UpdateStatus(ctx, name, updated.GetStatus(), "phase", "reason", "last_transition_time"); err != nil {
 			return err
 		}
 		c.cache.Routes[name] = updated
 	}
 
 	return nil
-}
-
-func (c *Controller) routeClient() routeclientv1.ClientV1 {
-	if c.routeV1 != nil {
-		return c.routeV1
-	}
-	if c.clientset == nil {
-		return nil
-	}
-	return c.clientset.RouteV1()
 }
 
 func mergeRouteStatus(route *routev1.Route, next compile.RouteCompileStatus) (*routev1.Route, bool) {
