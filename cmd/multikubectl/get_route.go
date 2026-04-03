@@ -105,10 +105,11 @@ func runListRoutesCmd(cmd *cobra.Command, cfg *client.Config) error {
 		logrus.Fatal(err)
 	}
 
-	_, _ = fmt.Fprintf(wr, "%s\t%s\t%s\n", "NAME", "GENERATION", "AGE")
+	_, _ = fmt.Fprintf(wr, "%s\t%s\t%s\t%s\n", "NAME", "PHASE", "GENERATION", "AGE")
 	for _, route := range routes {
-		_, _ = fmt.Fprintf(wr, "%s\t%d\t%s\n",
+		_, _ = fmt.Fprintf(wr, "%s\t%s\t%d\t%s\n",
 			route.GetMeta().GetName(),
+			route.GetStatus().GetPhase().GetValue(),
 			route.GetMeta().GetGeneration(),
 			cmdutil.FormatDuration(time.Since(route.GetMeta().GetCreated().AsTime())),
 		)

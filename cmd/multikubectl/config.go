@@ -13,6 +13,10 @@ func newConfigCmd() *cobra.Command {
 
 	cmd.AddCommand(newExportCmd())
 	cmd.AddCommand(newInitCmd())
+	cmd.AddCommand(newConfigCreateServerCmd())
+	cmd.AddCommand(newConfigListServersCmd())
+	cmd.AddCommand(newConfigUseCmd())
+	cmd.AddCommand(newConfigDumpCmd())
 
 	return cmd
 }

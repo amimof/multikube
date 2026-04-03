@@ -118,10 +118,15 @@ func init() {
 	if err != nil {
 		panic(fmt.Errorf("could not determine home directory: %w", err))
 	}
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		panic(fmt.Errorf("could not determine cache directory: %w", err))
+	}
 
-	defaultStatePath := filepath.Join(home, ".local", "state", "multikube")
+	defaultStatePath := filepath.Join(home, ".local", "state", "multiUserCacheDirkube")
+	defaultSocketPath := filepath.Join(cacheDir, "multikube.sock")
 
-	pflag.StringVar(&socketPath, "socket-path", "/var/run/multikube.sock", "the unix socket to listen on")
+	pflag.StringVar(&socketPath, "socket-path", defaultSocketPath, "the unix socket to listen on")
 	pflag.StringVar(&serverAddress, "server-address", "0.0.0.0:5743", "Address to listen the TCP server on")
 	pflag.StringVar(&metricsAddress, "metrics-address", "0.0.0.0:8888", "Address to listen the metrics server on")
 	pflag.StringVar(&proxyAddress, "proxy-address", "0.0.0.0:8443", "Address to listen the http proxy server on")
