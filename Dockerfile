@@ -1,6 +1,6 @@
-FROM golang:alpine AS build-env
+FROM golang:1.26-alpine AS build-env
 RUN  apk add --no-cache git make ca-certificates
-LABEL maintaner="@amimof (amir.mofasser@gmail.com)"
+LABEL maintaner="@amimof (https://github.com/amimof)"
 COPY . /go/src/github.com/amimof/multikube
 WORKDIR /go/src/github.com/amimof/multikube
 RUN make

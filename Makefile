@@ -36,6 +36,12 @@ server: | $(BIN) ; $(info $(M) building server executable to $(BUILDPATH)/$(BINA
 		-ldflags '-X main.VERSION=${VERSION} -X main.DATE=${DATE} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}' \
 		-o $(BUILDPATH)/$${BINARY_NAME:=multikube} cmd/multikube/main.go
 
+cli: | $(BIN) ; $(info $(M) building client executable to $(BUILDPATH)/$(BINARY_NAME)) @ ## Build program binary
+	$Q $(GO) build \
+		-tags release \
+		-ldflags '-X main.VERSION=${VERSION} -X main.DATE=${DATE} -X main.COMMIT=${COMMIT} -X main.BRANCH=${BRANCH} -X main.GOVERSION=${GOVERSION}' \
+		-o $(BUILDPATH)/$${BINARY_NAME:=multikubectl} ./cmd/multikubectl/
+
 .PHONY: oci
 oci: ; $(info $(M) building container image) @ ## Build container image from Dockerfile
 	$(RUNTIME) build -t ghcr.io/amimof/multikube:${VERSION} .

@@ -12,6 +12,20 @@ Multikube is an API-driven HTTP reverse proxy and load balancer for [Kubernetes]
 
 Managing access to multiple Kubernetes clusters usually means juggling kubeconfigs, auth integrations, audit concerns, and operational policies across many independent API servers. multikube centralizes this at the edge while allowing users to continue using familiar tools like kubectl.
 
+In many organizations, access to Kubernetes API servers is fronted by enterprise-grade load balancers such as F5 BigIP or similar platforms. While powerful, these solutions are often expensive, complex, and controlled by centralized infrastructure teams, limiting the flexibility and autonomy of DevOps teams. In other cases, such centralized load balancing capabilities are not available at all, leaving teams to manage access using ad hoc or fragile setups.
+
+multikube shifts that control closer to the teams that need it. It provides a lightweight, API-driven edge proxy that replaces the need for heavyweight external load balancers for Kubernetes API access, allowing DevOps teams to manage routing, authentication, and access policies themselves.
+
+## What is multikube?
+
+multikube is a transparent, API-driven edge proxy for Kubernetes API servers that centralizes access, security, and observability across multiple clusters. It sits in front of one or more Kubernetes API servers, terminates TLS, and handles authentication and authorization on behalf of the client using mechanisms such as JWT, OIDC, or basic auth. By moving these concerns to the edge, multikube removes the need to configure and maintain authentication integrations within each individual cluster, making it independent of Kubernetes distribution and significantly simplifying operations.
+
+In addition to authentication, multikube addresses the limitations of Kubernetes RBAC, which is inherently static, resource-based, and scoped to a single cluster. Many real-world access requirements such as context-aware rules, time-based access, or fine-grained permissions on specific resources are difficult or impossible to express with native RBAC alone. multikube introduces a more flexible authorization layer that allows these policies to be defined centrally and enforced consistently across all clusters, without modifying the clusters themselves.
+
+All traffic flowing through multikube can be audited and observed from a single point, providing centralized audit logging, metrics, and usage insights. This gives operators clear visibility into who is accessing which resources, across which clusters, and under what conditions, enabling better security monitoring and operational awareness.
+
+multikube is designed to be fully compatible with existing Kubernetes clients, allowing users to continue using tools like kubectl and existing workflows without modification. At the same time, it exposes a declarative, API-driven control plane through REST and gRPC, along with a CLI, making it easy to define backends, routing rules, and policies as code. Together, this provides a consistent, scalable way to manage multi-cluster access with strong security, simplified configuration, and centralized control.
+
 ## Features
 
 - Centralized authentication and authorization (JWT, OIDC, basic auth)
@@ -37,38 +51,14 @@ Managing access to multiple Kubernetes clusters usually means juggling kubeconfi
   - prevent insecure or invalid configurations
 - **Cross-cluster indexing**
   - lightning-fast search across multiple clusters
+- Kubernetes Manifest Compatibility
+  - Configure multikube using CRD's
+- Ingress load balancing
+  - Reverse proxy for ingress controllers
 
-## Overview
+## Getting Started
 
-multikube is a transparent, API-driven edge proxy for Kubernetes API servers that centralizes access, security, and observability across multiple clusters. It sits in front of one or more Kubernetes API servers, terminates TLS, and handles authentication and authorization on behalf of the client using mechanisms such as JWT, OIDC, or basic auth. By moving these concerns to the edge, multikube removes the need to configure and maintain authentication integrations within each individual cluster, making it independent of Kubernetes distribution and significantly simplifying operations.
-
-In addition to authentication, multikube addresses the limitations of Kubernetes RBAC, which is inherently static, resource-based, and scoped to a single cluster. Many real-world access requirements such as context-aware rules, time-based access, or fine-grained permissions on specific resources are difficult or impossible to express with native RBAC alone. multikube introduces a more flexible authorization layer that allows these policies to be defined centrally and enforced consistently across all clusters, without modifying the clusters themselves.
-
-All traffic flowing through multikube can be audited and observed from a single point, providing centralized audit logging, metrics, and usage insights. This gives operators clear visibility into who is accessing which resources, across which clusters, and under what conditions, enabling better security monitoring and operational awareness.
-
-multikube is designed to be fully compatible with existing Kubernetes clients, allowing users to continue using tools like kubectl and existing workflows without modification. At the same time, it exposes a declarative, API-driven control plane through REST and gRPC, along with a CLI, making it easy to define backends, routing rules, and policies as code. Together, this provides a consistent, scalable way to manage multi-cluster access with strong security, simplified configuration, and centralized control.
-
-## Getting started
-
-Download the latest binary from the [release page](https://github.com/amimof/multikube/releases) for your target platform. Below is for Linux.
-
-```
-curl -LOs https://github.com/amimof/multikube/releases/latest/download/multikube-linux-amd64
-```
-
-Or use the official Docker scratch image
-
-```
-docker pull amimof/multikube:latest
-```
-
-## Configuration
-
-You configure Multikube on the command line. There is no configuration file. However Multikube needs a [kubeconfig](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/) in order to communicate with upstream API servers. The kubeconfig is where you will configure the clusters (contexts) that Multikube will use for routing.
-
-## Examples
-
-Examples are found under [docs/examples](https://github.com/amimof/multikube/blob/master/docs/examples)
+See the [Getting Started Guide](/docs/getting-started.md) to set up your first cluster and run your first workload. See the full [Documentation](/docs/README.md) for installation and usage details.
 
 ## Contributing
 
