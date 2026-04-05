@@ -7,6 +7,7 @@
   - [How backends are used](#how-backends-are-used)
   - [Basic example](#basic-example)
   - [Example scenarios](#example-scenarios)
+  - [Import a backend from kubeconfig](#import-a-backend-from-kubeconfig)
   - [Create a backend with the CLI](#create-a-backend-with-the-cli)
   - [Current behavior and caveats](#current-behavior-and-caveats)
   - [Full Config](#full-config)
@@ -38,6 +39,22 @@ Create a backend when you want Multikube to send requests to:
 ## How backends are used
 
 At runtime Multikube uses the backend to build the outgoing connection to the upstream API server.
+
+This is an important trust boundary: Multikube does not forward the end user's kubeconfig credentials directly to the backend cluster.
+
+Instead, each backend needs its own credentials that Multikube can use when it connects to that cluster. Those backend credentials are separate from the identity that the user presented to Multikube at the edge.
+
+In practice this means:
+
+- users authenticate to Multikube
+- Multikube authorizes the request using its own policies
+- Multikube then authenticates to the upstream Kubernetes API server with the credential configured on the backend
+
+This separation lets operators centralize user authentication and authorization in Multikube while still using a controlled machine identity for the actual upstream connection.
+
+Those backend credentials must be created on the target cluster ahead of time. In most environments, a cluster administrator sets this up by creating a dedicated ServiceAccount and issuing a long-lived token for Multikube to use. That token, client certificate, or other supported secret material is then stored in a Multikube credential resource and referenced by the backend.
+
+If you already have working cluster access in a kubeconfig file, [`multikubectl import`](#import-a-backend-from-kubeconfig) can speed this up by reusing the cluster CA and supported auth material from that kubeconfig context.
 
 - `server` becomes the target URL for forwarded requests
 - `ca_ref` loads a certificate authority resource and uses it as the TLS root CA pool
@@ -121,6 +138,62 @@ config:
 
 This can be useful during local testing, but it disables upstream certificate verification and should not be used in normal production setups.
 
+## Import a backend from kubeconfig
+
+If you already have working access to a Kubernetes cluster through a normal kubeconfig, the fastest way to connect that cluster to Multikube is `multikubectl import`.
+
+The import command reads one kubeconfig context and creates the Multikube resources needed to talk to that cluster.
+
+Depending on what is present in the kubeconfig, it can create:
+
+- a backend
+- a certificate authority resource from the cluster CA
+- a credential resource for token or basic auth
+- a certificate resource when the kubeconfig uses client certificate authentication
+
+Basic usage:
+
+```bash
+multikubectl import prod
+```
+
+This reads the `prod` context from the default kubeconfig path and creates resources with names derived from the context:
+
+- `prod-backend`
+- `prod-credential`
+- `prod-certificate`
+- `prod-certificate-authority`
+
+You can then verify the imported backend with:
+
+```bash
+multikubectl get backends
+```
+
+If your kubeconfig is not in the default location, pass it explicitly:
+
+```bash
+multikubectl import prod --kubeconfig /path/to/kubeconfig
+```
+
+You can also override the generated resource names:
+
+```bash
+multikubectl import prod \
+  --backend-name prod-cluster \
+  --credential-name prod-token \
+  --certificate-name prod-client-cert \
+  --certificate-authority-name prod-ca
+```
+
+If the target resources already exist, the command fails fast by default. Use `--force` to update existing resources instead:
+
+```bash
+multikubectl import prod --force
+```
+
+This workflow is useful when you want to bootstrap Multikube from an existing cluster configuration instead of manually creating CA, credential, certificate, and backend resources one by one.
+
 ## Create a backend with the CLI
 
 ```bash
@@ -148,6 +221,9 @@ Useful flags:
 - backend health is present in status, but the compiler currently does not skip unhealthy backends
 - `cache_ttl` is optional and defaults to zero when omitted
 - `server` is required in practice; parsing errors are caught during compilation
+- `multikubectl import` supports kubeconfig contexts that use one supported auth method at a time: token, basic auth, or client certificate auth
+- `multikubectl import` does not currently support kubeconfig `exec` plugins or legacy `auth-provider` entries
+- `multikubectl import` reads referenced files relative to the kubeconfig file, which makes it work with normal kubeconfig CA, token, and client certificate file references
 
 ## Full Config
 
