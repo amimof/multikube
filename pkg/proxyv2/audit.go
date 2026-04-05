@@ -28,7 +28,7 @@ type auditResponseWriter struct {
 
 func (w *auditResponseWriter) WriterHeader(code int) {
 	w.statusCode = code
-	w.ResponseWriter.WriteHeader(code)
+	w.WriteHeader(code)
 }
 
 func (w *auditResponseWriter) Write(p []byte) (int, error) {
