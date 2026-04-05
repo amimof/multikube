@@ -16,4 +16,5 @@ Home of the documentation. Here you will hopefully find everything you need to k
   - [Credentials](/docs/credentials.md)
   - [Policies](/docs/policies.md)
   - [Certificates](/docs/certificates.md)
+  - [Audit Logs](/docs/audit-logs.md)
 - [Recipies](/docs/recipies/README.md)
