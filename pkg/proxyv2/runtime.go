@@ -241,6 +241,12 @@ func PrincipalFromContext(ctx context.Context) (*Principal, bool) {
 }
 
 func WithPrincipal(ctx context.Context, p *Principal) context.Context {
+	if ev, ok := EventFromContext(ctx); ok {
+		ev.Subject = p.Subject
+		ev.Username = p.User
+		ev.Groups = p.Groups
+		ev.Issuer = p.Issuer
+	}
 	return context.WithValue(ctx, ctxKeyPrincipal, p)
 }
 

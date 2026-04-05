@@ -6,11 +6,14 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/amimof/multikube/pkg/audit"
 )
 
 type Proxy struct {
-	runtime *RuntimeStore
-	pubKey  *ecdsa.PublicKey
+	runtime   *RuntimeStore
+	pubKey    *ecdsa.PublicKey
+	publisher audit.Publisher
 }
 
 // NewProxy creates a Proxy that serves requests from the given runtime store.
@@ -33,8 +36,16 @@ func WithPublicKey(key *ecdsa.PublicKey) ProxyOption {
 	}
 }
 
+func WithPublisher(pub audit.Publisher) ProxyOption {
+	return func(p *Proxy) {
+		p.publisher = pub
+	}
+}
+
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rt := p.runtime.Load()
+
+	ctx := r.Context()
 
 	// JWT extraction. If a public key is configured, we require and validate a JWT.
 	var principal *Principal
@@ -46,7 +57,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusForbidden)
 			return
 		}
-		ctx := WithPrincipal(r.Context(), principal)
+		ctx = WithPrincipal(ctx, principal)
 		ctx = WithJWTClaims(ctx, flat)
 		r = r.WithContext(ctx)
 	}
@@ -58,13 +69,15 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse K8s from request
+	k8sReq := ParseK8sRequest(ctx, r)
+
 	// Policy enforcement. Only enforce when policies are present and a public key is configured.
 	if p.pubKey != nil && len(rt.Policies) > 0 {
 		var backend *BackendRuntime
 		if route.BackendPool != nil {
 			backend, _ = route.BackendPool.Next(r)
 		}
-		k8sReq := ParseK8sRequest(r)
 		if EvalPolicies(rt.Policies, principal, backend, k8sReq) == EvalDeny {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
@@ -76,8 +89,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if route.Timeout > 0 {
 		handler = timeoutMiddleware(route.Timeout)(handler)
 	}
-
 	handler = withRuntimeVersion(rt.Version)(handler)
+
 	handler.ServeHTTP(w, r)
 }
 

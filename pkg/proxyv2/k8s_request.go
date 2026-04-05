@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"net/http"
 	"strings"
 )
@@ -26,7 +27,7 @@ type K8sRequest struct {
 //	/apis/<group>/<version>/namespaces/<ns>/<resource>/<name>/<subresource>
 //	/api/v1/<resource>/<name>
 //	/apis/<group>/<version>/<resource>/<name>
-func ParseK8sRequest(r *http.Request) K8sRequest {
+func ParseK8sRequest(ctx context.Context, r *http.Request) K8sRequest {
 	verb := httpMethodToVerb(r.Method, r.URL.Path)
 
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
@@ -47,6 +48,15 @@ func ParseK8sRequest(r *http.Request) K8sRequest {
 		if len(parts) > 3 {
 			parseResourcePath(&req, parts[3:])
 		}
+	}
+
+	if ev, ok := EventFromContext(ctx); ok {
+		ev.APIGroup = req.APIGroup
+		ev.Resource = req.Resource
+		ev.Subresource = req.SubResource
+		ev.Namespace = req.Namespace
+		ev.Name = req.Name
+		ev.K8sVerb = req.Verb
 	}
 
 	return req

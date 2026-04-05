@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"buf.build/go/protovalidate"
+	"github.com/amimof/multikube/pkg/audit"
 	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/controller"
@@ -427,7 +428,22 @@ func main() {
 	go ctrl.Run(ctx)
 	log.Info("started proxy Controller")
 
-	handler := proxyv2.NewProxy(runtimeStore, proxyv2.WithPublicKey(&rs256PrivKey.PublicKey))
+	// Setup Audit logging
+	fileSink, err := audit.NewFileSink(filepath.Join(dataPath, "audit.json"))
+	if err != nil {
+		log.Error("error setting up file sink for audit logging", "error", err)
+		os.Exit(1)
+	}
+	publisher := audit.NewAsyncPublisher(fileSink)
+	publisher.Start()
+
+	prox := proxyv2.NewProxy(
+		runtimeStore,
+		proxyv2.WithPublicKey(&rs256PrivKey.PublicKey),
+		proxyv2.WithPublisher(publisher),
+	)
+
+	handler := proxyv2.AuditMiddleware(publisher)(prox)
 
 	// Create the server
 	s := &server.Server{
