@@ -17,8 +17,7 @@ import (
 type RuntimeConfig struct {
 	Version uint64
 
-	Routes CompiledRoutes
-	// Backends map[string]*BackendRuntime
+	Routes   CompiledRoutes
 	Backends map[string]*BackendPool
 	Policies []*policyv1.Policy
 }
@@ -42,16 +41,14 @@ type RouteRuntime struct {
 	SNI        string
 	JWT        *JWTRuntime
 
-	// Backend *BackendRuntime
-
 	Handler     http.Handler
 	BackendPool *BackendPool
 }
 
 type BackendPool struct {
-	Name    string
-	Targets []*BackendRuntime
-	rr      atomic.Uint32
+	Name     string
+	Targets  []*BackendRuntime
+	Iterator BackendIterator
 }
 
 func (p *BackendPool) Next(r *http.Request) (*BackendRuntime, bool) {
@@ -59,10 +56,7 @@ func (p *BackendPool) Next(r *http.Request) (*BackendRuntime, bool) {
 	if len(targets) == 0 {
 		return nil, false
 	}
-
-	n := uint64(p.rr.Add(1))
-	idx := int(n % uint64(len(targets)))
-	return targets[idx], true
+	return p.Iterator.Next(targets)
 }
 
 func (p *BackendPool) healthyTargets() []*BackendRuntime {
@@ -90,6 +84,8 @@ type BackendRuntime struct {
 	Transport http.RoundTripper
 
 	AuthInjector RequestAuthInjector
+
+	Active atomic.Int64
 }
 
 type RouteMatchKind uint8

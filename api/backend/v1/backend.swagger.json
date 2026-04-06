@@ -586,6 +586,9 @@
         },
         "cacheTtl": {
           "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1LoadBalancingType"
         }
       }
     },
@@ -627,6 +630,17 @@
           }
         }
       }
+    },
+    "v1LoadBalancingType": {
+      "type": "string",
+      "enum": [
+        "LOAD_BALANCING_TYPE_UNSPECIFIED",
+        "LOAD_BALANCING_TYPE_ROUND_ROBIN",
+        "LOAD_BALANCING_TYPE_LEAST_CONNECTIONS",
+        "LOAD_BALANCING_TYPE_RANDOM",
+        "LOAD_BALANCING_TYPE_WEIGHTED_ROUND_ROBIN"
+      ],
+      "default": "LOAD_BALANCING_TYPE_UNSPECIFIED"
     },
     "v1Meta": {
       "type": "object",

@@ -318,12 +318,31 @@ func compileBackendPool(
 		out = append(out, br)
 	}
 
+	iter, err := getIteratorForLoadBalancingType(be.GetConfig().GetType())
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting iterator for type %s: %w", be.GetConfig().GetType(), err)
+	}
+
 	pool := &proxy.BackendPool{
-		Name:    be.GetConfig().GetName(),
-		Targets: out,
+		Name:     be.GetConfig().GetName(),
+		Targets:  out,
+		Iterator: iter,
 	}
 
 	return pool, fwd, nil
+}
+
+func getIteratorForLoadBalancingType(typ backendv1.LoadBalancingType) (proxy.BackendIterator, error) {
+	switch typ {
+	case backendv1.LoadBalancingType_LOAD_BALANCING_TYPE_UNSPECIFIED:
+		return &proxy.RoundRobinLB{}, nil
+	case backendv1.LoadBalancingType_LOAD_BALANCING_TYPE_ROUND_ROBIN:
+		return &proxy.RoundRobinLB{}, nil
+	case backendv1.LoadBalancingType_LOAD_BALANCING_TYPE_LEAST_CONNECTIONS:
+		return &proxy.LeastConnectionsLB{}, nil
+	default:
+		return nil, fmt.Errorf("%s is not a valid type", typ.String())
+	}
 }
 
 type bearerTokenInjector struct {

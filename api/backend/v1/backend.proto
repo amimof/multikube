@@ -84,6 +84,7 @@ message BackendConfig {
   string auth_ref = 4;
   bool insecure_skip_tls_verify = 5;
   google.protobuf.Duration cache_ttl = 6;
+  LoadBalancingType type = 7;
 }
 
 message BackendStatus {
@@ -94,6 +95,14 @@ message TargetStatus {
   google.protobuf.StringValue phase = 1;
   google.protobuf.StringValue reason = 2;
   google.protobuf.Timestamp last_transition_time = 3;
+}
+
+enum LoadBalancingType {
+  LOAD_BALANCING_TYPE_UNSPECIFIED = 0;
+  LOAD_BALANCING_TYPE_ROUND_ROBIN = 1;
+  LOAD_BALANCING_TYPE_LEAST_CONNECTIONS = 2;
+  LOAD_BALANCING_TYPE_RANDOM = 3;
+  LOAD_BALANCING_TYPE_WEIGHTED_ROUND_ROBIN = 4;
 }
 
 message GetRequest {
