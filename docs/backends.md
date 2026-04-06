@@ -7,6 +7,10 @@
   - [How backends are used](#how-backends-are-used)
   - [Basic example](#basic-example)
   - [Example scenarios](#example-scenarios)
+    - [Multiple backends](#multiple-backends)
+    - [Token-authenticated cluster](#token-authenticated-cluster)
+    - [Client certificate authentication to the upstream cluster](#client-certificate-authentication-to-the-upstream-cluster)
+    - [Development cluster with self-signed or broken TLS](#development-cluster-with-self-signed-or-broken-tls)
   - [Import a backend from kubeconfig](#import-a-backend-from-kubeconfig)
   - [Create a backend with the CLI](#create-a-backend-with-the-cli)
   - [Current behavior and caveats](#current-behavior-and-caveats)
@@ -56,7 +60,7 @@ Those backend credentials must be created on the target cluster ahead of time. I
 
 If you already have working cluster access in a kubeconfig file, [`multikubectl import`](#import-a-backend-from-kubeconfig) can speed this up by reusing the cluster CA and supported auth material from that kubeconfig context.
 
-- `server` becomes the target URL for forwarded requests
+- `server` becomes a list of target URLs for forwarded requests
 - `ca_ref` loads a certificate authority resource and uses it as the TLS root CA pool
 - `auth_ref` loads a credential resource and applies it to the upstream request or TLS client config
 - `insecure_skip_tls_verify` disables certificate verification for the upstream connection
@@ -70,7 +74,8 @@ meta:
   name: prod-cluster
 config:
   name: prod-cluster
-  server: https://prod-api.example.internal:6443
+  servers:
+  - https://prod-api.example.internal:6443
   ca_ref: prod-ca
   auth_ref: prod-token
   insecure_skip_tls_verify: false
@@ -87,6 +92,26 @@ This backend tells Multikube to:
 
 ## Example scenarios
 
+### Multiple backends
+
+Use multiple server URLs to have Multikube load balance requests to servers in the pool
+
+> This feature is WIP so only basic round robin load balancing is available. Stay tuned!
+
+```yaml
+version: backend/v1
+meta:
+  name: staging
+config:
+  name: staging
+  servers:
+  - https://control-plane-1.example.internal:6443
+  - https://control-plane-2.example.internal:6443
+  - https://control-plane-3.example.internal:6443
+  ca_ref: staging-ca
+  auth_ref: staging-token
+```
+
 ### Token-authenticated cluster
 
 Use a backend with `auth_ref` pointing to a credential that contains a bearer token.
@@ -97,7 +122,8 @@ meta:
   name: staging
 config:
   name: staging
-  server: https://staging-api.example.internal:6443
+  servers:
+  - https://staging-api.example.internal:6443
   ca_ref: staging-ca
   auth_ref: staging-token
 ```
@@ -132,7 +158,8 @@ meta:
   name: dev-cluster
 config:
   name: dev-cluster
-  server: https://dev-api.example.internal:6443
+  servers:
+  - https://dev-api.example.internal:6443
   insecure_skip_tls_verify: true
 ```
 
@@ -206,7 +233,7 @@ multikubectl create backend prod-cluster \
 
 Useful flags:
 
-- `--server` required upstream API server URL
+- `--server` required upstream API server URL. Can be used multiple times on the cmd line
 - `--ca-ref` reference to a CA resource
 - `--auth-ref` reference to a credential resource
 - `--insecure-skip-tls-verify` disable upstream certificate verification
@@ -220,7 +247,7 @@ Useful flags:
 - if the credential referenced by `auth_ref` points to a client certificate, that certificate must exist or compilation fails
 - backend health is present in status, but the compiler currently does not skip unhealthy backends
 - `cache_ttl` is optional and defaults to zero when omitted
-- `server` is required in practice; parsing errors are caught during compilation
+- `servers` is required in practice; parsing errors are caught during compilation
 - `multikubectl import` supports kubeconfig contexts that use one supported auth method at a time: token, basic auth, or client certificate auth
 - `multikubectl import` does not currently support kubeconfig `exec` plugins or legacy `auth-provider` entries
 - `multikubectl import` reads referenced files relative to the kubeconfig file, which makes it work with normal kubeconfig CA, token, and client certificate file references
@@ -241,7 +268,8 @@ meta:
   uid: "11111111-2222-3333-4444-555555555555" # Server-managed. Unique identifier.
 config:
   name: prod-cluster # Optional but normally set to the same value as meta.name.
-  server: https://prod-api.example.internal:6443 # Required in practice. Full upstream Kubernetes API URL.
+  servers: # Required in practice. Full upstream Kubernetes API URL.
+  - https://prod-api.example.internal:6443
   ca_ref: prod-ca # Optional. Name of a CA resource used to verify the upstream server certificate.
   auth_ref: prod-token # Optional. Name of a credential resource used for upstream auth.
   insecure_skip_tls_verify: false # Optional. Defaults to false. When true, disables upstream TLS certificate verification.
@@ -255,7 +283,7 @@ Field notes:
 - `version` should be `backend/v1`
 - `meta.name` is the stable identifier other resources use when they refer to this backend
 - `config.name` is part of the schema and is typically set to the same value as `meta.name`
-- `server` should include scheme, host, and port
+- `servers` each item should include scheme, host, and port
 - `ca_ref` should be set when the upstream server uses TLS and you want normal certificate verification
 - `auth_ref` should reference a credential that matches the upstream server's auth method
 - `insecure_skip_tls_verify: true` trades safety for convenience and is mainly for development or debugging

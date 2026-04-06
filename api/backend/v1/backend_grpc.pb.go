@@ -29,6 +29,7 @@ type BackendServiceClient interface {
 	Update(ctx context.Context, in *UpdateRequest, opts ...grpc.CallOption) (*UpdateResponse, error)
 	Patch(ctx context.Context, in *PatchRequest, opts ...grpc.CallOption) (*PatchResponse, error)
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	UpdateStatus(ctx context.Context, in *UpdateStatusRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type backendServiceClient struct {
@@ -93,6 +94,15 @@ func (c *backendServiceClient) Delete(ctx context.Context, in *DeleteRequest, op
 	return out, nil
 }
 
+func (c *backendServiceClient) UpdateStatus(ctx context.Context, in *UpdateStatusRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/backend.v1.BackendService/UpdateStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BackendServiceServer is the server API for BackendService service.
 // All implementations must embed UnimplementedBackendServiceServer
 // for forward compatibility
@@ -103,6 +113,7 @@ type BackendServiceServer interface {
 	Update(context.Context, *UpdateRequest) (*UpdateResponse, error)
 	Patch(context.Context, *PatchRequest) (*PatchResponse, error)
 	Delete(context.Context, *DeleteRequest) (*emptypb.Empty, error)
+	UpdateStatus(context.Context, *UpdateStatusRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedBackendServiceServer()
 }
 
@@ -127,6 +138,9 @@ func (UnimplementedBackendServiceServer) Patch(context.Context, *PatchRequest) (
 }
 func (UnimplementedBackendServiceServer) Delete(context.Context, *DeleteRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
+}
+func (UnimplementedBackendServiceServer) UpdateStatus(context.Context, *UpdateStatusRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateStatus not implemented")
 }
 func (UnimplementedBackendServiceServer) mustEmbedUnimplementedBackendServiceServer() {}
 
@@ -249,6 +263,24 @@ func _BackendService_Delete_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BackendService_UpdateStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BackendServiceServer).UpdateStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/backend.v1.BackendService/UpdateStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BackendServiceServer).UpdateStatus(ctx, req.(*UpdateStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BackendService_ServiceDesc is the grpc.ServiceDesc for BackendService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -279,6 +311,10 @@ var BackendService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Delete",
 			Handler:    _BackendService_Delete_Handler,
+		},
+		{
+			MethodName: "UpdateStatus",
+			Handler:    _BackendService_UpdateStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

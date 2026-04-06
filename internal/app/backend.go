@@ -2,9 +2,14 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/keys"
@@ -22,25 +27,38 @@ type BackendService struct {
 	Logger   logger.Logger
 }
 
-// func applyMaskedUpdateVolume(dst, src *backendv1.Status, mask *fieldmaskpb.FieldMask) error {
-// 	if mask == nil || len(mask.Paths) == 0 {
-// 		return status.Error(codes.InvalidArgument, "update_mask is required")
-// 	}
-//
-// 	for _, p := range mask.Paths {
-// 		switch p {
-// 		case "controllers":
-// 			if src.Controllers == nil {
-// 				continue
-// 			}
-// 			dst.Controllers = src.Controllers
-// 		default:
-// 			return fmt.Errorf("unknown mask path %q", p)
-// 		}
-// 	}
-//
-// 	return nil
-// }
+func applyMaskedUpdateBackend(dst, src *backendv1.BackendStatus, mask *fieldmaskpb.FieldMask) error {
+	if mask == nil || len(mask.Paths) == 0 {
+		return status.Error(codes.InvalidArgument, "update_mask is required")
+	}
+	for _, p := range mask.Paths {
+		switch p {
+		case "target_statuses":
+			if src.TargetStatuses == nil {
+				continue
+			}
+			if dst.TargetStatuses == nil {
+				dst.TargetStatuses = make(map[string]*backendv1.TargetStatus, len(src.TargetStatuses))
+			}
+			for k, srcStatus := range src.TargetStatuses {
+				if srcStatus == nil {
+					continue
+				}
+				if existing, ok := dst.TargetStatuses[k]; ok && existing != nil {
+					// Merge into the existing entry instead of replacing it.
+					proto.Merge(existing, srcStatus)
+				} else {
+					// Clone so dst does not alias src memory.
+					dst.TargetStatuses[k] = proto.Clone(srcStatus).(*backendv1.TargetStatus)
+				}
+			}
+
+		default:
+			return fmt.Errorf("unknown mask path %q", p)
+		}
+	}
+	return nil
+}
 
 func (l *BackendService) Get(ctx context.Context, id keys.ID) (*backendv1.Backend, error) {
 	ctx, span := tracer.Start(ctx, "volume.Get", trace.WithSpanKind(trace.SpanKindServer))
@@ -162,35 +180,6 @@ func (l *BackendService) Patch(ctx context.Context, id keys.ID, patch *backendv1
 	return nil
 }
 
-// UpdateStatus implements volumes.VolumeServieClient.
-// func (l *VolumeService) UpdateStatus(ctx context.Context, id keys.ID, st *backendv1.Status, mask ...string) error {
-// 	l.mu.Lock()
-// 	defer l.mu.Unlock()
-//
-// 	ctx, span := tracer.Start(ctx, "volume.UpdateStatus")
-// 	defer span.End()
-//
-// 	// Get the existing volume before updating so we can compare specs
-// 	existingVolume, err := l.Repo.Get(ctx, id)
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	// Apply mask safely
-// 	base := proto.Clone(existingVolume.Status).(*backendv1.Status)
-// 	if err := applyMaskedUpdateVolume(base, st, &fieldmaskpb.FieldMask{Paths: mask}); err != nil {
-// 		return status.Errorf(codes.InvalidArgument, "bad mask: %v", err)
-// 	}
-//
-// 	existingVolume.Status = base
-//
-// 	if _, err := l.Repo.Update(ctx, id, existingVolume); err != nil {
-// 		return err
-// 	}
-//
-// 	return nil
-// }
-
 func (l *BackendService) Update(ctx context.Context, id keys.ID, volume *backendv1.Backend) error {
 	ctx, span := tracer.Start(ctx, "volume.Update")
 	defer span.End()
@@ -229,19 +218,31 @@ func (l *BackendService) Update(ctx context.Context, id keys.ID, volume *backend
 	return nil
 }
 
-// func (l *VolumeService) Condition(ctx context.Context, id keys.ID, req *typesv1.ConditionRequest) error {
-// 	st := &backendv1.Status{
-// 		Conditions: req.GetConditions(),
-// 	}
-//
-// 	err := l.UpdateStatus(ctx, id, st, "conditions")
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	err = l.Exchange.Publish(ctx, events.NewEvent(events.ConditionReported, req))
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
+// UpdateStatus implements [routesv1.RouteServieClient]
+func (l *BackendService) UpdateStatus(ctx context.Context, id keys.ID, st *backendv1.BackendStatus, mask ...string) error {
+	ctx, span := tracer.Start(ctx, "route.UpdateStatus")
+	defer span.End()
+
+	// Get the existing route before updating so we can compare specs
+	existingBackend, err := l.Repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// Apply mask safely
+	base := &backendv1.BackendStatus{}
+	if existingBackend.Status != nil {
+		base = proto.Clone(existingBackend.Status).(*backendv1.BackendStatus)
+	}
+	if err := applyMaskedUpdateBackend(base, st, &fieldmaskpb.FieldMask{Paths: mask}); err != nil {
+		return status.Errorf(codes.InvalidArgument, "bad mask: %v", err)
+	}
+
+	existingBackend.Status = base
+
+	if _, err := l.Repo.Update(ctx, id, existingBackend); err != nil {
+		return err
+	}
+
+	return nil
+}

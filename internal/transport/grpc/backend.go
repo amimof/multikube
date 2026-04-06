@@ -103,6 +103,20 @@ func (n *BackendService) Patch(ctx context.Context, req *backendv1.PatchRequest)
 	return &backendv1.PatchResponse{Backend: node}, nil
 }
 
+func (n *BackendService) UpdateStatus(ctx context.Context, req *backendv1.UpdateStatusRequest) (*emptypb.Empty, error) {
+	uid, err := keys.FromUIDOrName(req.GetUid(), req.GetName())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+
+	err = n.app.UpdateStatus(ctx, uid, req.GetStatus(), req.GetUpdateMask().GetPaths()...)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
 func NewBackendService(app *app.BackendService) *BackendService {
 	return &BackendService{app: app}
 }

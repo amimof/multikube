@@ -7,6 +7,8 @@ import "google/api/annotations.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/wrappers.proto";
 import "meta/v1/meta.proto";
 
 option go_package = "github.com/amimof/multikube/api/backend/v1;backend";
@@ -53,12 +55,12 @@ service BackendService {
       additional_bindings: {delete: "/api/v1/backends/{name}"}
     };
   }
-  // rpc UpdateStatus(UpdateStatusRequest) returns (UpdateStatusResponse) {
-  //   option (google.api.http) = {
-  //     put: "/api/v1/backends/{uid}/status"
-  //     additional_bindings: {put: "/api/v1/backends/{name}/status"}
-  //   };
-  // }
+  rpc UpdateStatus(UpdateStatusRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      put: "/api/v1/backends/{uid}/status"
+      additional_bindings: {put: "/api/v1/routes/{name}/status"}
+    };
+  }
 }
 
 message Backend {
@@ -85,7 +87,13 @@ message BackendConfig {
 }
 
 message BackendStatus {
-  bool healthy = 1;
+  map<string, TargetStatus> target_statuses = 3;
+}
+
+message TargetStatus {
+  google.protobuf.StringValue phase = 1;
+  google.protobuf.StringValue reason = 2;
+  google.protobuf.Timestamp last_transition_time = 3;
 }
 
 message GetRequest {
@@ -149,23 +157,6 @@ message ListResponse {
   repeated Backend backends = 1;
 }
 
-// message UpdateStatusRequest {
-//   option (buf.validate.message).oneof = {
-//     fields: [
-//       "uid",
-//       "name"
-//     ]
-//   };
-//   string uid = 1 [(buf.validate.field).string.min_len = 1];
-//   string name = 2 [(buf.validate.field).string.min_len = 1];
-//   google.protobuf.FieldMask update_mask = 3 [(buf.validate.field).required = true];
-//   Status status = 4 [(buf.validate.field).required = true];
-// }
-
-// message UpdateStatusResponse {
-//   string id = 1;
-// }
-
 message PatchRequest {
   option (buf.validate.message).oneof = {
     fields: [
@@ -181,4 +172,17 @@ message PatchRequest {
 
 message PatchResponse {
   Backend backend = 1;
+}
+
+message UpdateStatusRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.FieldMask update_mask = 3 [(buf.validate.field).required = true];
+  BackendStatus status = 4 [(buf.validate.field).required = true];
 }

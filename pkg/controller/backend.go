@@ -36,6 +36,7 @@ type Controller struct {
 	runtime           *proxyv2.RuntimeStore
 	cache             *compile.State
 	heartBeatInterval time.Duration
+	heartBeatTimeout  time.Duration
 }
 
 type ControllerCache = compile.State
@@ -69,6 +70,12 @@ func WithExchange(e *events.Exchange) NewOption {
 func WithHeartBeatInterval(every time.Duration) NewOption {
 	return func(c *Controller) {
 		c.heartBeatInterval = every
+	}
+}
+
+func WithHeartBeatTimeout(timeout time.Duration) NewOption {
+	return func(c *Controller) {
+		c.heartBeatTimeout = timeout
 	}
 }
 
@@ -305,6 +312,9 @@ func (c *Controller) Run(ctx context.Context) {
 		return
 	}
 
+	// Start heartbeats
+	go c.runHeartbeat(ctx)
+
 	// Subscribe to events via the exchange
 	c.exchange.On(events.BackendCreate, events.HandleErrors(c.logger, events.HandleBackends(c.onBackendCreate)))
 	// c.exchange.On(events.BackendDelete, events.HandleErrors(c.logger, events.HandleBackends(c.onDelete)))
@@ -329,9 +339,11 @@ func (c *Controller) Run(ctx context.Context) {
 
 func New(cs *client.ClientSet, opts ...NewOption) *Controller {
 	m := &Controller{
-		clientset: cs,
-		logger:    logger.ConsoleLogger{},
-		tracer:    otel.Tracer("controller"),
+		clientset:         cs,
+		logger:            logger.ConsoleLogger{},
+		tracer:            otel.Tracer("controller"),
+		heartBeatInterval: 15 * time.Second,
+		heartBeatTimeout:  10 * time.Second,
 		cache: &compile.State{
 			Backends:               map[string]*backendv1.Backend{},
 			Routes:                 map[string]*routev1.Route{},

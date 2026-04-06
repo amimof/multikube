@@ -5,6 +5,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/amimof/multikube/pkg/client/version"
 	"github.com/amimof/multikube/pkg/errs"
@@ -41,6 +42,7 @@ type ClientV1 interface {
 	Get(context.Context, string) (*backendv1.Backend, error)
 	Delete(context.Context, string) error
 	List(context.Context, ...labels.Label) ([]*backendv1.Backend, error)
+	UpdateStatus(context.Context, string, *backendv1.BackendStatus, ...string) error
 }
 
 type clientV1 struct {
@@ -146,6 +148,32 @@ func (c *clientV1) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (c *clientV1) UpdateStatus(ctx context.Context, id string, status *backendv1.BackendStatus, path ...string) error {
+	// Construct field mask
+	mask := &fieldmaskpb.FieldMask{
+		Paths: path,
+	}
+
+	uid, err := keys.ParseStr(id)
+	if err != nil {
+		return err
+	}
+
+	req := &backendv1.UpdateStatusRequest{
+		Name:       uid.NameStr(),
+		Uid:        uid.UUIDStr(),
+		UpdateMask: mask,
+		Status:     status,
+	}
+
+	_, err = c.Client.UpdateStatus(ctx, req)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

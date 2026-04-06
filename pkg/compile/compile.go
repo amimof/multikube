@@ -512,15 +512,6 @@ func removeRouteRuntime(routes []*proxy.RouteRuntime, name string) []*proxy.Rout
 	return routes
 }
 
-// backendPoolFromRuntime wraps a BackendRuntime in a single-target BackendPool
-// compatible with the existing Forwarder.Handler signature.
-func backendPoolFromRuntime(br *proxy.BackendRuntime) *proxy.BackendPool {
-	return &proxy.BackendPool{
-		Name:    br.Name,
-		Targets: []*proxy.BackendRuntime{br},
-	}
-}
-
 // buildTLSTransport constructs an *http.Transport using the supplied tls.Config.
 func buildTLSTransport(cfg *tls.Config) http.RoundTripper {
 	return &http.Transport{
