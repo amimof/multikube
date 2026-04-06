@@ -18,7 +18,7 @@ import (
 
 func newCreateBackendCmd(cfg *client.Config) *cobra.Command {
 	var (
-		server          string
+		server          []string
 		caRef           string
 		authRef         string
 		insecureSkipTLS bool
@@ -36,7 +36,7 @@ func newCreateBackendCmd(cfg *client.Config) *cobra.Command {
 		}),
 	}
 
-	cmd.Flags().StringVar(&server, "server", "", "Address of the Kubernetes API server for this backend (required)")
+	cmd.Flags().StringArrayVar(&server, "server", []string{}, "Address of the Kubernetes API server for this backend (required)")
 	cmd.Flags().StringVar(&caRef, "ca-ref", "", "Reference to the CA certificate secret")
 	cmd.Flags().StringVar(&authRef, "auth-ref", "", "Reference to the authentication secret")
 	cmd.Flags().BoolVar(&insecureSkipTLS, "insecure-skip-tls-verify", false, "Skip TLS certificate verification for the backend server")
@@ -55,7 +55,7 @@ func runCreateBackendCmd(
 	cmd *cobra.Command,
 	args []string,
 	cfg *client.Config,
-	server, caRef, authRef string,
+	server []string, caRef, authRef string,
 	insecureSkipTLS bool,
 	cacheTTL time.Duration,
 	labelStrs []string,
@@ -92,7 +92,7 @@ func runCreateBackendCmd(
 		},
 		Config: &backendv1.BackendConfig{
 			Name:                  name,
-			Server:                server,
+			Servers:               server,
 			CaRef:                 caRef,
 			AuthRef:               authRef,
 			InsecureSkipTlsVerify: insecureSkipTLS,

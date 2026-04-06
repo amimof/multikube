@@ -471,8 +471,11 @@
         "name": {
           "type": "string"
         },
-        "server": {
-          "type": "string"
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "caRef": {
           "type": "string"

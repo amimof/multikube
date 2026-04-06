@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -26,14 +27,15 @@ import (
 )
 
 type Controller struct {
-	mu        sync.Mutex
-	logger    logger.Logger
-	clientset *client.ClientSet
-	tracer    trace.Tracer
-	exchange  *events.Exchange
-	compiler  *compile.Compiler
-	runtime   *proxyv2.RuntimeStore
-	cache     *compile.State
+	mu                sync.Mutex
+	logger            logger.Logger
+	clientset         *client.ClientSet
+	tracer            trace.Tracer
+	exchange          *events.Exchange
+	compiler          *compile.Compiler
+	runtime           *proxyv2.RuntimeStore
+	cache             *compile.State
+	heartBeatInterval time.Duration
 }
 
 type ControllerCache = compile.State
@@ -61,6 +63,12 @@ func WithLogger(l logger.Logger) NewOption {
 func WithExchange(e *events.Exchange) NewOption {
 	return func(c *Controller) {
 		c.exchange = e
+	}
+}
+
+func WithHeartBeatInterval(every time.Duration) NewOption {
+	return func(c *Controller) {
+		c.heartBeatInterval = every
 	}
 }
 

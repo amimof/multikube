@@ -74,7 +74,10 @@ message Backend {
 
 message BackendConfig {
   string name = 1 [(buf.validate.field).string.min_len = 1];
-  string server = 2 [(buf.validate.field).string.min_len = 1];
+  repeated string servers = 2 [
+    (buf.validate.field).repeated.min_items = 1,
+    (buf.validate.field).required = true
+  ];
   string ca_ref = 3;
   string auth_ref = 4;
   bool insecure_skip_tls_verify = 5;

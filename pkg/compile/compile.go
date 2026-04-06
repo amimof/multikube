@@ -79,14 +79,14 @@ func (c *Compiler) Compile(st *State) (*CompileResult, error) {
 		return nil, fmt.Errorf("compile credentials: %w", err)
 	}
 
-	// compile backends into BackendRuntimes and per-backend Forwarders.
-	backends, forwarders, err := compileBackends2(st.Backends, caPools, tlsCerts, compiledCreds)
+	// Compile backends into a BackendPool
+	backendPools, forwarders, err := compileBackendsPools(st.Backends, caPools, tlsCerts, compiledCreds)
 	if err != nil {
-		return nil, fmt.Errorf("compile backends: %w", err)
+		return nil, fmt.Errorf("compile backend pools: %w", err)
 	}
 
 	// compile routes into CompiledRoutes.
-	routes, statuses := compileRoutes2(st.Routes, backends, forwarders)
+	routes, statuses := compileRoutes2(st.Routes, backendPools, forwarders)
 
 	for name := range st.Routes {
 		if _, ok := statuses[name]; !ok {
@@ -96,7 +96,7 @@ func (c *Compiler) Compile(st *State) (*CompileResult, error) {
 
 	rt := &proxy.RuntimeConfig{
 		Version:  c.version.Add(1),
-		Backends: backends,
+		Backends: backendPools,
 		Routes:   routes,
 		Policies: compilePolicies(st.Policies),
 	}
@@ -224,15 +224,13 @@ func compileCredential(credential *credentialv1.Credential) (compiledCredential,
 	}
 }
 
-// compileBackends2 builds a BackendRuntime and a Forwarder for every healthy
-// backend. Unhealthy backends are silently skipped.
-func compileBackends2(
+func compileBackendsPools(
 	backends map[string]*backendv1.Backend,
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
 	credentials map[string]compiledCredential,
-) (map[string]*proxy.BackendRuntime, map[string]*proxy.Forwarder, error) {
-	out := make(map[string]*proxy.BackendRuntime, len(backends))
+) (map[string]*proxy.BackendPool, map[string]*proxy.Forwarder, error) {
+	out := make(map[string]*proxy.BackendPool, len(backends))
 	fwds := make(map[string]*proxy.Forwarder, len(backends))
 
 	for name, be := range backends {
@@ -242,7 +240,7 @@ func compileBackends2(
 		// 	continue
 		// }
 
-		br, fwd, err := compileBackend2(be, caPools, tlsCerts, credentials)
+		br, fwd, err := compileBackendPool(be, caPools, tlsCerts, credentials)
 		if err != nil {
 			return nil, nil, fmt.Errorf("backend %q: %w", name, err)
 		}
@@ -256,17 +254,12 @@ func compileBackends2(
 
 // compileBackend2 converts a single Backend proto into a BackendRuntime and its
 // dedicated Forwarder.
-func compileBackend2(
+func compileBackendPool(
 	be *backendv1.Backend,
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
 	credentials map[string]compiledCredential,
-) (*proxy.BackendRuntime, *proxy.Forwarder, error) {
-	serverURL, err := url.Parse(be.GetConfig().GetServer())
-	if err != nil {
-		return nil, nil, fmt.Errorf("parsing server URL %q: %w", be.GetConfig().GetServer(), err)
-	}
-
+) (*proxy.BackendPool, *proxy.Forwarder, error) {
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: be.GetConfig().GetInsecureSkipTlsVerify(), //nolint:gosec // user-controlled
 	}
@@ -301,20 +294,36 @@ func compileBackend2(
 	transport := buildTLSTransport(tlsCfg)
 	fwd := proxy.NewForwarder(transport)
 
-	br := &proxy.BackendRuntime{
-		Name:      be.GetMeta().GetName(),
-		Labels:    be.GetMeta().GetLabels(),
-		URL:       serverURL,
-		CacheTTL:  cacheTTL,
-		TLSConfig: tlsCfg,
-		Transport: transport,
+	out := []*proxy.BackendRuntime{}
+
+	for _, server := range be.GetConfig().GetServers() {
+		serverURL, err := url.Parse(server)
+		if err != nil {
+			return nil, nil, fmt.Errorf("parsing server URL %q: %w", server, err)
+		}
+		if len(server) == 0 {
+			return nil, nil, fmt.Errorf("server URL is empty")
+		}
+		br := &proxy.BackendRuntime{
+			Name:      be.GetMeta().GetName(),
+			Labels:    be.GetMeta().GetLabels(),
+			URL:       serverURL,
+			CacheTTL:  cacheTTL,
+			TLSConfig: tlsCfg,
+			Transport: transport,
+		}
+		if ref := be.GetConfig().GetAuthRef(); ref != "" {
+			br.AuthInjector = credentials[ref].authInjector
+		}
+		out = append(out, br)
 	}
 
-	if ref := be.GetConfig().GetAuthRef(); ref != "" {
-		br.AuthInjector = credentials[ref].authInjector
+	pool := &proxy.BackendPool{
+		Name:    be.GetConfig().GetName(),
+		Targets: out,
 	}
 
-	return br, fwd, nil
+	return pool, fwd, nil
 }
 
 type bearerTokenInjector struct {
@@ -346,7 +355,7 @@ type routeMatchKey struct {
 // and builds an http.Handler for it.
 func compileRoutes2(
 	routes map[string]*routev1.Route,
-	backends map[string]*proxy.BackendRuntime,
+	backends map[string]*proxy.BackendPool,
 	forwarders map[string]*proxy.Forwarder,
 ) (proxy.CompiledRoutes, map[string]RouteCompileStatus) {
 	cr := proxy.CompiledRoutes{
@@ -384,7 +393,7 @@ func compileRoutes2(
 func compileRoute(
 	name string,
 	route *routev1.Route,
-	backends map[string]*proxy.BackendRuntime,
+	backends map[string]*proxy.BackendPool,
 	forwarders map[string]*proxy.Forwarder,
 ) (*proxy.RouteRuntime, routeMatchKey, RouteCompileStatus) {
 	config := route.GetConfig()
@@ -410,12 +419,11 @@ func compileRoute(
 	}
 
 	// Build a single-target BackendPool so the Forwarder can pick a target.
-	pool := backendPoolFromRuntime(br)
-	handler := fwd.Handler(pool)
+	handler := fwd.Handler(br)
 
 	rr := &proxy.RouteRuntime{
 		Name:        name,
-		BackendPool: pool,
+		BackendPool: br,
 		Handler:     handler,
 	}
 

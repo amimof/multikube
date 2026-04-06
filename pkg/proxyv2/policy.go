@@ -25,7 +25,7 @@ const (
 func EvalPolicies(
 	policies []*policyv1.Policy,
 	principal *Principal,
-	backend *BackendRuntime,
+	backend *BackendPool,
 	req K8sRequest,
 ) EvalResult {
 	if len(policies) == 0 {
@@ -108,7 +108,7 @@ func subjectSelectorMatches(sel *policyv1.SubjectSelector, p *Principal) bool {
 
 // ruleMatchesCluster returns true if the backend satisfies at least one
 // ClusterSelector in the rule, or if the rule has no cluster selectors (wildcard).
-func ruleMatchesCluster(rule *policyv1.Rule, backend *BackendRuntime) bool {
+func ruleMatchesCluster(rule *policyv1.Rule, backend *BackendPool) bool {
 	clusters := rule.GetClusters()
 	if len(clusters) == 0 {
 		return true // no cluster selectors = wildcard
@@ -126,15 +126,17 @@ func ruleMatchesCluster(rule *policyv1.Rule, backend *BackendRuntime) bool {
 	return false
 }
 
-func clusterSelectorMatches(sel *policyv1.ClusterSelector, backend *BackendRuntime) bool {
-	// Match by name
-	if slices.Contains(sel.GetNames(), backend.Name) {
-		return true
-	}
-	// Match by labels
-	for k, v := range sel.GetLabels() {
-		if backend.Labels[k] == v {
+func clusterSelectorMatches(sel *policyv1.ClusterSelector, pool *BackendPool) bool {
+	for _, be := range pool.Targets {
+		// Match by name
+		if slices.Contains(sel.GetNames(), be.Name) {
 			return true
+		}
+		// Match by labels
+		for k, v := range sel.GetLabels() {
+			if be.Labels[k] == v {
+				return true
+			}
 		}
 	}
 	return false

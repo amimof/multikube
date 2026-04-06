@@ -44,8 +44,9 @@ func TestBuildImportPlanDefaultNamesNoAuth(t *testing.T) {
 	if got := plan.Backend.GetMeta().GetName(); got != "prod-backend" {
 		t.Fatalf("unexpected backend name: %q", got)
 	}
-	if got := plan.Backend.GetConfig().GetServer(); got != "https://cluster.example" {
-		t.Fatalf("unexpected backend server: %q", got)
+	servers := plan.Backend.GetConfig().GetServers()
+	if len(servers) != 1 || servers[0] != "https://cluster.example" {
+		t.Fatalf("unexpected backend servers: %#v", servers)
 	}
 	if got := plan.Backend.GetConfig().GetAuthRef(); got != "" {
 		t.Fatalf("expected empty auth ref, got %q", got)

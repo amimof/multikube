@@ -66,8 +66,19 @@ func selfSignedPEM(t *testing.T) (certPEM, keyPEM string) {
 func newBackend(name, server string) *backendv1.Backend {
 	return &backendv1.Backend{
 		Meta:   &metav1.Meta{Name: name},
-		Config: &backendv1.BackendConfig{Server: server, InsecureSkipTlsVerify: true},
+		Config: &backendv1.BackendConfig{Servers: []string{server}, InsecureSkipTlsVerify: true},
 	}
+}
+
+func requireSingleBackendTarget(t *testing.T, pool *proxy.BackendPool) *proxy.BackendRuntime {
+	t.Helper()
+	if pool == nil {
+		t.Fatal("expected backend pool")
+	}
+	if len(pool.Targets) != 1 {
+		t.Fatalf("expected 1 backend target, got %d", len(pool.Targets))
+	}
+	return pool.Targets[0]
 }
 
 func newRoute(name, backendRef string, match *routev1.Match) *routev1.Route {
@@ -631,7 +642,7 @@ func TestCompile_BackendTokenCredential_AttachesAuthInjector(t *testing.T) {
 			"be": {
 				Meta: &metav1.Meta{Name: "be"},
 				Config: &backendv1.BackendConfig{
-					Server:                srv.URL,
+					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
 				},
@@ -650,16 +661,13 @@ func TestCompile_BackendTokenCredential_AttachesAuthInjector(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	backend := res.Runtime.Backends["be"]
-	if backend == nil {
-		t.Fatal("expected backend runtime")
-	}
-	if backend.AuthInjector == nil {
+	target := requireSingleBackendTarget(t, res.Runtime.Backends["be"])
+	if target.AuthInjector == nil {
 		t.Fatal("expected auth injector")
 	}
 
 	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
-	if err := backend.AuthInjector.Apply(req); err != nil {
+	if err := target.AuthInjector.Apply(req); err != nil {
 		t.Fatalf("apply auth injector: %v", err)
 	}
 	if got := req.Header.Get("Authorization"); got != "Bearer secret-token" {
@@ -677,7 +685,7 @@ func TestCompile_BackendBasicCredential_AttachesAuthInjector(t *testing.T) {
 			"be": {
 				Meta: &metav1.Meta{Name: "be"},
 				Config: &backendv1.BackendConfig{
-					Server:                srv.URL,
+					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
 				},
@@ -696,16 +704,13 @@ func TestCompile_BackendBasicCredential_AttachesAuthInjector(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	backend := res.Runtime.Backends["be"]
-	if backend == nil {
-		t.Fatal("expected backend runtime")
-	}
-	if backend.AuthInjector == nil {
+	target := requireSingleBackendTarget(t, res.Runtime.Backends["be"])
+	if target.AuthInjector == nil {
 		t.Fatal("expected auth injector")
 	}
 
 	req := httptest.NewRequest(http.MethodGet, srv.URL, nil)
-	if err := backend.AuthInjector.Apply(req); err != nil {
+	if err := target.AuthInjector.Apply(req); err != nil {
 		t.Fatalf("apply auth injector: %v", err)
 	}
 	if got := req.Header.Get("Authorization"); len(got) < 6 || got[:6] != "Basic " {
@@ -724,7 +729,7 @@ func TestCompile_BackendClientCertificateCredential_AttachesTLSCert(t *testing.T
 			"be": {
 				Meta: &metav1.Meta{Name: "be"},
 				Config: &backendv1.BackendConfig{
-					Server:                srv.URL,
+					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
 				},
@@ -745,14 +750,11 @@ func TestCompile_BackendClientCertificateCredential_AttachesTLSCert(t *testing.T
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	backend := res.Runtime.Backends["be"]
-	if backend == nil {
-		t.Fatal("expected backend runtime")
+	target := requireSingleBackendTarget(t, res.Runtime.Backends["be"])
+	if len(target.TLSConfig.Certificates) != 1 {
+		t.Fatalf("expected one tls certificate, got %d", len(target.TLSConfig.Certificates))
 	}
-	if len(backend.TLSConfig.Certificates) != 1 {
-		t.Fatalf("expected one tls certificate, got %d", len(backend.TLSConfig.Certificates))
-	}
-	if backend.AuthInjector != nil {
+	if target.AuthInjector != nil {
 		t.Fatal("expected no auth injector for client certificate credential")
 	}
 }
@@ -767,7 +769,7 @@ func TestCompile_BackendMissingCredentialRef_Error(t *testing.T) {
 			"be": {
 				Meta: &metav1.Meta{Name: "be"},
 				Config: &backendv1.BackendConfig{
-					Server:                srv.URL,
+					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "missing",
 				},
@@ -795,7 +797,7 @@ func TestCompile_BackendClientCredentialMissingCertificate_Error(t *testing.T) {
 			"be": {
 				Meta: &metav1.Meta{Name: "be"},
 				Config: &backendv1.BackendConfig{
-					Server:                srv.URL,
+					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
 				},

@@ -13,7 +13,7 @@ func NewRuntimeStore() *RuntimeStore {
 	s.current.Store(&RuntimeConfig{
 		Version:  0,
 		Routes:   CompiledRoutes{},
-		Backends: make(map[string]*BackendRuntime),
+		Backends: make(map[string]*BackendPool),
 	})
 	return s
 }

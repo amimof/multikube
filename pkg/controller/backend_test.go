@@ -89,7 +89,7 @@ func TestControllerCompileRuntime_PublishesSnapshotAndStatuses(t *testing.T) {
 				"be": {
 					Meta: &metav1.Meta{Name: "be"},
 					Config: &backendv1.BackendConfig{
-						Server:                "http://example.com",
+						Servers:               []string{"http://example.com"},
 						InsecureSkipTlsVerify: true,
 					},
 				},

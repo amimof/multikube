@@ -74,11 +74,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Policy enforcement. Only enforce when policies are present and a public key is configured.
 	if p.pubKey != nil && len(rt.Policies) > 0 {
-		var backend *BackendRuntime
-		if route.BackendPool != nil {
-			backend, _ = route.BackendPool.Next(r)
-		}
-		if EvalPolicies(rt.Policies, principal, backend, k8sReq) == EvalDeny {
+		if EvalPolicies(rt.Policies, principal, route.BackendPool, k8sReq) == EvalDeny {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

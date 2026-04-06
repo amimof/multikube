@@ -277,7 +277,7 @@ func buildImportPlan(kubeconfigPath, contextName string, kubeconfig *clientcmdap
 		Meta: &metav1.Meta{Name: names.Backend},
 		Config: &backendv1.BackendConfig{
 			Name:                  names.Backend,
-			Server:                cluster.Server,
+			Servers:               []string{cluster.Server},
 			InsecureSkipTlsVerify: cluster.InsecureSkipTLSVerify,
 		},
 	}

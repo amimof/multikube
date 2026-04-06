@@ -17,8 +17,9 @@ import (
 type RuntimeConfig struct {
 	Version uint64
 
-	Routes   CompiledRoutes
-	Backends map[string]*BackendRuntime
+	Routes CompiledRoutes
+	// Backends map[string]*BackendRuntime
+	Backends map[string]*BackendPool
 	Policies []*policyv1.Policy
 }
 
@@ -77,6 +78,20 @@ type BackendTarget struct {
 	Weight  int
 }
 
+type BackendRuntime struct {
+	Name   string
+	Labels map[string]string
+
+	URL *url.URL
+
+	CacheTTL time.Duration
+
+	TLSConfig *tls.Config
+	Transport http.RoundTripper
+
+	AuthInjector RequestAuthInjector
+}
+
 type RouteMatchKind uint8
 
 const (
@@ -96,20 +111,6 @@ type HeaderRuntime struct {
 type JWTRuntime struct {
 	Claim string
 	Value string
-}
-
-type BackendRuntime struct {
-	Name   string
-	Labels map[string]string
-
-	URL *url.URL
-
-	CacheTTL time.Duration
-
-	TLSConfig *tls.Config
-	Transport http.RoundTripper
-
-	AuthInjector RequestAuthInjector
 }
 
 type RequestAuthInjector interface {
