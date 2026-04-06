@@ -9,12 +9,12 @@ Home of the documentation. Here you will hopefully find everything you need to k
   - [Kubernetes](/docs/installation/kubernetes.md)
   - [Systemd](/docs/installation/systemd.md)
 - Configuration
-  - TLS
+  - [TLS](/docs/configuration/tls.md)
   - Metrics
 - Usage
-  - [Backends](/docs/backends.md)
-  - [Routes](/docs/routes.md)
-  - [Credentials](/docs/credentials.md)
-  - [Policies](/docs/policies.md)
-  - [Certificates](/docs/certificates.md)
-  - [Audit Logs](/docs/audit-logs.md)
+  - [Backends](/docs/usage/backends.md)
+  - [Routes](/docs/usage/routes.md)
+  - [Credentials](/docs/usage/credentials.md)
+  - [Policies](/docs/usage/policies.md)
+  - [Certificates](/docs/usage/certificates.md)
+  - [Audit Logs](/docs/usage/audit-logs.md)

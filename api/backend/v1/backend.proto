@@ -58,7 +58,7 @@ service BackendService {
   rpc UpdateStatus(UpdateStatusRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       put: "/api/v1/backends/{uid}/status"
-      additional_bindings: {put: "/api/v1/routes/{name}/status"}
+      additional_bindings: {put: "/api/v1/backends/{name}/status"}
     };
   }
 }
