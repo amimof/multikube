@@ -80,6 +80,10 @@ func (c *clientV1) Update(ctx context.Context, id string, ctr *routev1.Route) er
 		return err
 	}
 
+	if ctr.Version == "" {
+		ctr.Version = version.VersionRoute
+	}
+
 	_, err = c.Client.Update(ctx, &routev1.UpdateRequest{Uid: uid.UUIDStr(), Name: uid.NameStr(), Route: ctr})
 	if err != nil {
 		return errs.ToStatus(err)

@@ -80,6 +80,26 @@ lint: | $(GOCILINT) ; $(info $(M) running golangci-lint) @ ## Runs static code a
 test: ; $(info $(M) running go test) @ ## Runs unit tests
 	$Q $(GO) test -count=1 -v ./...
 
+.PHONY: e2e-setup
+e2e-setup: ; $(info $(M) setting up e2e environment) @ ## Creates kind clusters and builds local test assets
+	$Q ./e2e/setup.sh
+
+.PHONY: e2e-deploy
+e2e-deploy: ; $(info $(M) deploying multikube to management cluster) @ ## Deploys multikube into the e2e management cluster
+	$Q ./e2e/deploy-multikube.sh
+
+.PHONY: e2e-test
+e2e-test: ; $(info $(M) running e2e smoke tests) @ ## Runs the e2e smoke test suite
+	$Q ./e2e/tests/smoke.sh
+
+.PHONY: e2e-teardown
+e2e-teardown: ; $(info $(M) tearing down e2e environment) @ ## Deletes kind clusters and e2e artifacts
+	$Q ./e2e/teardown.sh
+
+.PHONY: e2e
+e2e: ; $(info $(M) running full e2e flow) @ ## Runs setup, deploy, smoke test, and teardown for the local e2e scaffold
+	$Q ./e2e/run.sh
+
 .PHONY: fmt
 fmt: ; $(info $(M) running gofmt) @ ## Formats Go code
 	$Q $(GO) fmt ./...

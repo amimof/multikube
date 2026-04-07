@@ -30,7 +30,7 @@ func newConfigCreateServerCmd() *cobra.Command {
 multikubectl config create-server dev --address localhost:5743 --ca ca.crt
 `,
 		Args: cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withConfigWithoutValidation(func(cmd *cobra.Command, args []string) error {
 			return runConfigCreateServerCmd(args[0], address, caFile, certFile, keyFile, insecure, current, tls)
 		}),
 	}

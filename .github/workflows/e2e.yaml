@@ -1,0 +1,31 @@
+name: E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: "Log level"
+        required: true
+        default: "info"
+
+jobs:
+  e2e-full:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.1
+          cache: true
+
+      - name: Run full e2e tests
+        run: |
+          make e2e
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          draft: true
+          artifacts: "./bin/*"

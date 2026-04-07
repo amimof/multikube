@@ -78,6 +78,10 @@ func (c *clientV1) Update(ctx context.Context, id string, ctr *certv1.Certificat
 		return err
 	}
 
+	if ctr.Version == "" {
+		ctr.Version = version.VersionCertificate
+	}
+
 	_, err = c.Client.Update(ctx, &certv1.UpdateRequest{Uid: uid.UUIDStr(), Name: uid.NameStr(), Certificate: ctr})
 	if err != nil {
 		return errs.ToStatus(err)

@@ -66,6 +66,10 @@ func (c *clientV1) Update(ctx context.Context, id string, policy *policyv1.Polic
 		return err
 	}
 
+	if policy.Version == "" {
+		policy.Version = version.VersionPolicy
+	}
+
 	_, err = c.Client.Update(ctx, &policyv1.UpdateRequest{Uid: uid.UUIDStr(), Name: uid.NameStr(), Policy: policy})
 	if err != nil {
 		return errs.ToStatus(err)

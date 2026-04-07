@@ -91,6 +91,26 @@ func (c *Controller) onBackendCreate(ctx context.Context, b *backendv1.Backend) 
 	return c.compileRuntime(ctx)
 }
 
+func (c *Controller) onBackendUpdate(ctx context.Context, p *backendv1.Backend) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on update handler", "backend", p.GetMeta().GetName())
+
+	c.cache.Backends[p.GetMeta().GetName()] = p
+
+	return c.compileRuntime(ctx)
+}
+
+func (c *Controller) onBackendDelete(ctx context.Context, p *backendv1.Backend) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on delete handler", "backend", p.GetMeta().GetName())
+
+	delete(c.cache.Backends, p.GetMeta().GetName())
+
+	return c.compileRuntime(ctx)
+}
+
 func (c *Controller) onRouteCreate(ctx context.Context, r *routev1.Route) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -179,6 +199,66 @@ func (c *Controller) onCredentialDelete(ctx context.Context, ctr *credentialv1.C
 	c.logger.Info("on delete handler", "credential", ctr.GetMeta().GetName())
 
 	delete(c.cache.Credentials, ctr.GetMeta().GetName())
+
+	return c.compileRuntime(ctx)
+}
+
+func (c *Controller) onCertificateCreate(ctx context.Context, ctr *certificatev1.Certificate) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on create handler", "certificate", ctr.GetMeta().GetName())
+
+	c.cache.Certificates[ctr.GetMeta().GetName()] = ctr
+
+	return c.compileRuntime(ctx)
+}
+
+func (c *Controller) onCertificateUpdate(ctx context.Context, ctr *certificatev1.Certificate) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on update handler", "certificate", ctr.GetMeta().GetName())
+
+	c.cache.Certificates[ctr.GetMeta().GetName()] = ctr
+
+	return c.compileRuntime(ctx)
+}
+
+func (c *Controller) onCertificateDelete(ctx context.Context, ctr *certificatev1.Certificate) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on delete handler", "certificate", ctr.GetMeta().GetName())
+
+	delete(c.cache.Certificates, ctr.GetMeta().GetName())
+
+	return c.compileRuntime(ctx)
+}
+
+func (c *Controller) onCertificateAuthorityCreate(ctx context.Context, ctr *cav1.CertificateAuthority) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on create handler", "ca", ctr.GetMeta().GetName())
+
+	c.cache.CertificateAuthorities[ctr.GetMeta().GetName()] = ctr
+
+	return c.compileRuntime(ctx)
+}
+
+func (c *Controller) onCertificateAuthorityUpdate(ctx context.Context, ctr *cav1.CertificateAuthority) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on update handler", "ca", ctr.GetMeta().GetName())
+
+	c.cache.CertificateAuthorities[ctr.GetMeta().GetName()] = ctr
+
+	return c.compileRuntime(ctx)
+}
+
+func (c *Controller) onCertificateAuthorityDelete(ctx context.Context, ctr *cav1.CertificateAuthority) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.logger.Info("on delete handler", "ca", ctr.GetMeta().GetName())
+
+	delete(c.cache.CertificateAuthorities, ctr.GetMeta().GetName())
 
 	return c.compileRuntime(ctx)
 }
@@ -316,22 +396,42 @@ func (c *Controller) Run(ctx context.Context) {
 	go c.runHeartbeat(ctx)
 
 	// Subscribe to events via the exchange
+
+	// Backends
 	c.exchange.On(events.BackendCreate, events.HandleErrors(c.logger, events.HandleBackends(c.onBackendCreate)))
-	// c.exchange.On(events.BackendDelete, events.HandleErrors(c.logger, events.HandleBackends(c.onDelete)))
-	// c.exchange.On(events.BackendUpdate, events.HandleErrors(c.logger, events.HandleBackends(c.onUpdate)))
-	// c.exchange.On(events.BackendPatch, events.HandleErrors(c.logger, events.HandleBackends(c.onPatch)))
+	c.exchange.On(events.BackendUpdate, events.HandleErrors(c.logger, events.HandleBackends(c.onBackendUpdate)))
+	c.exchange.On(events.BackendPatch, events.HandleErrors(c.logger, events.HandleBackends(c.onBackendUpdate)))
+	c.exchange.On(events.BackendDelete, events.HandleErrors(c.logger, events.HandleBackends(c.onBackendDelete)))
+
+	// Routes
 	c.exchange.On(events.RouteCreate, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteCreate)))
 	c.exchange.On(events.RouteUpdate, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteUpdate)))
 	c.exchange.On(events.RoutePatch, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteUpdate)))
 	c.exchange.On(events.RouteDelete, events.HandleErrors(c.logger, events.HandleRoutes(c.onRouteDelete)))
+
+	// Credentials
 	c.exchange.On(events.CredentialCreate, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialCreate)))
 	c.exchange.On(events.CredentialUpdate, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialUpdate)))
 	c.exchange.On(events.CredentialPatch, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialUpdate)))
 	c.exchange.On(events.CredentialDelete, events.HandleErrors(c.logger, events.HandleCredentials(c.onCredentialDelete)))
+
+	// Policies
 	c.exchange.On(events.PolicyCreate, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyCreate)))
 	c.exchange.On(events.PolicyUpdate, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyUpdate)))
 	c.exchange.On(events.PolicyPatch, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyUpdate)))
 	c.exchange.On(events.PolicyDelete, events.HandleErrors(c.logger, events.HandlePolicies(c.onPolicyDelete)))
+
+	// Certificates
+	c.exchange.On(events.CertificateCreate, events.HandleErrors(c.logger, events.HandleCertificates(c.onCertificateCreate)))
+	c.exchange.On(events.CertificateUpdate, events.HandleErrors(c.logger, events.HandleCertificates(c.onCertificateUpdate)))
+	c.exchange.On(events.CertificatePatch, events.HandleErrors(c.logger, events.HandleCertificates(c.onCertificateUpdate)))
+	c.exchange.On(events.CertificateDelete, events.HandleErrors(c.logger, events.HandleCertificates(c.onCertificateDelete)))
+
+	// CAs
+	c.exchange.On(events.CertificateAuthorityCreate, events.HandleErrors(c.logger, events.HandleCertificateAuthorities(c.onCertificateAuthorityCreate)))
+	c.exchange.On(events.CertificateAuthorityUpdate, events.HandleErrors(c.logger, events.HandleCertificateAuthorities(c.onCertificateAuthorityUpdate)))
+	c.exchange.On(events.CertificateAuthorityPatch, events.HandleErrors(c.logger, events.HandleCertificateAuthorities(c.onCertificateAuthorityUpdate)))
+	c.exchange.On(events.CertificateAuthorityDelete, events.HandleErrors(c.logger, events.HandleCertificateAuthorities(c.onCertificateAuthorityDelete)))
 
 	// Block until context is cancelled
 	<-ctx.Done()

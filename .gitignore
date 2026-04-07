@@ -4,3 +4,4 @@ bin/
 coverage/
 test/
 multikube.yaml
+e2e/tmp/

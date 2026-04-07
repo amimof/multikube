@@ -73,6 +73,10 @@ func (c *clientV1) Update(ctx context.Context, id string, ctr *credentialv1.Cred
 		return err
 	}
 
+	if ctr.Version == "" {
+		ctr.Version = version.VersionCredential
+	}
+
 	_, err = c.Client.Update(ctx, &credentialv1.UpdateRequest{Uid: uid.UUIDStr(), Name: uid.NameStr(), Credential: ctr})
 	if err != nil {
 		return errs.ToStatus(err)

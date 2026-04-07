@@ -40,21 +40,15 @@ multikube is designed to be fully compatible with existing Kubernetes clients, a
 - Declarative, API-driven configuration (REST, gRPC, CLI)
 - Minimal configuration and no components required on backend clusters
 
-## Planned features
+## Roadmap
 
-- **Web UI**
-- **Resource decoration**
-  - enrich Kubernetes resources with labels such as cluster name, region, etc.
-- **Fine-grained authorization**
-  - example: user `bob` can access only specific resources under specific conditions
-- **Policy enforcement**
-  - prevent insecure or invalid configurations
-- **Cross-cluster indexing**
-  - lightning-fast search across multiple clusters
-- Kubernetes Manifest Compatibility
-  - Configure multikube using CRD's
-- Ingress load balancing
-  - Reverse proxy for ingress controllers
+- **Web UI**: Planned
+- **Resource decoration:** Planned
+- **Fine-grained policy authorization:** Done ✅
+- **Policy enforcement:** Incubating
+- **Cross-cluster indexing:** Planned
+- **Kubernetes Manifest Compatibility:** Incubating
+- **Ingress load balancing:** Planned
 
 ## Getting Started
 

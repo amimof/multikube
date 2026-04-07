@@ -44,16 +44,25 @@ func initConfig() {
 	viper.SetConfigType("yaml")
 }
 
-func withConfig(run func(cmd *cobra.Command, args []string) error) func(cmd *cobra.Command, args []string) error {
+func withConfigWithoutValidation(run func(cmd *cobra.Command, args []string) error) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		if err := loadConfig(); err != nil {
+		if err := loadConfig(false); err != nil {
 			return err
 		}
 		return run(cmd, args)
 	}
 }
 
-func loadConfig() error {
+func withConfig(run func(cmd *cobra.Command, args []string) error) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := loadConfig(true); err != nil {
+			return err
+		}
+		return run(cmd, args)
+	}
+}
+
+func loadConfig(validate bool) error {
 	if err := viper.ReadInConfig(); err != nil {
 		logrus.Fatalf("error reading config: %v", err)
 		return err
@@ -62,9 +71,11 @@ func loadConfig() error {
 		logrus.Fatalf("error decoding config into struct: %v", err)
 		return err
 	}
-	if err := cfg.Validate(); err != nil {
-		logrus.Fatalf("config validation error: %v", err)
-		return err
+	if validate {
+		if err := cfg.Validate(); err != nil {
+			logrus.Fatalf("config validation error: %v", err)
+			return err
+		}
 	}
 	return nil
 }

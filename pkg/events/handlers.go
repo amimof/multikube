@@ -9,6 +9,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
+	cav1 "github.com/amimof/multikube/api/ca/v1"
+	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
 	credentialv1 "github.com/amimof/multikube/api/credential/v1"
 	eventsv1 "github.com/amimof/multikube/api/event/v1"
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
@@ -20,11 +22,13 @@ type Handler interface {
 }
 
 type (
-	HandlerFunc           func(context.Context, *eventsv1.Envelope) error
-	BackendHandlerFunc    func(context.Context, *backendv1.Backend) error
-	CredentialHandlerFunc func(context.Context, *credentialv1.Credential) error
-	RouteHandlerFunc      func(context.Context, *routev1.Route) error
-	PolicyHandlerFunc     func(context.Context, *policyv1.Policy) error
+	HandlerFunc                     func(context.Context, *eventsv1.Envelope) error
+	BackendHandlerFunc              func(context.Context, *backendv1.Backend) error
+	CredentialHandlerFunc           func(context.Context, *credentialv1.Credential) error
+	RouteHandlerFunc                func(context.Context, *routev1.Route) error
+	PolicyHandlerFunc               func(context.Context, *policyv1.Policy) error
+	CertificateHandlerFunc          func(context.Context, *certificatev1.Certificate) error
+	CertificateAuthorityHandlerFunc func(context.Context, *cav1.CertificateAuthority) error
 )
 
 // getCallerInfo gets the file, line, and function name of the caller
@@ -149,6 +153,38 @@ func HandlePolicies(h ...PolicyHandlerFunc) HandlerFunc {
 				return err
 			}
 			if err := ih(ctx, &policy); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func HandleCertificates(h ...CertificateHandlerFunc) HandlerFunc {
+	return func(ctx context.Context, ev *eventsv1.Envelope) error {
+		for _, ih := range h {
+			var certificate certificatev1.Certificate
+			err := ev.GetObject().UnmarshalTo(&certificate)
+			if err != nil {
+				return err
+			}
+			if err := ih(ctx, &certificate); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func HandleCertificateAuthorities(h ...CertificateAuthorityHandlerFunc) HandlerFunc {
+	return func(ctx context.Context, ev *eventsv1.Envelope) error {
+		for _, ih := range h {
+			var cas cav1.CertificateAuthority
+			err := ev.GetObject().UnmarshalTo(&cas)
+			if err != nil {
+				return err
+			}
+			if err := ih(ctx, &cas); err != nil {
 				return err
 			}
 		}
