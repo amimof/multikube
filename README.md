@@ -6,6 +6,10 @@
 
 Multikube is an API-driven HTTP reverse proxy and load balancer for [Kubernetes](http://kubernetes.io/) API server. It sits at the edge, terminates client TLS connections, authenticates and authorizes requests, and forwards them to one or more backend Kubernetes clusters on behalf of the client. The goal is to provide a transparent, compatible way to access multiple clusters through a single control point without having to deploy complicated auth and authz layers in each cluster.
 
+<p align="center">
+  <img src="./images/diagram.gif"/>
+</p>
+
 > **Note**: This project is under active early development and unstable. Features, APIs, and behavior are subject to change at any time and may not be backwards compatible between versions. Expect breaking changes.
 
 ## Why multikube?
