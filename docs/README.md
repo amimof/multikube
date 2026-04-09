@@ -3,7 +3,9 @@
 
 Home of the documentation. Here you will hopefully find everything you need to know about multikube. The documentation is still in progress and content is constantly added. If anything is missing or if you feel something can be improved/added then let me know.
 
+- [Design](/docs/design.md)
 - [Getting Started](/docs/getting-started.md)
+- [User Guide](/docs/user-guide.md)
 - Installation
   - [Docker](/docs/installation/docker.md)
   - [Kubernetes](/docs/installation/kubernetes.md)

@@ -33,7 +33,10 @@ var (
 	}
 )
 
-var cfg client.Config
+var (
+	cfg       client.Config
+	clientSet *client.ClientSet
+)
 
 func init() {
 	cobra.OnInitialize(initConfig)
@@ -60,6 +63,26 @@ func withConfig(run func(cmd *cobra.Command, args []string) error) func(cmd *cob
 		}
 		return run(cmd, args)
 	}
+}
+
+func withClientSet(run func(cmd *cobra.Command, args []string) error) func(cmd *cobra.Command, args []string) error {
+	return withConfig(func(cmd *cobra.Command, args []string) error {
+		currentSrv, err := cfg.CurrentServer()
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		clientSet, err = client.New(currentSrv.Address, client.WithTLSConfigFromCfg(&cfg))
+		if err != nil {
+			logrus.Fatalf("error setting up client: %v", err)
+			return err
+		}
+		defer func() {
+			if err := clientSet.Close(); err != nil {
+				logrus.Fatalf("error closing client connection: %v", err)
+			}
+		}()
+		return run(cmd, args)
+	})
 }
 
 func loadConfig(validate bool) error {
@@ -114,10 +137,12 @@ func main() {
 	rootCmd.AddCommand(newGetCmd(&cfg))
 	rootCmd.AddCommand(newCreateCmd(&cfg))
 	rootCmd.AddCommand(newDeleteCmd(&cfg))
+	rootCmd.AddCommand(newEditCmd())
 	rootCmd.AddCommand(newImportCmd(&cfg))
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newKubeconfigCmd())
+	rootCmd.AddCommand(newApplyCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

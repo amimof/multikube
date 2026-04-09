@@ -97,5 +97,4 @@ Multikubectl reads it's configuration from a yaml file located at `~/.multikube/
 
 ## Next Steps
 
-- For a more detailed installation guide see the [Installation Guide](/docs/installation/README.md).
-- To learn more read the [Documentation](/docs/README.md)
+Read the [User Guide](/docs/user-guide.md) to learn how to use Multikube in a real world scenario. To learn more read the [Documentation](/docs/README.md)
