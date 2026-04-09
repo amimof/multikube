@@ -7,14 +7,12 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/cmdutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"go.opentelemetry.io/otel"
 )
 
-func newGetCACmd(cfg *client.Config) *cobra.Command {
+func newGetCACmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "ca [NAME]",
 		Short:   "Get certificate authorities",
@@ -22,10 +20,13 @@ func newGetCACmd(cfg *client.Config) *cobra.Command {
 		Aliases: []string{"cas"},
 		Args:    cobra.MaximumNArgs(1),
 		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
+			defer cancel()
+
 			if len(args) == 1 {
-				return runGetCACmd(cmd, cfg, args[0])
+				return runGetCACmd(ctx, cmd, args[0])
 			}
-			return runListCAsCmd(cmd, cfg)
+			return runListCAsCmd(ctx, cmd)
 		}),
 	}
 	return cmd
@@ -33,30 +34,8 @@ func newGetCACmd(cfg *client.Config) *cobra.Command {
 
 // runCertificateAuthorityCmd lists all cas registered with the multikube API server
 // and prints them as a formatted table to stdout.
-func runGetCACmd(cmd *cobra.Command, cfg *client.Config, name string) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
-	tracer := otel.Tracer("multikubectl")
-	ctx, span := tracer.Start(ctx, "multikubectl.ca.list")
-	defer span.End()
-
-	// Setup client
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
-	lease, err := c.CAV1().Get(ctx, name)
+func runGetCACmd(ctx context.Context, cmd *cobra.Command, name string) error {
+	lease, err := clientSet.CAV1().Get(ctx, name)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -78,32 +57,11 @@ func runGetCACmd(cmd *cobra.Command, cfg *client.Config, name string) error {
 
 // runListCAsCmd lists all cas registered with the multikube API server
 // and prints them as a formatted table to stdout.
-func runListCAsCmd(cmd *cobra.Command, cfg *client.Config) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
-	tracer := otel.Tracer("multikubectl")
-	ctx, span := tracer.Start(ctx, "multikubectl.ca.list")
-	defer span.End()
-
-	// Setup client
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
+func runListCAsCmd(ctx context.Context, cmd *cobra.Command) error {
 	// Setup writer
 	wr := tabwriter.NewWriter(os.Stdout, 8, 8, 8, '\t', tabwriter.AlignRight)
 
-	tasks, err := c.CAV1().List(ctx)
+	tasks, err := clientSet.CAV1().List(ctx)
 	if err != nil {
 		logrus.Fatal(err)
 	}

@@ -7,14 +7,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/cmdutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 )
 
-func newGetCertificateCmd(cfg *client.Config) *cobra.Command {
+func newGetCertificateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "certificate [NAME]",
 		Aliases: []string{"cert", "certs", "certificates"},
@@ -22,10 +21,12 @@ func newGetCertificateCmd(cfg *client.Config) *cobra.Command {
 		Long:    `Retrieve and display certificates`,
 		Args:    cobra.MaximumNArgs(1),
 		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
+			defer cancel()
 			if len(args) == 1 {
-				return runGetCertificateCmd(cmd, cfg, args[0])
+				return runGetCertificateCmd(ctx, cmd, args[0])
 			}
-			return runListCertificatesCmd(cmd, cfg)
+			return runListCertificatesCmd(ctx, cmd)
 		}),
 	}
 	return cmd
@@ -33,30 +34,12 @@ func newGetCertificateCmd(cfg *client.Config) *cobra.Command {
 
 // runCertificateCmd lists all certificates registered with the multikube API server
 // and prints them as a formatted table to stdout.
-func runGetCertificateCmd(cmd *cobra.Command, cfg *client.Config, name string) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
+func runGetCertificateCmd(ctx context.Context, cmd *cobra.Command, name string) error {
 	tracer := otel.Tracer("multikubectl")
 	ctx, span := tracer.Start(ctx, "multikubectl.certificate.list")
 	defer span.End()
 
-	// Setup client
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
-	lease, err := c.CertificateV1().Get(ctx, name)
+	lease, err := clientSet.CertificateV1().Get(ctx, name)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -78,32 +61,15 @@ func runGetCertificateCmd(cmd *cobra.Command, cfg *client.Config, name string) e
 
 // runListCertificatesCmd lists all certificates registered with the multikube API server
 // and prints them as a formatted table to stdout.
-func runListCertificatesCmd(cmd *cobra.Command, cfg *client.Config) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
+func runListCertificatesCmd(ctx context.Context, cmd *cobra.Command) error {
 	tracer := otel.Tracer("multikubectl")
 	ctx, span := tracer.Start(ctx, "multikubectl.certificate.list")
 	defer span.End()
 
-	// Setup client
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
 	// Setup writer
 	wr := tabwriter.NewWriter(os.Stdout, 8, 8, 8, '\t', tabwriter.AlignRight)
 
-	tasks, err := c.CertificateV1().List(ctx)
+	tasks, err := clientSet.CertificateV1().List(ctx)
 	if err != nil {
 		logrus.Fatal(err)
 	}

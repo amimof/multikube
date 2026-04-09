@@ -21,9 +21,6 @@ multikube create backend default-backend
 multikube create routes
 `,
 		Args: cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
-			return runListBackendsCmd(cmd, cfg)
-		}),
 	}
 
 	cmd.AddCommand(newCreateBackendCmd(cfg))

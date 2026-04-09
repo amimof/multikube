@@ -7,14 +7,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/cmdutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 )
 
-func newGetPolicyCmd(cfg *client.Config) *cobra.Command {
+func newGetPolicyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "policy [NAME]",
 		Short:   "Get policies",
@@ -22,38 +21,23 @@ func newGetPolicyCmd(cfg *client.Config) *cobra.Command {
 		Aliases: []string{"policies"},
 		Args:    cobra.MaximumNArgs(1),
 		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
+			defer cancel()
 			if len(args) == 1 {
-				return runGetPolicyCmd(cmd, cfg, args[0])
+				return runGetPolicyCmd(ctx, cmd, args[0])
 			}
-			return runListPoliciesCmd(cmd, cfg)
+			return runListPoliciesCmd(ctx, cmd)
 		}),
 	}
 	return cmd
 }
 
-func runGetPolicyCmd(cmd *cobra.Command, cfg *client.Config, name string) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
+func runGetPolicyCmd(ctx context.Context, cmd *cobra.Command, name string) error {
 	tracer := otel.Tracer("multikubectl")
 	ctx, span := tracer.Start(ctx, "multikubectl.policy.get")
 	defer span.End()
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
-	policy, err := c.PolicyV1().Get(ctx, name)
+	policy, err := clientSet.PolicyV1().Get(ctx, name)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -73,31 +57,14 @@ func runGetPolicyCmd(cmd *cobra.Command, cfg *client.Config, name string) error 
 	return nil
 }
 
-func runListPoliciesCmd(cmd *cobra.Command, cfg *client.Config) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
+func runListPoliciesCmd(ctx context.Context, cmd *cobra.Command) error {
 	tracer := otel.Tracer("multikubectl")
 	ctx, span := tracer.Start(ctx, "multikubectl.policy.list")
 	defer span.End()
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
 	wr := tabwriter.NewWriter(os.Stdout, 8, 8, 8, '\t', tabwriter.AlignRight)
 
-	policies, err := c.PolicyV1().List(ctx)
+	policies, err := clientSet.PolicyV1().List(ctx)
 	if err != nil {
 		logrus.Fatal(err)
 	}

@@ -7,14 +7,13 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/cmdutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 )
 
-func newGetRouteCmd(cfg *client.Config) *cobra.Command {
+func newGetRouteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "route [NAME]",
 		Short:   "Get routes",
@@ -22,40 +21,24 @@ func newGetRouteCmd(cfg *client.Config) *cobra.Command {
 		Aliases: []string{"routes"},
 		Args:    cobra.MaximumNArgs(1),
 		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
+			defer cancel()
 			if len(args) == 1 {
-				return runGetRouteCmd(cmd, cfg, args[0])
+				return runGetRouteCmd(ctx, cmd, args[0])
 			}
-			return runListRoutesCmd(cmd, cfg)
+			return runListRoutesCmd(ctx, cmd)
 		}),
 	}
 	return cmd
 }
 
 // runRouteCmd lists all routes registered with the server
-func runGetRouteCmd(cmd *cobra.Command, cfg *client.Config, name string) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
+func runGetRouteCmd(ctx context.Context, cmd *cobra.Command, name string) error {
 	tracer := otel.Tracer("multikubectl")
 	ctx, span := tracer.Start(ctx, "multikubectl.route.list")
 	defer span.End()
 
-	// Setup client
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
-	lease, err := c.RouteV1().Get(ctx, name)
+	lease, err := clientSet.RouteV1().Get(ctx, name)
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -76,31 +59,14 @@ func runGetRouteCmd(cmd *cobra.Command, cfg *client.Config, name string) error {
 }
 
 // runRouteListCmd lists all routes registered with the server
-func runListRoutesCmd(cmd *cobra.Command, cfg *client.Config) error {
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
-	defer cancel()
-
+func runListRoutesCmd(ctx context.Context, cmd *cobra.Command) error {
 	tracer := otel.Tracer("multikubectl")
 	ctx, span := tracer.Start(ctx, "multikubectl.route.list")
 	defer span.End()
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
 	wr := tabwriter.NewWriter(os.Stdout, 8, 8, 8, '\t', tabwriter.AlignRight)
 
-	routes, err := c.RouteV1().List(ctx)
+	routes, err := clientSet.RouteV1().List(ctx)
 	if err != nil {
 		logrus.Fatal(err)
 	}
