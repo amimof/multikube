@@ -1,11 +1,10 @@
 package main
 
 import (
-	"github.com/amimof/multikube/pkg/client"
 	"github.com/spf13/cobra"
 )
 
-func newGetCmd(cfg *client.Config) *cobra.Command {
+func newGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "Get resources",

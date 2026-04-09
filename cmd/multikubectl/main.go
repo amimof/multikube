@@ -134,7 +134,7 @@ func main() {
 	rootCmd.PersistentFlags().BoolVar(&insecure, "insecure", false, "Skip TLS certificate verification")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "number for the log level verbosity (debug, info, warn, error, fatal, panic)")
 
-	rootCmd.AddCommand(newGetCmd(&cfg))
+	rootCmd.AddCommand(newGetCmd())
 	rootCmd.AddCommand(newCreateCmd(&cfg))
 	rootCmd.AddCommand(newDeleteCmd(&cfg))
 	rootCmd.AddCommand(newEditCmd())

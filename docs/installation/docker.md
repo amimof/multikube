@@ -7,7 +7,7 @@ docker run -d \
   --name multikube \
   -p 5743:5743 \
   -p 8443:8443 \
-  -v multikube-data:/.local/state/multiUserCacheDirkube  \
+  -v multikube-data:/.local/state/multikube  \
   multikube:latest
 ```
 

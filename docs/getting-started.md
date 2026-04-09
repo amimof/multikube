@@ -27,8 +27,8 @@ This guide walks you through running a single-instance containerized Multikube c
      --name multikube \
      -p 5743:5743 \
      -p 8443:8443 \
-     -v multikube-data:/.local/state/multiUserCacheDirkube  \
-     multikube:latest
+     -v multikube-data:/.local/state/multikube  \
+     ghcr.io/amimof/multikube:latest
    ```
 
 ## Downloading and Installing the CLI

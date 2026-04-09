@@ -30,7 +30,25 @@ Make sure these are already available:
 - `kubectl`
 - `curl`
 
-You also need a running Multikube control plane and a working `multikubectl` config.
+You also need a running Multikube control plane and a working `multikubectl` config. Read the [getting started guide](/docs/getting-started.md) to learn how to set it up.
+
+If you are running multikube in Docker then you must join the multikube container to the kind network. Otherwise multikube will not be able to communicate with the kubernetes clusters. If multikube is already running then you can run this command to join multikube to the `kind` network:
+
+```bash
+docker network connect kind multikube
+```
+
+If multikube is not setup and you want to run it with docker, use `--network kind` flag
+
+```bash
+docker run -d \
+  --name multikube \
+  --network kind  \
+  -p 5743:5743 \
+  -p 8443:8443 \
+  -v multikube-data:/.local/state/multikube  \
+  multikube:latest
+```
 
 ## 1: Create two local clusters with kind
 
@@ -62,11 +80,22 @@ kubectl --context kind-demo-west create namespace west-demo
 
 ## 3: Import both clusters
 
+The `import` command is very useful when you want to create multikube resources from a kubeconfig. It reads the provided kubeconfig and imports a `context` into multikube creating `backend`, `certificate`, `ca` and `credentials` resource.
+
+> A note on kind: Multikube accesses kind clusters through the docker network so we can't import the kubeconfig that kind created when creating the clusters. To create kubeconfigs that can be used from inside other docker containers we have to use the `--internal` flag.
+
+Create an `internal` kubeconfig file per cluster that we import into multikube later
+
+```bash
+kind get kubeconfig --internal --name demo-east > ~/.kube/demo-east.yaml
+kind get kubeconfig --internal --name demo-west > ~/.kube/demo-west.yaml
+```
+
 Import the two `kind` contexts and give them easy-to-remember backend names:
 
 ```bash
-multikubectl import kind-demo-east --backend-name east-cluster
-multikubectl import kind-demo-west --backend-name west-cluster
+multikubectl import kind-demo-east --backend-name east-cluster --kubeconfig ~/.kube/demo-east.yaml
+multikubectl import kind-demo-west --backend-name west-cluster --kubeconfig ~/.kube/demo-west.yaml
 ```
 
 > If you re-run the guide and the resources already exist, use `--force` to overwrite existing resources

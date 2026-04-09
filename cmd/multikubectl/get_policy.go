@@ -20,7 +20,7 @@ func newGetPolicyCmd() *cobra.Command {
 		Long:    `Retrieve and display policies`,
 		Aliases: []string{"policies"},
 		Args:    cobra.MaximumNArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
 			defer cancel()
 			if len(args) == 1 {

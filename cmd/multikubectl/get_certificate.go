@@ -20,7 +20,7 @@ func newGetCertificateCmd() *cobra.Command {
 		Short:   "Get certificates",
 		Long:    `Retrieve and display certificates`,
 		Args:    cobra.MaximumNArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
 			defer cancel()
 			if len(args) == 1 {

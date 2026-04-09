@@ -76,6 +76,6 @@ spec:
           imagePullPolicy: Always
           volumeMounts:
             - name: multikube-data
-              mountPath: "/.local/state/multiUserCacheDirkube"
+              mountPath: "/.local/state/multikube"
       serviceAccount: multikube
       serviceAccountName: multikube

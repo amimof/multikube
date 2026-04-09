@@ -24,7 +24,7 @@ func (c *Controller) runHeartbeat(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if err := c.heartbeat(); err != nil {
-				c.logger.Error("heartbeat failed: %w", err)
+				c.logger.Error("heartbeat failed", "error", err)
 			}
 		case <-ctx.Done():
 			ticker.Stop()
@@ -40,7 +40,7 @@ func (c *Controller) heartbeat() error {
 		for _, target := range pool.Targets {
 			go func(br *proxy.BackendRuntime) {
 				if err := c.heartbeatSingle(br); err != nil {
-					c.logger.Error("heartbeat failed for target %s: %w", target.URL, err)
+					c.logger.Error("heartbeat reported unhealthy", "error", err, "backend", target.Name, "target", target.URL.String())
 				}
 			}(target)
 		}
@@ -72,7 +72,7 @@ func (c *Controller) heartbeatSingle(be *proxy.BackendRuntime) error {
 		_ = resp.Body.Close()
 	}()
 	if resp.StatusCode != http.StatusOK {
-		c.logger.Debug("heartbeat returned non-ok response: %d - %s", resp.StatusCode, resp.Status)
+		c.logger.Debug("heartbeat returned non-ok response", "code", resp.StatusCode, "status", resp.Status)
 		_ = c.setTargetUnhealthy(be, resp.Status)
 		return nil
 	}

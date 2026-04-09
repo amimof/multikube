@@ -124,7 +124,7 @@ func init() {
 		panic(fmt.Errorf("could not determine cache directory: %w", err))
 	}
 
-	defaultStatePath := filepath.Join(home, ".local", "state", "multiUserCacheDirkube")
+	defaultStatePath := filepath.Join(home, ".local", "state", "multikube")
 	defaultSocketPath := filepath.Join(cacheDir, "multikube.sock")
 
 	pflag.StringVar(&socketPath, "socket-path", defaultSocketPath, "the unix socket to listen on")
