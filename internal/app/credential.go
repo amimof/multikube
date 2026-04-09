@@ -125,13 +125,13 @@ func (l *CredentialService) Patch(ctx context.Context, id keys.ID, patch *creden
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existing.GetConfig(), credential.GetConfig())
+	equal, err := protoutils.SpecEqual(existing.GetConfig(), credential.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.CredentialPatch, credential))
 		if err != nil {
 			l.Logger.Error("error publishing credential patch event", "error", err, "name", existing.GetMeta().GetName())
@@ -162,13 +162,13 @@ func (l *CredentialService) Update(ctx context.Context, id keys.ID, credential *
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existingCredential.GetConfig(), updated.GetConfig())
+	equal, err := protoutils.SpecEqual(existingCredential.GetConfig(), updated.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		l.Logger.Debug("credential was updated, emitting event to listeners", "event", "CredentialUpdate", "name", updated.GetMeta().GetName())
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.CredentialUpdate, updated))
 		if err != nil {

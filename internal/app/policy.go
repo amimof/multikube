@@ -116,12 +116,12 @@ func (l *PolicyService) Patch(ctx context.Context, id keys.ID, patch *policyv1.P
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existing.GetConfig(), policy.GetConfig())
+	equal, err := protoutils.SpecEqual(existing.GetConfig(), policy.GetConfig())
 	if err != nil {
 		return err
 	}
 
-	if changed {
+	if !equal {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.PolicyPatch, policy))
 		if err != nil {
 			l.Logger.Error("error publishing policy patch event", "error", err, "name", existing.GetMeta().GetName())
@@ -150,12 +150,12 @@ func (l *PolicyService) Update(ctx context.Context, id keys.ID, policy *policyv1
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existingPolicy.GetConfig(), updated.GetConfig())
+	equal, err := protoutils.SpecEqual(existingPolicy.GetConfig(), updated.GetConfig())
 	if err != nil {
 		return err
 	}
 
-	if changed {
+	if !equal {
 		l.Logger.Debug("policy was updated, emitting event to listeners", "event", "PolicyUpdate", "name", updated.GetMeta().GetName())
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.PolicyUpdate, updated))
 		if err != nil {

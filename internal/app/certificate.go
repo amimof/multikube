@@ -123,13 +123,13 @@ func (l *CertificateService) Patch(ctx context.Context, id keys.ID, patch *certv
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existing.GetConfig(), certificate.GetConfig())
+	equal, err := protoutils.SpecEqual(existing.GetConfig(), certificate.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.CertificatePatch, certificate))
 		if err != nil {
 			l.Logger.Error("error publishing certificate patch event", "error", err, "name", existing.GetMeta().GetName())
@@ -160,13 +160,13 @@ func (l *CertificateService) Update(ctx context.Context, id keys.ID, certificate
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existingCertificate.GetConfig(), updated.GetConfig())
+	equal, err := protoutils.SpecEqual(existingCertificate.GetConfig(), updated.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		l.Logger.Debug("certificate was updated, emitting event to listeners", "event", "CertificateUpdate", "name", updated.GetMeta().GetName())
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.CertificateUpdate, updated))
 		if err != nil {

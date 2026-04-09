@@ -14,7 +14,7 @@
     - [7b. Route to the west cluster](#7b-route-to-the-west-cluster)
     - [7c. List namespaces through either route](#7c-list-namespaces-through-either-route)
   - [8: Test policy enforcement with curl](#8-test-policy-enforcement-with-curl)
-  - [Step 10: Try a request without a token](#step-10-try-a-request-without-a-token)
+  - [9: Try a request without a token](#9-try-a-request-without-a-token)
   - [Clean up](#clean-up)
 <!--toc:end-->
 
@@ -265,7 +265,7 @@ The request should be denied.
 
 In most setups you should see an HTTP `403 Forbidden` response, because the deny policy matches before any allow rule can permit the request.
 
-## Step 10: Try a request without a token
+## 9: Try a request without a token
 
 Policies are evaluated against the authenticated principal. If you omit the bearer token, the request should not be authorized.
 

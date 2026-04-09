@@ -163,13 +163,13 @@ func (l *BackendService) Patch(ctx context.Context, id keys.ID, patch *backendv1
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existing.GetConfig(), volume.GetConfig())
+	equal, err := protoutils.SpecEqual(existing.GetConfig(), volume.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.BackendPatch, volume))
 		if err != nil {
 			l.Logger.Error("error publishing volume patch event", "error", err, "name", existing.GetMeta().GetName())
@@ -200,13 +200,13 @@ func (l *BackendService) Update(ctx context.Context, id keys.ID, volume *backend
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existingVolume.GetConfig(), updated.GetConfig())
+	equal, err := protoutils.SpecEqual(existingVolume.GetConfig(), updated.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		l.Logger.Debug("volume was updated, emitting event to listeners", "event", "VolumeUpdate", "name", updated.GetMeta().GetName())
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.BackendUpdate, updated))
 		if err != nil {

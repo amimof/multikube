@@ -336,14 +336,14 @@ func (r *Repo[T]) Create(ctx context.Context, resource T) (T, error) {
 			return ErrIdxExists
 		}
 
-		changed, err := protoutils.SpecEqual(existing, resource)
+		equal, err := protoutils.SpecEqual(existing, resource)
 		if err != nil {
 			return err
 		}
 
 		protoutils.EnsureMessageField(resource, "status")
 
-		if changed {
+		if !equal {
 			resource.GetMeta().Generation++
 		}
 

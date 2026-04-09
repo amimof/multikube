@@ -123,13 +123,13 @@ func (l *CertificateAuthorityService) Patch(ctx context.Context, id keys.ID, pat
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existing.GetConfig(), ca.GetConfig())
+	equal, err := protoutils.SpecEqual(existing.GetConfig(), ca.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.CertificateAuthorityPatch, ca))
 		if err != nil {
 			l.Logger.Error("error publishing ca patch event", "error", err, "name", existing.GetMeta().GetName())
@@ -160,13 +160,13 @@ func (l *CertificateAuthorityService) Update(ctx context.Context, id keys.ID, ca
 		return err
 	}
 
-	changed, err := protoutils.SpecEqual(existingCert.GetConfig(), updated.GetConfig())
+	equal, err := protoutils.SpecEqual(existingCert.GetConfig(), updated.GetConfig())
 	if err != nil {
 		return err
 	}
 
 	// Only publish if spec is updated
-	if changed {
+	if !equal {
 		l.Logger.Debug("ca was updated, emitting event to listeners", "event", "CertificateAuthorityUpdate", "name", updated.GetMeta().GetName())
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.CertificateAuthorityUpdate, updated))
 		if err != nil {
