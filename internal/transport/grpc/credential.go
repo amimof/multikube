@@ -8,6 +8,7 @@ import (
 
 	"github.com/amimof/multikube/internal/app"
 	"github.com/amimof/multikube/pkg/keys"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
 	credentialv1 "github.com/amimof/multikube/api/credential/v1"
 )
@@ -21,6 +22,10 @@ type CredentialService struct {
 
 func (n *CredentialService) Register(server *grpc.Server) {
 	credentialv1.RegisterCredentialServiceServer(server, n)
+}
+
+func (n *CredentialService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
+	credentialv1.RegisterCredentialServiceHandler(ctx, mux, conn)
 }
 
 func (n *CredentialService) Get(ctx context.Context, req *credentialv1.GetRequest) (*credentialv1.GetResponse, error) {

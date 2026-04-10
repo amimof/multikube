@@ -8,6 +8,7 @@ import (
 
 	"github.com/amimof/multikube/internal/app"
 	"github.com/amimof/multikube/pkg/keys"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
 	cav1 "github.com/amimof/multikube/api/ca/v1"
 )
@@ -21,6 +22,10 @@ type CertificateAuthorityService struct {
 
 func (n *CertificateAuthorityService) Register(server *grpc.Server) {
 	cav1.RegisterCertificateAuthorityServiceServer(server, n)
+}
+
+func (n *CertificateAuthorityService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
+	cav1.RegisterCertificateAuthorityServiceHandler(ctx, mux, conn)
 }
 
 func (n *CertificateAuthorityService) Get(ctx context.Context, req *cav1.GetRequest) (*cav1.GetResponse, error) {

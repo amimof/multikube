@@ -22,7 +22,7 @@ func init() {
 	grpclog.SetLoggerV2(grpclog.NewLoggerV2(io.Discard, io.Discard, io.Discard))
 }
 
-type Service interface {
+type GrpcService interface {
 	Register(*grpc.Server)
 }
 
@@ -103,7 +103,7 @@ func (s *Server) ForceShutdown() {
 	s.grpcServer.Stop()
 }
 
-func (s *Server) RegisterService(svcs ...Service) {
+func (s *Server) RegisterService(svcs ...GrpcService) {
 	for _, svc := range svcs {
 		svc.Register(s.grpcServer)
 	}

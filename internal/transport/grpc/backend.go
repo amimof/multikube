@@ -8,6 +8,7 @@ import (
 
 	"github.com/amimof/multikube/internal/app"
 	"github.com/amimof/multikube/pkg/keys"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 )
@@ -21,6 +22,10 @@ type BackendService struct {
 
 func (n *BackendService) Register(server *grpc.Server) {
 	backendv1.RegisterBackendServiceServer(server, n)
+}
+
+func (n *BackendService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
+	backendv1.RegisterBackendServiceHandler(ctx, mux, conn)
 }
 
 func (n *BackendService) Get(ctx context.Context, req *backendv1.GetRequest) (*backendv1.GetResponse, error) {

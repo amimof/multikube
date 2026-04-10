@@ -28,7 +28,6 @@ import (
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/controller"
 	"github.com/amimof/multikube/pkg/events"
-	"github.com/amimof/multikube/pkg/proxy"
 	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
 	"github.com/amimof/multikube/pkg/repository"
 	"github.com/amimof/multikube/pkg/server"
@@ -69,6 +68,7 @@ var (
 	serverAddress  string
 	metricsAddress string
 	proxyAddress   string
+	gatewayAddress string
 
 	listenLimit  int
 	keepAlive    time.Duration
@@ -131,6 +131,7 @@ func init() {
 	pflag.StringVar(&serverAddress, "server-address", "0.0.0.0:5743", "Address to listen the TCP server on")
 	pflag.StringVar(&metricsAddress, "metrics-address", "0.0.0.0:8888", "Address to listen the metrics server on")
 	pflag.StringVar(&proxyAddress, "proxy-address", "0.0.0.0:8443", "Address to listen the http proxy server on")
+	pflag.StringVar(&gatewayAddress, "gateway-address", "0.0.0.0:6443", "Address to listen the http gateway server on")
 	pflag.StringVar(&tlsCertificate, "tls-certificate", "", "the certificate to use for secure connections")
 	pflag.StringVar(&tlsCertificateKey, "tls-key", "", "the private key to use for secure conections")
 	pflag.StringVar(&tlsCACertificate, "tls-ca", "", "the certificate authority file to be used with mutual tls auth")
@@ -290,6 +291,7 @@ func main() {
 	}
 
 	var serverOpts []transport.NewServerOption
+	var gatewayOpts []transport.NewGatewayOption
 
 	// Load in certificates either from flags or auto-generated
 	cert, err := generateCertificates()
@@ -301,6 +303,14 @@ func main() {
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
+
+	tlsConfigGw := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+	gatewayOpts = append(gatewayOpts,
+		transport.WithTLSConfig(tlsConfig),
+		transport.WithGrpcDialOption(grpc.WithTransportCredentials(credentials.NewTLS(tlsConfigGw))),
+	)
 
 	// Enable mTLS for gRPC server, if CA cert provided
 	if tlsCACertificate != "" {
@@ -362,6 +372,32 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Used by clientset and the gateway to connect internally
+	socketAddr := fmt.Sprintf("unix:///%s", socketPath)
+
+	// Setup gateway
+	gw, err := transport.NewGateway(
+		ctx,
+		socketAddr,
+		transport.DefaultMux,
+		gatewayOpts...,
+	)
+	if err != nil {
+		log.Error("error setting up gateway", "error", err)
+		os.Exit(1)
+	}
+	gw.RegisterService(ctx,
+		backendService,
+		caService,
+		certService,
+		routeService,
+		policyService,
+		credentialService,
+		tokenService,
+	)
+
+	go serveGateway(gatewayAddress, gw, errChan)
+
 	// Only allow one of the flags rs256-public-key and oidc-issuer-url
 	// TODO: Remove these from flags. They are now in the API instead
 	if rs256PublicKey != "" && oidcIssuerURL != "" {
@@ -372,8 +408,6 @@ func main() {
 	go serveTCP(serverAddress, srv, errChan)
 	go serveUnix(srv, errChan)
 
-	// Used by clientset and the gateway to connect internally
-	socketAddr := fmt.Sprintf("unix:///%s", socketPath)
 
 	// Setup a clientset for the controllers
 	cs, err := client.New(socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}), client.WithGrpcDialOption(grpc.WithAuthority("localhost")))
@@ -386,34 +420,6 @@ func main() {
 			log.Error("error closing clientset connection", "error", err)
 		}
 	}()
-
-	// Create the proxy
-	p, err := proxy.New(nil)
-	if err != nil {
-		log.Error("error setting up proxy", "error", err)
-		os.Exit(1)
-	}
-	p.CacheTTL(cacheTTL)
-
-	p.Use(
-		proxy.WithEmpty(),
-		proxy.WithLogging(),
-		proxy.WithJWT(),
-		proxy.WithHeader(),
-	)
-
-	// Add JWK validation middleware if issuer url is provided on cmd line
-	if oidcIssuerURL != "" {
-		oidcConfig := proxy.OIDCConfig{
-			OIDCIssuerURL:          oidcIssuerURL,
-			OIDCPollInterval:       oidcPollInterval,
-			OIDCUsernameClaim:      oidcUsernameClaim,
-			OIDCInsecureSkipVerify: oidcInsecureSkipVerify,
-			OIDCCa:                 readCert(oidcCaFile),
-		}
-		// middlewares = append(middlewares, proxy.WithOIDC(oidcConfig))
-		p.Use(proxy.WithOIDC(oidcConfig))
-	}
 
 	// Setup controller
 	runtimeStore := proxyv2.NewRuntimeStore()
@@ -462,7 +468,6 @@ func main() {
 		TLSReadTimeout:   tlsReadTimeout,
 		TLSWriteTimeout:  tlsWriteTimeout,
 		Logger:           log,
-		// Handler:          p.Chain(),
 		Handler: handler,
 	}
 
@@ -547,21 +552,6 @@ func readCert(p string) *x509.Certificate {
 	return cert
 }
 
-// Reads a RSA public key file from the filesystem and parses it into an instance of rsa.PublicKey
-// func readPublicKey(p string) *rsa.PublicKey {
-// 	f, err := os.ReadFile(p)
-// 	if err != nil {
-// 		log.Error("error reading public keyl", "error", err)
-// 		return nil
-// 	}
-// 	pubkey, err := crypto.ParseRSAPublicKeyFromPEM(f)
-// 	if err != nil {
-// 		log.Error("error parsing rsa public key from pem", "error", err)
-// 		return nil
-// 	}
-// 	return pubkey
-// }
-
 func serveUnix(s *transport.Server, errChan chan error) {
 	// Remove the socket file if it already exists
 	if _, err := os.Stat(socketPath); err == nil {
@@ -609,6 +599,19 @@ func serveProxyServer(ps *server.Server, errChan chan error) {
 	err := ps.Serve()
 	if err != nil {
 		errChan <- fmt.Errorf("error serving proxy: %v", err)
+		return
+	}
+}
+
+func serveGateway(addr string, gw *transport.Gateway, errChan chan error) {
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		errChan <- fmt.Errorf("error creating gateway listener: %v", err)
+		return
+	}
+	log.Info("gateway listening", "address", addr)
+	if err := gw.ServeTLS(l, tlsCertificate, tlsCertificateKey); err != nil {
+		errChan <- fmt.Errorf("error serving gateway: %v", err)
 		return
 	}
 }

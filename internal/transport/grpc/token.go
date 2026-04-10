@@ -8,6 +8,7 @@ import (
 
 	"github.com/amimof/multikube/internal/app"
 	"github.com/amimof/multikube/pkg/keys"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
 	tokenv1 "github.com/amimof/multikube/api/token/v1"
 )
@@ -21,6 +22,10 @@ type TokenService struct {
 
 func (n *TokenService) Register(server *grpc.Server) {
 	tokenv1.RegisterTokenServiceServer(server, n)
+}
+
+func (n *TokenService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
+	tokenv1.RegisterTokenServiceHandler(ctx, mux, conn)
 }
 
 func (n *TokenService) Issue(ctx context.Context, req *tokenv1.IssueRequest) (*tokenv1.IssueResponse, error) {

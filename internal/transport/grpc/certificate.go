@@ -8,6 +8,7 @@ import (
 
 	"github.com/amimof/multikube/internal/app"
 	"github.com/amimof/multikube/pkg/keys"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
 	certv1 "github.com/amimof/multikube/api/certificate/v1"
 )
@@ -21,6 +22,10 @@ type CertificateService struct {
 
 func (n *CertificateService) Register(server *grpc.Server) {
 	certv1.RegisterCertificateServiceServer(server, n)
+}
+
+func (n *CertificateService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
+	certv1.RegisterCertificateServiceHandler(ctx, mux, conn)
 }
 
 func (n *CertificateService) Get(ctx context.Context, req *certv1.GetRequest) (*certv1.GetResponse, error) {

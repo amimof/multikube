@@ -8,6 +8,7 @@ import (
 
 	"github.com/amimof/multikube/internal/app"
 	"github.com/amimof/multikube/pkg/keys"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
 )
@@ -21,6 +22,10 @@ type PolicyService struct {
 
 func (n *PolicyService) Register(server *grpc.Server) {
 	policyv1.RegisterPolicyServiceServer(server, n)
+}
+
+func (n *PolicyService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
+	policyv1.RegisterPolicyServiceHandler(ctx, mux, conn)
 }
 
 func (n *PolicyService) Get(ctx context.Context, req *policyv1.GetRequest) (*policyv1.GetResponse, error) {
