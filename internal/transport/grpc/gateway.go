@@ -15,7 +15,7 @@ import (
 var DefaultMux = runtime.NewServeMux(runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{MarshalOptions: protojson.MarshalOptions{EmitUnpopulated: true}}))
 
 type GatewayService interface {
-	RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn)
+	RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error
 }
 
 type Gateway struct {
@@ -57,10 +57,13 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (g *Gateway) RegisterService(ctx context.Context, svcs ...GatewayService) {
+func (g *Gateway) RegisterService(ctx context.Context, svcs ...GatewayService) error {
 	for _, svc := range svcs {
-		svc.RegisterHandler(ctx, g.mux, g.conn)
+		if err := svc.RegisterHandler(ctx, g.mux, g.conn); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func NewGateway(ctx context.Context, addr string, mux *runtime.ServeMux, opts ...NewGatewayOption) (*Gateway, error) {

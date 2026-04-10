@@ -24,8 +24,8 @@ func (n *CertificateAuthorityService) Register(server *grpc.Server) {
 	cav1.RegisterCertificateAuthorityServiceServer(server, n)
 }
 
-func (n *CertificateAuthorityService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
-	cav1.RegisterCertificateAuthorityServiceHandler(ctx, mux, conn)
+func (n *CertificateAuthorityService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return cav1.RegisterCertificateAuthorityServiceHandler(ctx, mux, conn)
 }
 
 func (n *CertificateAuthorityService) Get(ctx context.Context, req *cav1.GetRequest) (*cav1.GetResponse, error) {

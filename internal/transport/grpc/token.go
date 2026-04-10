@@ -24,8 +24,8 @@ func (n *TokenService) Register(server *grpc.Server) {
 	tokenv1.RegisterTokenServiceServer(server, n)
 }
 
-func (n *TokenService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
-	tokenv1.RegisterTokenServiceHandler(ctx, mux, conn)
+func (n *TokenService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return tokenv1.RegisterTokenServiceHandler(ctx, mux, conn)
 }
 
 func (n *TokenService) Issue(ctx context.Context, req *tokenv1.IssueRequest) (*tokenv1.IssueResponse, error) {

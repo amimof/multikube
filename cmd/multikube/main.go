@@ -386,7 +386,7 @@ func main() {
 		log.Error("error setting up gateway", "error", err)
 		os.Exit(1)
 	}
-	gw.RegisterService(ctx,
+	err = gw.RegisterService(ctx,
 		backendService,
 		caService,
 		certService,
@@ -395,6 +395,10 @@ func main() {
 		credentialService,
 		tokenService,
 	)
+	if err != nil {
+		log.Error("error registering service handler", "error", err)
+		os.Exit(1)
+	}
 
 	go serveGateway(gatewayAddress, gw, errChan)
 
@@ -536,20 +540,6 @@ func main() {
 
 	close(exit)
 	close(errChan)
-}
-
-// Reads an x509 certificate from the filesystem and returns an instance of x509.Certiticate. Returns nil on errors
-func readCert(p string) *x509.Certificate {
-	signer, err := os.ReadFile(p)
-	if err != nil {
-		return nil
-	}
-	block, _ := pem.Decode(signer)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil
-	}
-	return cert
 }
 
 func serveUnix(s *transport.Server, errChan chan error) {

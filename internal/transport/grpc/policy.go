@@ -24,8 +24,8 @@ func (n *PolicyService) Register(server *grpc.Server) {
 	policyv1.RegisterPolicyServiceServer(server, n)
 }
 
-func (n *PolicyService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
-	policyv1.RegisterPolicyServiceHandler(ctx, mux, conn)
+func (n *PolicyService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return policyv1.RegisterPolicyServiceHandler(ctx, mux, conn)
 }
 
 func (n *PolicyService) Get(ctx context.Context, req *policyv1.GetRequest) (*policyv1.GetResponse, error) {

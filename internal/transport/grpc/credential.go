@@ -24,8 +24,8 @@ func (n *CredentialService) Register(server *grpc.Server) {
 	credentialv1.RegisterCredentialServiceServer(server, n)
 }
 
-func (n *CredentialService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
-	credentialv1.RegisterCredentialServiceHandler(ctx, mux, conn)
+func (n *CredentialService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return credentialv1.RegisterCredentialServiceHandler(ctx, mux, conn)
 }
 
 func (n *CredentialService) Get(ctx context.Context, req *credentialv1.GetRequest) (*credentialv1.GetResponse, error) {

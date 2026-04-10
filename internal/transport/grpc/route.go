@@ -24,9 +24,10 @@ func (n *RouteService) Register(server *grpc.Server) {
 	routev1.RegisterRouteServiceServer(server, n)
 }
 
-func (n *RouteService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
-	routev1.RegisterRouteServiceHandler(ctx, mux, conn)
+func (n *RouteService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return routev1.RegisterRouteServiceHandler(ctx, mux, conn)
 }
+
 func (n *RouteService) Get(ctx context.Context, req *routev1.GetRequest) (*routev1.GetResponse, error) {
 	uid, err := keys.FromUIDOrName(req.GetUid(), req.GetName())
 	if err != nil {

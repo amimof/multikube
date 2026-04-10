@@ -24,8 +24,8 @@ func (n *CertificateService) Register(server *grpc.Server) {
 	certv1.RegisterCertificateServiceServer(server, n)
 }
 
-func (n *CertificateService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) {
-	certv1.RegisterCertificateServiceHandler(ctx, mux, conn)
+func (n *CertificateService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux, conn *grpc.ClientConn) error {
+	return certv1.RegisterCertificateServiceHandler(ctx, mux, conn)
 }
 
 func (n *CertificateService) Get(ctx context.Context, req *certv1.GetRequest) (*certv1.GetResponse, error) {
