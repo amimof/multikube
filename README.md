@@ -46,7 +46,7 @@ multikube is designed to be fully compatible with existing Kubernetes clients, a
 
 ## Roadmap
 
-- **Web UI**: Planned
+- **Web UI**: In Progress
 - **REST API**: Done ✅
 - **Resource decoration:** Planned
 - **Fine-grained policy authorization:** Done ✅

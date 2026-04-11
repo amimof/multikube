@@ -730,12 +730,16 @@ func local_request_BackendService_Delete_1(ctx context.Context, marshaler runtim
 }
 
 var (
-	filter_BackendService_UpdateStatus_0 = &utilities.DoubleArray{Encoding: map[string]int{"uid": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_BackendService_UpdateStatus_0 = &utilities.DoubleArray{Encoding: map[string]int{"status": 0, "uid": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_BackendService_UpdateStatus_0(ctx context.Context, marshaler runtime.Marshaler, client BackendServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq UpdateStatusRequest
 	var metadata runtime.ServerMetadata
+
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Status); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 
 	var (
 		val string
@@ -770,6 +774,10 @@ func local_request_BackendService_UpdateStatus_0(ctx context.Context, marshaler 
 	var protoReq UpdateStatusRequest
 	var metadata runtime.ServerMetadata
 
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Status); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
 	var (
 		val string
 		ok  bool
@@ -800,12 +808,16 @@ func local_request_BackendService_UpdateStatus_0(ctx context.Context, marshaler 
 }
 
 var (
-	filter_BackendService_UpdateStatus_1 = &utilities.DoubleArray{Encoding: map[string]int{"name": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_BackendService_UpdateStatus_1 = &utilities.DoubleArray{Encoding: map[string]int{"status": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_BackendService_UpdateStatus_1(ctx context.Context, marshaler runtime.Marshaler, client BackendServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq UpdateStatusRequest
 	var metadata runtime.ServerMetadata
+
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Status); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 
 	var (
 		val string
@@ -839,6 +851,10 @@ func request_BackendService_UpdateStatus_1(ctx context.Context, marshaler runtim
 func local_request_BackendService_UpdateStatus_1(ctx context.Context, marshaler runtime.Marshaler, server BackendServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq UpdateStatusRequest
 	var metadata runtime.ServerMetadata
+
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Status); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 
 	var (
 		val string

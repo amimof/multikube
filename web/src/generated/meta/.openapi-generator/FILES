@@ -1,0 +1,8 @@
+.openapi-generator-ignore
+docs/ProtobufAny.md
+docs/RpcStatus.md
+index.ts
+models/ProtobufAny.ts
+models/RpcStatus.ts
+models/index.ts
+runtime.ts

@@ -412,7 +412,6 @@ func main() {
 	go serveTCP(serverAddress, srv, errChan)
 	go serveUnix(srv, errChan)
 
-
 	// Setup a clientset for the controllers
 	cs, err := client.New(socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}), client.WithGrpcDialOption(grpc.WithAuthority("localhost")))
 	if err != nil {
@@ -472,7 +471,7 @@ func main() {
 		TLSReadTimeout:   tlsReadTimeout,
 		TLSWriteTimeout:  tlsWriteTimeout,
 		Logger:           log,
-		Handler: handler,
+		Handler:          handler,
 	}
 
 	// Listen and serve!

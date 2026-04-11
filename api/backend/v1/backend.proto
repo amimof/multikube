@@ -58,7 +58,11 @@ service BackendService {
   rpc UpdateStatus(UpdateStatusRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       put: "/api/v1/backends/{uid}/status"
-      additional_bindings: {put: "/api/v1/backends/{name}/status"}
+      body: "status",
+      additional_bindings: {
+        put: "/api/v1/backends/{name}/status"
+        body: "status"
+      }
     };
   }
 }
@@ -88,7 +92,7 @@ message BackendConfig {
 }
 
 message BackendStatus {
-  map<string, TargetStatus> target_statuses = 3;
+  map<string, TargetStatus> target_statuses = 1;
 }
 
 message TargetStatus {
