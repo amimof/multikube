@@ -29,12 +29,6 @@ import {
 export interface V1BackendConfig {
     /**
      * 
-     * @type {string}
-     * @memberof V1BackendConfig
-     */
-    name?: string;
-    /**
-     * 
      * @type {Array<string>}
      * @memberof V1BackendConfig
      */
@@ -90,7 +84,6 @@ export function V1BackendConfigFromJSONTyped(json: any, ignoreDiscriminator: boo
     }
     return {
         
-        'name': json['name'] == null ? undefined : json['name'],
         'servers': json['servers'] == null ? undefined : json['servers'],
         'caRef': json['caRef'] == null ? undefined : json['caRef'],
         'authRef': json['authRef'] == null ? undefined : json['authRef'],
@@ -111,7 +104,6 @@ export function V1BackendConfigToJSONTyped(value?: V1BackendConfig | null, ignor
 
     return {
         
-        'name': value['name'],
         'servers': value['servers'],
         'caRef': value['caRef'],
         'authRef': value['authRef'],

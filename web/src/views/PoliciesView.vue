@@ -36,7 +36,7 @@ function createEmptyPolicy(): V1Policy {
   return {
     version: 'policy/v1',
     meta: { name: '', labels: {} },
-    config: { name: '', rules: [] },
+    config: { rules: [] },
   }
 }
 
@@ -148,12 +148,6 @@ function sortByCreated(a: any, b: any): number {
   return ta - tb
 }
 
-function sortByConfigName(a: any, b: any): number {
-  const na = a.config?.name ?? ''
-  const nb = b.config?.name ?? ''
-  return na.localeCompare(nb)
-}
-
 function sortByRules(a: any, b: any): number {
   return (a.config?.rules?.length ?? 0) - (b.config?.rules?.length ?? 0)
 }
@@ -193,7 +187,7 @@ async function handleBulkDelete() {
 
 // Rule management
 function addRule() {
-  if (!form.value.config) form.value.config = { name: '', rules: [] }
+  if (!form.value.config) form.value.config = { rules: [] }
   if (!form.value.config.rules) form.value.config.rules = []
   form.value.config.rules.push(createEmptyRule())
 }
@@ -261,7 +255,7 @@ function openCreate() {
 
 function openEdit(row: V1Policy) {
   form.value = structuredClone(toRaw(row))
-  if (!form.value.config) form.value.config = { name: '', rules: [] }
+  if (!form.value.config) form.value.config = { rules: [] }
   if (!form.value.config.rules) form.value.config.rules = []
   // Ensure all rule sub-arrays exist
   for (const rule of form.value.config.rules) {
@@ -384,11 +378,6 @@ onMounted(() => {
       >
       <el-table-column type="selection" width="48" />
       <el-table-column prop="meta.name" label="Name" min-width="180" sortable />
-      <el-table-column label="Config Name" min-width="150" sortable :sort-method="sortByConfigName">
-        <template #default="{ row }">
-          {{ row.config?.name || '-' }}
-        </template>
-      </el-table-column>
       <el-table-column label="Rules" min-width="80" sortable :sort-method="sortByRules">
         <template #default="{ row }">
           <el-tag size="small">{{ row.config?.rules?.length ?? 0 }}</el-tag>
@@ -436,10 +425,6 @@ onMounted(() => {
         </el-form-item>
 
         <el-divider content-position="left">Config</el-divider>
-
-        <el-form-item label="Config Name">
-          <el-input v-model="form.config!.name" placeholder="Config name" />
-        </el-form-item>
 
         <!-- Rules -->
         <el-divider content-position="left">Rules</el-divider>

@@ -6,7 +6,6 @@
 
 Name | Type
 ------------ | -------------
-`name` | string
 `servers` | Array&lt;string&gt;
 `caRef` | string
 `authRef` | string
@@ -21,7 +20,6 @@ import type { V1BackendConfig } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "name": null,
   "servers": null,
   "caRef": null,
   "authRef": null,

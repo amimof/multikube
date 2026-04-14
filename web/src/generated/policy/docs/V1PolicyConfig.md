@@ -6,7 +6,6 @@
 
 Name | Type
 ------------ | -------------
-`name` | string
 `rules` | [Array&lt;Policyv1Rule&gt;](Policyv1Rule.md)
 
 ## Example
@@ -16,7 +15,6 @@ import type { V1PolicyConfig } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "name": null,
   "rules": null,
 } satisfies V1PolicyConfig
 

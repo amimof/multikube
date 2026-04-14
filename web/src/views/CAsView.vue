@@ -30,7 +30,6 @@ function createEmptyCa(): V1CertificateAuthority {
     version: 'certificate_authority/v1',
     meta: { name: '', labels: {} },
     config: {
-      name: '',
       certificate: '',
       certificateData: '',
     },
@@ -64,12 +63,6 @@ function sortByCreated(a: any, b: any): number {
   const ta = new Date(a.meta?.created ?? 0).getTime()
   const tb = new Date(b.meta?.created ?? 0).getTime()
   return ta - tb
-}
-
-function sortByConfigName(a: any, b: any): number {
-  const na = a.config?.name ?? ''
-  const nb = b.config?.name ?? ''
-  return na.localeCompare(nb)
 }
 
 function sortByCertificate(a: any, b: any): number {
@@ -214,11 +207,6 @@ onMounted(() => {
       >
       <el-table-column type="selection" width="48" />
       <el-table-column prop="meta.name" label="Name" min-width="200" sortable />
-      <el-table-column label="Config Name" min-width="180" sortable :sort-method="sortByConfigName">
-        <template #default="{ row }">
-          {{ row.config?.name || '-' }}
-        </template>
-      </el-table-column>
       <el-table-column label="Certificate" min-width="200" sortable :sort-method="sortByCertificate">
         <template #default="{ row }">
           <span v-if="row.config?.certificate">{{ row.config.certificate }}</span>
@@ -268,10 +256,6 @@ onMounted(() => {
         </el-form-item>
 
         <el-divider content-position="left">Config</el-divider>
-
-        <el-form-item label="Config Name">
-          <el-input v-model="form.config!.name" placeholder="Config name" />
-        </el-form-item>
 
         <el-form-item label="Certificate">
           <el-input v-model="form.config!.certificate" placeholder="Path to certificate file" :disabled="(form.config!.certificateData ?? '').trim().length > 0" />

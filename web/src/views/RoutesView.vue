@@ -35,7 +35,6 @@ function createEmptyRoute(): V1Route {
     version: 'route/v1',
     meta: { name: '', labels: {} },
     config: {
-      name: '',
       backendRef: '',
       match: undefined,
     },
@@ -375,10 +374,6 @@ onMounted(() => {
         </el-form-item>
 
         <el-divider content-position="left">Config</el-divider>
-
-        <el-form-item label="Config Name">
-          <el-input v-model="form.config!.name" placeholder="Config name" />
-        </el-form-item>
 
         <el-form-item label="Backend Ref" required>
           <el-select

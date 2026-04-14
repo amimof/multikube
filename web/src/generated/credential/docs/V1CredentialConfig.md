@@ -6,7 +6,6 @@
 
 Name | Type
 ------------ | -------------
-`name` | string
 `clientCertificateRef` | string
 `token` | string
 `basic` | [V1CredentialBasic](V1CredentialBasic.md)
@@ -18,7 +17,6 @@ import type { V1CredentialConfig } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "name": null,
   "clientCertificateRef": null,
   "token": null,
   "basic": null,

@@ -6,7 +6,6 @@
 
 Name | Type
 ------------ | -------------
-`name` | string
 `match` | [V1Match](V1Match.md)
 `backendRef` | string
 
@@ -17,7 +16,6 @@ import type { V1RouteConfig } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "name": null,
   "match": null,
   "backendRef": null,
 } satisfies V1RouteConfig

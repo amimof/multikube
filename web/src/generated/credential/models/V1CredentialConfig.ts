@@ -32,12 +32,6 @@ export interface V1CredentialConfig {
      * @type {string}
      * @memberof V1CredentialConfig
      */
-    name?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof V1CredentialConfig
-     */
     clientCertificateRef?: string;
     /**
      * 
@@ -70,7 +64,6 @@ export function V1CredentialConfigFromJSONTyped(json: any, ignoreDiscriminator: 
     }
     return {
         
-        'name': json['name'] == null ? undefined : json['name'],
         'clientCertificateRef': json['clientCertificateRef'] == null ? undefined : json['clientCertificateRef'],
         'token': json['token'] == null ? undefined : json['token'],
         'basic': json['basic'] == null ? undefined : V1CredentialBasicFromJSON(json['basic']),
@@ -88,7 +81,6 @@ export function V1CredentialConfigToJSONTyped(value?: V1CredentialConfig | null,
 
     return {
         
-        'name': value['name'],
         'clientCertificateRef': value['clientCertificateRef'],
         'token': value['token'],
         'basic': V1CredentialBasicToJSON(value['basic']),

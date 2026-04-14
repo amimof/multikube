@@ -148,7 +148,6 @@ onMounted(() => {
         </template>
         <el-descriptions :column="2" border size="default">
           <el-descriptions-item label="Name">{{ backend.meta?.name ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="Config Name">{{ backend.config?.name || '-' }}</el-descriptions-item>
           <el-descriptions-item label="Load Balancing">{{ lbLabel(backend.config?.type as string) }}</el-descriptions-item>
           <el-descriptions-item label="Servers">{{ (backend.config?.servers ?? []).length }}</el-descriptions-item>
           <el-descriptions-item label="Cache TTL">{{ backend.config?.cacheTtl || '-' }}</el-descriptions-item>

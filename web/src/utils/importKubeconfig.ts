@@ -194,7 +194,6 @@ export function buildImportPlan(
         version: 'certificate_authority/v1',
         meta: { name: names.certificateAuthority },
         config: {
-          name: names.certificateAuthority,
           certificateData: decodeBase64(caData),
         },
       },
@@ -270,7 +269,6 @@ export function buildImportPlan(
           version: 'certificate/v1',
           meta: { name: names.certificate },
           config: {
-            name: names.certificate,
             certificateData: decodeBase64(user['client-certificate-data']!),
             keyData: decodeBase64(user['client-key-data']!),
           },
@@ -288,7 +286,6 @@ export function buildImportPlan(
           version: 'credential/v1',
           meta: { name: names.credential },
           config: {
-            name: names.credential,
             token: user.token,
           },
         },
@@ -302,7 +299,6 @@ export function buildImportPlan(
           version: 'credential/v1',
           meta: { name: names.credential },
           config: {
-            name: names.credential,
             basic: {
               username: user.username,
               password: user.password,
@@ -319,7 +315,6 @@ export function buildImportPlan(
           version: 'credential/v1',
           meta: { name: names.credential },
           config: {
-            name: names.credential,
             clientCertificateRef: names.certificate,
           },
         },
@@ -329,7 +324,6 @@ export function buildImportPlan(
 
   // --- Backend (always created) ---
   const backendConfig: Record<string, unknown> = {
-    name: names.backend,
     servers: [cluster.server],
     insecureSkipTlsVerify: cluster['insecure-skip-tls-verify'] ?? false,
   }

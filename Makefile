@@ -51,6 +51,16 @@ oci: ; $(info $(M) building container image) @ ## Build container image from Doc
 protos: ; $(info $(M) generating protos) @ ## Generate protos
 	buf generate
 
+OPENAPI_GENERATOR ?= openapi-generator
+.PHONY: generate-ts-clients
+generate-ts-clients: ; $(info $(M) generating TypeScript OpenAPI clients) @ ## Generate TypeScript clients for frontend
+	$Q $(OPENAPI_GENERATOR) generate -i api/backend/v1/backend.swagger.json -g typescript-fetch -o web/src/generated/backend
+	$Q $(OPENAPI_GENERATOR) generate -i api/ca/v1/ca.swagger.json -g typescript-fetch -o web/src/generated/ca
+	$Q $(OPENAPI_GENERATOR) generate -i api/certificate/v1/certificate.swagger.json -g typescript-fetch -o web/src/generated/certificate
+	$Q $(OPENAPI_GENERATOR) generate -i api/credential/v1/credential.swagger.json -g typescript-fetch -o web/src/generated/credential
+	$Q $(OPENAPI_GENERATOR) generate -i api/policy/v1/policy.swagger.json -g typescript-fetch -o web/src/generated/policy
+	$Q $(OPENAPI_GENERATOR) generate -i api/route/v1/route.swagger.json -g typescript-fetch -o web/src/generated/route
+
 # Tools
 
 $(BIN):

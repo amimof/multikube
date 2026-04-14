@@ -37,7 +37,6 @@ function createEmptyBackend(): V1Backend {
     version: 'backend/v1',
     meta: { name: '', labels: {} },
     config: {
-      name: '',
       servers: [],
       caRef: '',
       authRef: '',
@@ -350,10 +349,6 @@ onMounted(() => {
         </el-form-item>
 
         <el-divider content-position="left">Config</el-divider>
-
-        <el-form-item label="Config Name">
-          <el-input v-model="form.config!.name" placeholder="Config name" />
-        </el-form-item>
 
         <el-form-item label="Servers">
           <el-input

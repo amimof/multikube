@@ -29,12 +29,6 @@ import {
 export interface V1RouteConfig {
     /**
      * 
-     * @type {string}
-     * @memberof V1RouteConfig
-     */
-    name?: string;
-    /**
-     * 
      * @type {V1Match}
      * @memberof V1RouteConfig
      */
@@ -64,7 +58,6 @@ export function V1RouteConfigFromJSONTyped(json: any, ignoreDiscriminator: boole
     }
     return {
         
-        'name': json['name'] == null ? undefined : json['name'],
         'match': json['match'] == null ? undefined : V1MatchFromJSON(json['match']),
         'backendRef': json['backendRef'] == null ? undefined : json['backendRef'],
     };
@@ -81,7 +74,6 @@ export function V1RouteConfigToJSONTyped(value?: V1RouteConfig | null, ignoreDis
 
     return {
         
-        'name': value['name'],
         'match': V1MatchToJSON(value['match']),
         'backendRef': value['backendRef'],
     };

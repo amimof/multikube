@@ -6,7 +6,6 @@
 
 Name | Type
 ------------ | -------------
-`name` | string
 `certificate` | string
 `certificateData` | string
 `key` | string
@@ -19,7 +18,6 @@ import type { V1CertificateConfig } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "name": null,
   "certificate": null,
   "certificateData": null,
   "key": null,

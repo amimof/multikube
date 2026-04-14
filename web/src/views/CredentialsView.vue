@@ -34,7 +34,7 @@ function createEmptyCredential(): V1Credential {
   return {
     version: 'credential/v1',
     meta: { name: '', labels: {} },
-    config: { name: '' },
+    config: {},
   }
 }
 
@@ -56,22 +56,21 @@ function inferMode(config: V1Credential['config']): CredentialMode {
   return ''
 }
 
-// When mode changes, reset config auth fields while preserving config.name
+// When mode changes, reset config auth fields
 watch(credentialMode, (newMode, oldMode) => {
   if (newMode === oldMode) return
-  const configName = form.value.config?.name ?? ''
   switch (newMode) {
     case 'clientCertificateRef':
-      form.value.config = { name: configName, clientCertificateRef: '' }
+      form.value.config = { clientCertificateRef: '' }
       break
     case 'token':
-      form.value.config = { name: configName, token: '' }
+      form.value.config = { token: '' }
       break
     case 'basic':
-      form.value.config = { name: configName, basic: { username: '', password: '' } }
+      form.value.config = { basic: { username: '', password: '' } }
       break
     default:
-      form.value.config = { name: configName }
+      form.value.config = {}
       break
   }
 })
@@ -119,12 +118,6 @@ function sortByCreated(a: any, b: any): number {
   const ta = new Date(a.meta?.created ?? 0).getTime()
   const tb = new Date(b.meta?.created ?? 0).getTime()
   return ta - tb
-}
-
-function sortByConfigName(a: any, b: any): number {
-  const na = a.config?.name ?? ''
-  const nb = b.config?.name ?? ''
-  return na.localeCompare(nb)
 }
 
 function sortByCredentialType(a: any, b: any): number {
@@ -279,11 +272,6 @@ onMounted(() => {
       >
       <el-table-column type="selection" width="48" />
       <el-table-column prop="meta.name" label="Name" min-width="200" sortable />
-      <el-table-column label="Config Name" min-width="160" sortable :sort-method="sortByConfigName">
-        <template #default="{ row }">
-          {{ row.config?.name || '-' }}
-        </template>
-      </el-table-column>
       <el-table-column label="Type" min-width="150" sortable :sort-method="sortByCredentialType">
         <template #default="{ row }">
           <el-tag size="small">{{ credentialTypeLabel(row) }}</el-tag>
@@ -338,10 +326,6 @@ onMounted(() => {
         </el-form-item>
 
         <el-divider content-position="left">Config</el-divider>
-
-        <el-form-item label="Config Name">
-          <el-input v-model="form.config!.name" placeholder="Config name" />
-        </el-form-item>
 
         <el-form-item label="Credential Type" required>
           <el-select v-model="credentialMode" placeholder="Select credential type" style="width: 100%">

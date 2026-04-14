@@ -24,12 +24,6 @@ export interface V1CertificateConfig {
      * @type {string}
      * @memberof V1CertificateConfig
      */
-    name?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof V1CertificateConfig
-     */
     certificate?: string;
     /**
      * 
@@ -68,7 +62,6 @@ export function V1CertificateConfigFromJSONTyped(json: any, ignoreDiscriminator:
     }
     return {
         
-        'name': json['name'] == null ? undefined : json['name'],
         'certificate': json['certificate'] == null ? undefined : json['certificate'],
         'certificateData': json['certificateData'] == null ? undefined : json['certificateData'],
         'key': json['key'] == null ? undefined : json['key'],
@@ -87,7 +80,6 @@ export function V1CertificateConfigToJSONTyped(value?: V1CertificateConfig | nul
 
     return {
         
-        'name': value['name'],
         'certificate': value['certificate'],
         'certificateData': value['certificateData'],
         'key': value['key'],

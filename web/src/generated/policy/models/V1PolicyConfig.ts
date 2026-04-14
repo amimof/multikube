@@ -29,12 +29,6 @@ import {
 export interface V1PolicyConfig {
     /**
      * 
-     * @type {string}
-     * @memberof V1PolicyConfig
-     */
-    name?: string;
-    /**
-     * 
      * @type {Array<Policyv1Rule>}
      * @memberof V1PolicyConfig
      */
@@ -58,7 +52,6 @@ export function V1PolicyConfigFromJSONTyped(json: any, ignoreDiscriminator: bool
     }
     return {
         
-        'name': json['name'] == null ? undefined : json['name'],
         'rules': json['rules'] == null ? undefined : ((json['rules'] as Array<any>).map(Policyv1RuleFromJSON)),
     };
 }
@@ -74,7 +67,6 @@ export function V1PolicyConfigToJSONTyped(value?: V1PolicyConfig | null, ignoreD
 
     return {
         
-        'name': value['name'],
         'rules': value['rules'] == null ? undefined : ((value['rules'] as Array<any>).map(Policyv1RuleToJSON)),
     };
 }
