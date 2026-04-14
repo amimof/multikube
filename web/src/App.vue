@@ -5,6 +5,9 @@ import {
   Monitor,
   Guide,
   Key,
+  Lock,
+  Document,
+  List,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -39,6 +42,18 @@ const route = useRoute()
         <el-menu-item index="/cas">
           <el-icon><Key /></el-icon>
           <span>Certificate Authorities</span>
+        </el-menu-item>
+        <el-menu-item index="/credentials">
+          <el-icon><Lock /></el-icon>
+          <span>Credentials</span>
+        </el-menu-item>
+        <el-menu-item index="/certificates">
+          <el-icon><Document /></el-icon>
+          <span>Certificates</span>
+        </el-menu-item>
+        <el-menu-item index="/policies">
+          <el-icon><List /></el-icon>
+          <span>Policies</span>
         </el-menu-item>
       </el-menu>
     </el-aside>

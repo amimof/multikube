@@ -23,6 +23,21 @@ const router = createRouter({
       name: 'cas',
       component: () => import('@/views/CAsView.vue'),
     },
+    {
+      path: '/credentials',
+      name: 'credentials',
+      component: () => import('@/views/CredentialsView.vue'),
+    },
+    {
+      path: '/certificates',
+      name: 'certificates',
+      component: () => import('@/views/CertificatesView.vue'),
+    },
+    {
+      path: '/policies',
+      name: 'policies',
+      component: () => import('@/views/PoliciesView.vue'),
+    },
   ],
 })
 

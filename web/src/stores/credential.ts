@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { api } from '@/api/client'
+import { api, sanitizePayload } from '@/api/client'
 import type { V1Credential } from '@/generated/credential'
 
 export const useCredentialStore = defineStore('credential', {
@@ -23,6 +23,44 @@ export const useCredentialStore = defineStore('credential', {
       } finally {
         this.loading = false
       }
+    },
+
+    async createCredential(credential: V1Credential) {
+      const response = await api.credentialService.credentialServiceCreate({
+        credential: sanitizePayload(credential) as V1Credential,
+      })
+      await this.fetchCredentials()
+      return response.credential
+    },
+
+    async updateCredential(credential: V1Credential) {
+      const name = credential.meta?.name
+
+      if (!name) {
+        throw new Error('Credential is missing name')
+      }
+
+      const response = await api.credentialService.credentialServiceUpdate2({
+        name,
+        credential: sanitizePayload(credential) as V1Credential,
+      })
+
+      await this.fetchCredentials()
+      return response.credential
+    },
+
+    async deleteCredential(credential: V1Credential) {
+      const name = credential.meta?.name
+
+      if (!name) {
+        throw new Error('Credential is missing name')
+      }
+
+      await api.credentialService.credentialServiceDelete2({
+        name,
+      })
+
+      await this.fetchCredentials()
     },
   },
 })
