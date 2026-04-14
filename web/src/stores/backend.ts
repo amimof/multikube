@@ -62,5 +62,33 @@ export const useBackendStore = defineStore('backend', {
 
       await this.fetchBackends()
     },
+
+    async deleteManyBackends(backends: V1Backend[]): Promise<{ succeeded: number; failed: { name: string; error: string }[] }> {
+      const results = await Promise.allSettled(
+        backends.map(async (b) => {
+          const name = b.meta?.name
+          if (!name) throw new Error('Backend is missing name')
+          await api.backendService.backendServiceDelete2({ name })
+          return name
+        }),
+      )
+
+      const failed: { name: string; error: string }[] = []
+      let succeeded = 0
+
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          succeeded++
+        } else {
+          failed.push({
+            name: backends[i]?.meta?.name ?? 'unknown',
+            error: r.reason instanceof Error ? r.reason.message : 'Delete failed',
+          })
+        }
+      })
+
+      await this.fetchBackends()
+      return { succeeded, failed }
+    },
   },
 })

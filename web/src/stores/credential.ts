@@ -62,5 +62,33 @@ export const useCredentialStore = defineStore('credential', {
 
       await this.fetchCredentials()
     },
+
+    async deleteManyCredentials(credentials: V1Credential[]): Promise<{ succeeded: number; failed: { name: string; error: string }[] }> {
+      const results = await Promise.allSettled(
+        credentials.map(async (c) => {
+          const name = c.meta?.name
+          if (!name) throw new Error('Credential is missing name')
+          await api.credentialService.credentialServiceDelete2({ name })
+          return name
+        }),
+      )
+
+      const failed: { name: string; error: string }[] = []
+      let succeeded = 0
+
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          succeeded++
+        } else {
+          failed.push({
+            name: credentials[i]?.meta?.name ?? 'unknown',
+            error: r.reason instanceof Error ? r.reason.message : 'Delete failed',
+          })
+        }
+      })
+
+      await this.fetchCredentials()
+      return { succeeded, failed }
+    },
   },
 })

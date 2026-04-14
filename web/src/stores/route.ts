@@ -62,5 +62,33 @@ export const useRouteStore = defineStore('route', {
 
       await this.fetchRoutes()
     },
+
+    async deleteManyRoutes(routes: V1Route[]): Promise<{ succeeded: number; failed: { name: string; error: string }[] }> {
+      const results = await Promise.allSettled(
+        routes.map(async (r) => {
+          const name = r.meta?.name
+          if (!name) throw new Error('Route is missing name')
+          await api.routeService.routeServiceDelete2({ name })
+          return name
+        }),
+      )
+
+      const failed: { name: string; error: string }[] = []
+      let succeeded = 0
+
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          succeeded++
+        } else {
+          failed.push({
+            name: routes[i]?.meta?.name ?? 'unknown',
+            error: r.reason instanceof Error ? r.reason.message : 'Delete failed',
+          })
+        }
+      })
+
+      await this.fetchRoutes()
+      return { succeeded, failed }
+    },
   },
 })

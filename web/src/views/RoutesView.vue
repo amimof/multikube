@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch, toRaw } from 'vue'
-import { Plus, Refresh, Delete } from '@element-plus/icons-vue'
+import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRouteStore } from '@/stores/route'
 import { useBackendStore } from '@/stores/backend'
+import { useResourceTable } from '@/composables/useResourceTable'
+import moment from 'moment'
 import type { V1Route, V1Match } from '@/generated/route'
 import LabelEditor from '@/components/LabelEditor.vue'
 import MetadataDisplay from '@/components/MetadataDisplay.vue'
@@ -14,11 +16,16 @@ type RouteMatchMode = '' | 'sni' | 'path' | 'pathPrefix' | 'header' | 'jwt'
 const routeStore = useRouteStore()
 const backendStore = useBackendStore()
 
+const { nameFilter, displayItems } = useResourceTable(computed(() => routeStore.items))
+
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const saving = ref(false)
 const deleteDialogVisible = ref(false)
 const deleteTarget = ref<V1Route | null>(null)
+const selectedRows = ref<V1Route[]>([])
+const bulkDeleteVisible = ref(false)
+const bulkDeleting = ref(false)
 
 const matchMode = ref<RouteMatchMode>('')
 const form = ref<V1Route>(createEmptyRoute())
@@ -115,7 +122,62 @@ const isFormValid = computed(() => {
 
 function formatDate(date?: Date): string {
   if (!date) return '-'
-  return new Date(date).toLocaleString()
+  return moment(date).fromNow()
+}
+
+function sortByCreated(a: any, b: any): number {
+  const ta = new Date(a.meta?.created ?? 0).getTime()
+  const tb = new Date(b.meta?.created ?? 0).getTime()
+  return ta - tb
+}
+
+function sortByStatus(a: any, b: any): number {
+  const sa = a.status?.phase ?? ''
+  const sb = b.status?.phase ?? ''
+  return sa.localeCompare(sb)
+}
+
+function sortByBackendRef(a: any, b: any): number {
+  const ra = a.config?.backendRef ?? ''
+  const rb = b.config?.backendRef ?? ''
+  return ra.localeCompare(rb)
+}
+
+function sortByMatch(a: any, b: any): number {
+  return describeMatch(a.config?.match).localeCompare(describeMatch(b.config?.match))
+}
+
+// Selection
+function handleSelectionChange(rows: V1Route[]) {
+  selectedRows.value = rows
+}
+
+function handleRowClick(row: V1Route, column: any) {
+  if (column?.type === 'selection') return
+  openEdit(row)
+}
+
+function confirmBulkDelete() {
+  bulkDeleteVisible.value = true
+}
+
+async function handleBulkDelete() {
+  bulkDeleting.value = true
+  try {
+    const { succeeded, failed } = await routeStore.deleteManyRoutes(selectedRows.value)
+    selectedRows.value = []
+    if (failed.length === 0) {
+      ElMessage.success(`Deleted ${succeeded} route${succeeded === 1 ? '' : 's'}`)
+    } else if (succeeded > 0) {
+      ElMessage.warning(`Deleted ${succeeded}, failed ${failed.length}: ${failed.map((f) => f.name).join(', ')}`)
+    } else {
+      ElMessage.error(`All ${failed.length} deletes failed`)
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'Bulk delete failed')
+  } finally {
+    bulkDeleting.value = false
+  }
 }
 
 function openCreate() {
@@ -219,16 +281,35 @@ onMounted(() => {
       <el-button type="primary" :icon="Plus" @click="openCreate">Create</el-button>
     </el-empty>
 
-    <el-table
-      v-else
-      v-loading="routeStore.loading"
-      :data="routeStore.items"
-      style="width: 100%"
-      @row-click="openEdit"
-      :row-class-name="() => 'clickable-row'"
-    >
-      <el-table-column prop="meta.name" label="Name" min-width="150" />
-      <el-table-column label="Status" width="100">
+    <template v-else>
+      <el-row :gutter="12" align="middle" style="margin-bottom: 12px">
+        <el-col :span="12">
+          <el-input
+            v-model="nameFilter"
+            placeholder="Filter by name..."
+            clearable
+            :prefix-icon="Search"
+          />
+        </el-col>
+        <el-col :span="12" v-if="selectedRows.length > 0">
+          <el-button type="danger" :icon="Delete" @click="confirmBulkDelete">
+            Delete ({{ selectedRows.length }})
+          </el-button>
+        </el-col>
+      </el-row>
+
+      <el-table
+        v-loading="routeStore.loading"
+        :data="displayItems"
+        style="width: 100%"
+        row-key="meta.name"
+        @row-click="handleRowClick"
+        @selection-change="handleSelectionChange"
+        :row-class-name="() => 'clickable-row'"
+      >
+      <el-table-column type="selection" width="48" />
+      <el-table-column prop="meta.name" label="Name" min-width="150" sortable />
+      <el-table-column label="Status" width="100" sortable :sort-method="sortByStatus">
         <template #default="{ row }">
           <el-tag
             v-if="row.status?.phase"
@@ -241,17 +322,17 @@ onMounted(() => {
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="Backend Ref" min-width="150">
+      <el-table-column label="Backend Ref" min-width="150" sortable :sort-method="sortByBackendRef">
         <template #default="{ row }">
           {{ row.config?.backendRef || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="Match" min-width="200">
+      <el-table-column label="Match" min-width="200" sortable :sort-method="sortByMatch">
         <template #default="{ row }">
           {{ describeMatch(row.config?.match) }}
         </template>
       </el-table-column>
-      <el-table-column label="Created" width="180">
+      <el-table-column label="Created" width="180" sortable :sort-method="sortByCreated">
         <template #default="{ row }">
           {{ formatDate(row.meta?.created) }}
         </template>
@@ -268,6 +349,7 @@ onMounted(() => {
         </template>
       </el-table-column>
     </el-table>
+    </template>
 
     <!-- Create / Edit Dialog -->
     <el-dialog
@@ -377,6 +459,13 @@ onMounted(() => {
       v-model:visible="deleteDialogVisible"
       :item-name="deleteTarget?.meta?.name ?? ''"
       @confirm="handleDelete"
+    />
+
+    <!-- Bulk delete confirmation -->
+    <ConfirmDelete
+      v-model:visible="bulkDeleteVisible"
+      :message="`Delete ${selectedRows.length} selected route${selectedRows.length === 1 ? '' : 's'}?`"
+      @confirm="handleBulkDelete"
     />
   </div>
 </template>

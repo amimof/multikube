@@ -62,5 +62,33 @@ export const useCertificateStore = defineStore('certificate', {
 
       await this.fetchCertificates()
     },
+
+    async deleteManyCertificates(certificates: V1Certificate[]): Promise<{ succeeded: number; failed: { name: string; error: string }[] }> {
+      const results = await Promise.allSettled(
+        certificates.map(async (c) => {
+          const name = c.meta?.name
+          if (!name) throw new Error('Certificate is missing name')
+          await api.certificateService.certificateServiceDelete2({ name })
+          return name
+        }),
+      )
+
+      const failed: { name: string; error: string }[] = []
+      let succeeded = 0
+
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          succeeded++
+        } else {
+          failed.push({
+            name: certificates[i]?.meta?.name ?? 'unknown',
+            error: r.reason instanceof Error ? r.reason.message : 'Delete failed',
+          })
+        }
+      })
+
+      await this.fetchCertificates()
+      return { succeeded, failed }
+    },
   },
 })

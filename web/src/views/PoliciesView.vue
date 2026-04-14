@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, toRaw } from 'vue'
-import { Plus, Refresh, Delete } from '@element-plus/icons-vue'
+import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { usePolicyStore } from '@/stores/policy'
+import { useResourceTable } from '@/composables/useResourceTable'
+import moment from 'moment'
 import type { V1Policy } from '@/generated/policy'
 import type { Policyv1Rule } from '@/generated/policy'
 import type { V1SubjectSelector } from '@/generated/policy'
@@ -17,11 +19,16 @@ import ConfirmDelete from '@/components/ConfirmDelete.vue'
 
 const policyStore = usePolicyStore()
 
+const { nameFilter, displayItems } = useResourceTable(computed(() => policyStore.items))
+
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const saving = ref(false)
 const deleteDialogVisible = ref(false)
 const deleteTarget = ref<V1Policy | null>(null)
+const selectedRows = ref<V1Policy[]>([])
+const bulkDeleteVisible = ref(false)
+const bulkDeleting = ref(false)
 
 const form = ref<V1Policy>(createEmptyPolicy())
 
@@ -132,7 +139,56 @@ function textToArr(text: string): string[] {
 // Table helpers
 function formatDate(date?: Date): string {
   if (!date) return '-'
-  return new Date(date).toLocaleString()
+  return moment(date).fromNow()
+}
+
+function sortByCreated(a: any, b: any): number {
+  const ta = new Date(a.meta?.created ?? 0).getTime()
+  const tb = new Date(b.meta?.created ?? 0).getTime()
+  return ta - tb
+}
+
+function sortByConfigName(a: any, b: any): number {
+  const na = a.config?.name ?? ''
+  const nb = b.config?.name ?? ''
+  return na.localeCompare(nb)
+}
+
+function sortByRules(a: any, b: any): number {
+  return (a.config?.rules?.length ?? 0) - (b.config?.rules?.length ?? 0)
+}
+
+// Selection
+function handleSelectionChange(rows: V1Policy[]) {
+  selectedRows.value = rows
+}
+
+function handleRowClick(row: V1Policy, column: any) {
+  if (column?.type === 'selection') return
+  openEdit(row)
+}
+
+function confirmBulkDelete() {
+  bulkDeleteVisible.value = true
+}
+
+async function handleBulkDelete() {
+  bulkDeleting.value = true
+  try {
+    const { succeeded, failed } = await policyStore.deleteManyPolicies(selectedRows.value)
+    selectedRows.value = []
+    if (failed.length === 0) {
+      ElMessage.success(`Deleted ${succeeded} polic${succeeded === 1 ? 'y' : 'ies'}`)
+    } else if (succeeded > 0) {
+      ElMessage.warning(`Deleted ${succeeded}, failed ${failed.length}: ${failed.map((f) => f.name).join(', ')}`)
+    } else {
+      ElMessage.error(`All ${failed.length} deletes failed`)
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'Bulk delete failed')
+  } finally {
+    bulkDeleting.value = false
+  }
 }
 
 // Rule management
@@ -299,26 +355,45 @@ onMounted(() => {
       <el-button type="primary" :icon="Plus" @click="openCreate">Create</el-button>
     </el-empty>
 
-    <el-table
-      v-else
-      v-loading="policyStore.loading"
-      :data="policyStore.items"
-      style="width: 100%"
-      @row-click="openEdit"
-      :row-class-name="() => 'clickable-row'"
-    >
-      <el-table-column prop="meta.name" label="Name" min-width="180" />
-      <el-table-column label="Config Name" min-width="150">
+    <template v-else>
+      <el-row :gutter="12" align="middle" style="margin-bottom: 12px">
+        <el-col :span="12">
+          <el-input
+            v-model="nameFilter"
+            placeholder="Filter by name..."
+            clearable
+            :prefix-icon="Search"
+          />
+        </el-col>
+        <el-col :span="12" v-if="selectedRows.length > 0">
+          <el-button type="danger" :icon="Delete" @click="confirmBulkDelete">
+            Delete ({{ selectedRows.length }})
+          </el-button>
+        </el-col>
+      </el-row>
+
+      <el-table
+        v-loading="policyStore.loading"
+        :data="displayItems"
+        style="width: 100%"
+        row-key="meta.name"
+        @row-click="handleRowClick"
+        @selection-change="handleSelectionChange"
+        :row-class-name="() => 'clickable-row'"
+      >
+      <el-table-column type="selection" width="48" />
+      <el-table-column prop="meta.name" label="Name" min-width="180" sortable />
+      <el-table-column label="Config Name" min-width="150" sortable :sort-method="sortByConfigName">
         <template #default="{ row }">
           {{ row.config?.name || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="Rules" min-width="80">
+      <el-table-column label="Rules" min-width="80" sortable :sort-method="sortByRules">
         <template #default="{ row }">
           <el-tag size="small">{{ row.config?.rules?.length ?? 0 }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="Created" width="180">
+      <el-table-column label="Created" width="180" sortable :sort-method="sortByCreated">
         <template #default="{ row }">
           {{ formatDate(row.meta?.created) }}
         </template>
@@ -335,6 +410,7 @@ onMounted(() => {
         </template>
       </el-table-column>
     </el-table>
+    </template>
 
     <!-- Create / Edit Dialog -->
     <el-dialog
@@ -566,6 +642,13 @@ onMounted(() => {
       v-model:visible="deleteDialogVisible"
       :item-name="deleteTarget?.meta?.name ?? ''"
       @confirm="handleDelete"
+    />
+
+    <!-- Bulk delete confirmation -->
+    <ConfirmDelete
+      v-model:visible="bulkDeleteVisible"
+      :message="`Delete ${selectedRows.length} selected polic${selectedRows.length === 1 ? 'y' : 'ies'}?`"
+      @confirm="handleBulkDelete"
     />
   </div>
 </template>

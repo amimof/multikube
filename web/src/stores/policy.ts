@@ -62,5 +62,33 @@ export const usePolicyStore = defineStore('policy', {
 
       await this.fetchPolicies()
     },
+
+    async deleteManyPolicies(policies: V1Policy[]): Promise<{ succeeded: number; failed: { name: string; error: string }[] }> {
+      const results = await Promise.allSettled(
+        policies.map(async (p) => {
+          const name = p.meta?.name
+          if (!name) throw new Error('Policy is missing name')
+          await api.policyService.policyServiceDelete2({ name })
+          return name
+        }),
+      )
+
+      const failed: { name: string; error: string }[] = []
+      let succeeded = 0
+
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          succeeded++
+        } else {
+          failed.push({
+            name: policies[i]?.meta?.name ?? 'unknown',
+            error: r.reason instanceof Error ? r.reason.message : 'Delete failed',
+          })
+        }
+      })
+
+      await this.fetchPolicies()
+      return { succeeded, failed }
+    },
   },
 })

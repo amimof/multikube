@@ -62,5 +62,33 @@ export const useCaStore = defineStore('ca', {
 
       await this.fetchCas()
     },
+
+    async deleteManyCas(cas: V1CertificateAuthority[]): Promise<{ succeeded: number; failed: { name: string; error: string }[] }> {
+      const results = await Promise.allSettled(
+        cas.map(async (ca) => {
+          const name = ca.meta?.name
+          if (!name) throw new Error('CA is missing name')
+          await api.certificateAuthorityService.certificateAuthorityServiceDelete2({ name })
+          return name
+        }),
+      )
+
+      const failed: { name: string; error: string }[] = []
+      let succeeded = 0
+
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          succeeded++
+        } else {
+          failed.push({
+            name: cas[i]?.meta?.name ?? 'unknown',
+            error: r.reason instanceof Error ? r.reason.message : 'Delete failed',
+          })
+        }
+      })
+
+      await this.fetchCas()
+      return { succeeded, failed }
+    },
   },
 })

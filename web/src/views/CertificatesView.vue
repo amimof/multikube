@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch, toRaw } from 'vue'
-import { Plus, Refresh, Delete } from '@element-plus/icons-vue'
+import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCertificateStore } from '@/stores/certificate'
+import { useResourceTable } from '@/composables/useResourceTable'
+import moment from 'moment'
 import type { V1Certificate } from '@/generated/certificate'
 import LabelEditor from '@/components/LabelEditor.vue'
 import MetadataDisplay from '@/components/MetadataDisplay.vue'
@@ -10,11 +12,16 @@ import ConfirmDelete from '@/components/ConfirmDelete.vue'
 
 const certificateStore = useCertificateStore()
 
+const { nameFilter, displayItems } = useResourceTable(computed(() => certificateStore.items))
+
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const saving = ref(false)
 const deleteDialogVisible = ref(false)
 const deleteTarget = ref<V1Certificate | null>(null)
+const selectedRows = ref<V1Certificate[]>([])
+const bulkDeleteVisible = ref(false)
+const bulkDeleting = ref(false)
 
 type CertSourceMode = '' | 'certificate' | 'certificateData'
 type KeySourceMode = '' | 'key' | 'keyData'
@@ -119,7 +126,60 @@ function keySourceLabel(row: V1Certificate): string {
 
 function formatDate(date?: Date): string {
   if (!date) return '-'
-  return new Date(date).toLocaleString()
+  return moment(date).fromNow()
+}
+
+function sortByCreated(a: any, b: any): number {
+  const ta = new Date(a.meta?.created ?? 0).getTime()
+  const tb = new Date(b.meta?.created ?? 0).getTime()
+  return ta - tb
+}
+
+function sortByConfigName(a: any, b: any): number {
+  const na = a.config?.name ?? ''
+  const nb = b.config?.name ?? ''
+  return na.localeCompare(nb)
+}
+
+function sortByCertSource(a: any, b: any): number {
+  return certSourceLabel(a).localeCompare(certSourceLabel(b))
+}
+
+function sortByKeySource(a: any, b: any): number {
+  return keySourceLabel(a).localeCompare(keySourceLabel(b))
+}
+
+// Selection
+function handleSelectionChange(rows: V1Certificate[]) {
+  selectedRows.value = rows
+}
+
+function handleRowClick(row: V1Certificate, column: any) {
+  if (column?.type === 'selection') return
+  openEdit(row)
+}
+
+function confirmBulkDelete() {
+  bulkDeleteVisible.value = true
+}
+
+async function handleBulkDelete() {
+  bulkDeleting.value = true
+  try {
+    const { succeeded, failed } = await certificateStore.deleteManyCertificates(selectedRows.value)
+    selectedRows.value = []
+    if (failed.length === 0) {
+      ElMessage.success(`Deleted ${succeeded} certificate${succeeded === 1 ? '' : 's'}`)
+    } else if (succeeded > 0) {
+      ElMessage.warning(`Deleted ${succeeded}, failed ${failed.length}: ${failed.map((f) => f.name).join(', ')}`)
+    } else {
+      ElMessage.error(`All ${failed.length} deletes failed`)
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'Bulk delete failed')
+  } finally {
+    bulkDeleting.value = false
+  }
 }
 
 function openCreate() {
@@ -200,35 +260,54 @@ onMounted(() => {
       <el-button type="primary" :icon="Plus" @click="openCreate">Create</el-button>
     </el-empty>
 
-    <el-table
-      v-else
-      v-loading="certificateStore.loading"
-      :data="certificateStore.items"
-      style="width: 100%"
-      @row-click="openEdit"
-      :row-class-name="() => 'clickable-row'"
-    >
-      <el-table-column prop="meta.name" label="Name" min-width="180" />
-      <el-table-column label="Config Name" min-width="150">
+    <template v-else>
+      <el-row :gutter="12" align="middle" style="margin-bottom: 12px">
+        <el-col :span="12">
+          <el-input
+            v-model="nameFilter"
+            placeholder="Filter by name..."
+            clearable
+            :prefix-icon="Search"
+          />
+        </el-col>
+        <el-col :span="12" v-if="selectedRows.length > 0">
+          <el-button type="danger" :icon="Delete" @click="confirmBulkDelete">
+            Delete ({{ selectedRows.length }})
+          </el-button>
+        </el-col>
+      </el-row>
+
+      <el-table
+        v-loading="certificateStore.loading"
+        :data="displayItems"
+        style="width: 100%"
+        row-key="meta.name"
+        @row-click="handleRowClick"
+        @selection-change="handleSelectionChange"
+        :row-class-name="() => 'clickable-row'"
+      >
+      <el-table-column type="selection" width="48" />
+      <el-table-column prop="meta.name" label="Name" min-width="180" sortable />
+      <el-table-column label="Config Name" min-width="150" sortable :sort-method="sortByConfigName">
         <template #default="{ row }">
           {{ row.config?.name || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="Certificate Source" min-width="140">
+      <el-table-column label="Certificate Source" min-width="140" sortable :sort-method="sortByCertSource">
         <template #default="{ row }">
           <el-tag v-if="row.config?.certificate" size="small">File</el-tag>
           <el-tag v-else-if="row.config?.certificateData" size="small" type="info">Inline data</el-tag>
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="Key Source" min-width="120">
+      <el-table-column label="Key Source" min-width="120" sortable :sort-method="sortByKeySource">
         <template #default="{ row }">
           <el-tag v-if="row.config?.key" size="small">File</el-tag>
           <el-tag v-else-if="row.config?.keyData" size="small" type="info">Inline data</el-tag>
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="Created" width="180">
+      <el-table-column label="Created" width="180" sortable :sort-method="sortByCreated">
         <template #default="{ row }">
           {{ formatDate(row.meta?.created) }}
         </template>
@@ -245,6 +324,7 @@ onMounted(() => {
         </template>
       </el-table-column>
     </el-table>
+    </template>
 
     <!-- Create / Edit Dialog -->
     <el-dialog
@@ -334,6 +414,13 @@ onMounted(() => {
       v-model:visible="deleteDialogVisible"
       :item-name="deleteTarget?.meta?.name ?? ''"
       @confirm="handleDelete"
+    />
+
+    <!-- Bulk delete confirmation -->
+    <ConfirmDelete
+      v-model:visible="bulkDeleteVisible"
+      :message="`Delete ${selectedRows.length} selected certificate${selectedRows.length === 1 ? '' : 's'}?`"
+      @confirm="handleBulkDelete"
     />
   </div>
 </template>

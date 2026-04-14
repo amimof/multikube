@@ -1,7 +1,8 @@
 <script setup lang="ts">
 defineProps<{
   visible: boolean
-  itemName: string
+  itemName?: string
+  message?: string
 }>()
 
 const emit = defineEmits<{
@@ -26,7 +27,8 @@ function handleConfirm() {
     width="400"
     @update:model-value="$emit('update:visible', $event)"
   >
-    <p>Are you sure you want to delete <strong>{{ itemName }}</strong>?</p>
+    <p v-if="message">{{ message }}</p>
+    <p v-else>Are you sure you want to delete <strong>{{ itemName }}</strong>?</p>
     <p>This action cannot be undone.</p>
     <template #footer>
       <el-button @click="handleClose">Cancel</el-button>
