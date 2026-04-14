@@ -5,40 +5,37 @@ import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
-import fs from 'node:fs'
-import path from 'node:path'
-
-// process.env.VITE_APP_VERSION = require("./package.json").version;
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
 export default defineConfig({
-
   plugins: [
     vue(),
     vueJsx(),
     vueDevTools(),
+    AutoImport({
+      resolvers: [ElementPlusResolver()],
+    }),
+    Components({
+      resolvers: [ElementPlusResolver()],
+    }),
   ],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-
   server: {
-    // https: {
-    //   key: fs.readFileSync(path.resolve('.cert/dev.key')),
-    //   cert: fs.readFileSync(path.resolve('.cert/dev.crt')),
-    // },
     proxy: {
       '/api/v1': {
         target: 'https://localhost:6443',
         changeOrigin: true,
-
         // dev-only: allows Vite's Node proxy to talk to your
         // self-signed backend cert
         secure: false,
       },
     },
   },
-
 })

@@ -1,58 +1,66 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { useRoute } from 'vue-router'
+import {
+  HomeFilled,
+  Monitor,
+  Guide,
+  Key,
+} from '@element-plus/icons-vue'
 
-const navigationItems = [
-  { label: 'Backends', to: '/backends' },
-  { label: "CA's", to: '/cas' },
-  { label: 'Certificates', to: '/certificates' },
-  { label: 'Credentials', to: '/credentials' },
-  { label: 'Policies', to: '/policies' },
-  { label: 'Routes', to: '/routes' },
-]
+const route = useRoute()
 </script>
 
 <template>
-  <div class="container-fluid px-0">
-    <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom shadow-sm">
-      <div class="container">
-        <RouterLink class="navbar-brand fw-semibold" to="/">Multikube Admin</RouterLink>
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarText"
-          aria-controls="navbarText"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarText">
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0 gap-lg-1">
-            <li class="nav-item">
-              <RouterLink class="nav-link" to="/">Home</RouterLink>
-            </li>
-            <li v-for="item in navigationItems" :key="item.to" class="nav-item">
-              <RouterLink class="nav-link" :to="item.to">{{ item.label }}</RouterLink>
-            </li>
-          </ul>
-          <span class="navbar-text">
-            Resource console
-          </span>
-        </div>
+  <el-container style="height: 100vh">
+    <el-aside width="220px" style="background-color: #001529">
+      <div style="padding: 20px; text-align: center">
+        <h2 style="color: #fff; margin: 0; font-size: 18px">Multikube</h2>
       </div>
-    </nav>
-  </div>
-
-  <div class="container">
-    <main class="main my-4">
-      <RouterView />
-    </main>
-
-    <footer class="text-center py-3 mt-auto text-body-secondary small">
-      <span>&copy; 2026 Multikube</span>
-    </footer>
-  </div>
+      <el-menu
+        :default-active="route.path"
+        router
+        background-color="#001529"
+        text-color="#ffffffa6"
+        active-text-color="#ffffff"
+        style="border-right: none"
+      >
+        <el-menu-item index="/">
+          <el-icon><HomeFilled /></el-icon>
+          <span>Home</span>
+        </el-menu-item>
+        <el-menu-item index="/backends">
+          <el-icon><Monitor /></el-icon>
+          <span>Backends</span>
+        </el-menu-item>
+        <el-menu-item index="/routes">
+          <el-icon><Guide /></el-icon>
+          <span>Routes</span>
+        </el-menu-item>
+        <el-menu-item index="/cas">
+          <el-icon><Key /></el-icon>
+          <span>Certificate Authorities</span>
+        </el-menu-item>
+      </el-menu>
+    </el-aside>
+    <el-container>
+      <el-main style="background-color: #f5f7fa; padding: 20px">
+        <RouterView />
+      </el-main>
+    </el-container>
+  </el-container>
 </template>
 
-<style scoped></style>
+<style>
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.el-menu-item.is-active {
+  background-color: #1890ff !important;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+</style>
