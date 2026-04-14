@@ -53,7 +53,7 @@ func (c *Controller) heartbeatSingle(be *proxy.BackendRuntime) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.heartBeatTimeout)
 	defer cancel()
 
-	u, err := url.JoinPath(be.URL.String(), "/api/v1/")
+	u, err := url.JoinPath(be.URL.String(), "/healthz")
 	if err != nil {
 		_ = c.setTargetUnhealthy(be, err.Error())
 		return err

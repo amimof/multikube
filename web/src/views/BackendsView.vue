@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, toRaw } from 'vue'
-import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Plus, Refresh, Delete, Search, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useBackendStore } from '@/stores/backend'
 import { useCaStore } from '@/stores/ca'
@@ -16,6 +17,7 @@ import ConfirmDelete from '@/components/ConfirmDelete.vue'
 const backendStore = useBackendStore()
 const caStore = useCaStore()
 const credentialStore = useCredentialStore()
+const router = useRouter()
 
 const { nameFilter, displayItems } = useResourceTable(computed(() => backendStore.items))
 
@@ -143,6 +145,11 @@ function handleSelectionChange(rows: V1Backend[]) {
 function handleRowClick(row: V1Backend, column: any) {
   if (column?.type === 'selection') return
   openEdit(row)
+}
+
+function viewStatus(row: V1Backend) {
+  const name = row.meta?.name
+  if (name) router.push(`/backends/${name}`)
 }
 
 function openCreate() {
@@ -297,8 +304,15 @@ onMounted(() => {
           {{ formatDate(row.meta?.created) }}
         </template>
       </el-table-column>
-      <el-table-column label="Actions" width="80" fixed="right">
+      <el-table-column label="Actions" width="120" fixed="right">
         <template #default="{ row }">
+          <el-button
+            :icon="View"
+            type="primary"
+            size="small"
+            plain
+            @click.stop="viewStatus(row)"
+          />
           <el-button
             :icon="Delete"
             type="danger"

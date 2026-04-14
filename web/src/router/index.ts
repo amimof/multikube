@@ -14,6 +14,11 @@ const router = createRouter({
       component: () => import('@/views/BackendsView.vue'),
     },
     {
+      path: '/backends/:name',
+      name: 'backend-status',
+      component: () => import('@/views/BackendStatusView.vue'),
+    },
+    {
       path: '/routes',
       name: 'routes',
       component: () => import('@/views/RoutesView.vue'),

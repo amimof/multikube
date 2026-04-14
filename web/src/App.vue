@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   HomeFilled,
@@ -8,9 +9,15 @@ import {
   Lock,
   Document,
   List,
+  Plus,
+  Upload,
 } from '@element-plus/icons-vue'
+import ApplyResourcesModal from '@/components/ApplyResourcesModal.vue'
+import ImportKubeconfigModal from '@/components/ImportKubeconfigModal.vue'
 
 const route = useRoute()
+const showApplyModal = ref(false)
+const showImportModal = ref(false)
 </script>
 
 <template>
@@ -57,11 +64,28 @@ const route = useRoute()
         </el-menu-item>
       </el-menu>
     </el-aside>
-    <el-container>
+    <el-container direction="vertical">
+      <el-header class="app-header">
+        <div />
+        <div style="display: flex; gap: 8px">
+          <el-button :icon="Upload" @click="showImportModal = true">
+            Import
+          </el-button>
+          <el-button type="primary" :icon="Plus" @click="showApplyModal = true">
+            Create
+          </el-button>
+        </div>
+      </el-header>
       <el-main style="background-color: #f5f7fa; padding: 20px">
         <RouterView />
       </el-main>
     </el-container>
+
+    <!-- Global Apply from YAML modal -->
+    <ApplyResourcesModal v-model:visible="showApplyModal" />
+
+    <!-- Global Import Kubeconfig modal -->
+    <ImportKubeconfigModal v-model:visible="showImportModal" />
   </el-container>
 </template>
 
@@ -77,5 +101,15 @@ body {
 
 .clickable-row {
   cursor: pointer;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 50px;
+  padding: 0 20px;
+  background-color: #fff;
+  border-bottom: 1px solid #e4e7ed;
 }
 </style>
