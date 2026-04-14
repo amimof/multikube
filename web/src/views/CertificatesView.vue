@@ -279,6 +279,7 @@ onMounted(() => {
 
       <el-table
         v-loading="certificateStore.loading"
+        element-loading-text="Loading..."
         :data="displayItems"
         style="width: 100%"
         row-key="meta.name"
@@ -404,7 +405,7 @@ onMounted(() => {
       <template #footer>
         <el-button @click="dialogVisible = false">Cancel</el-button>
         <el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
-          {{ isEditing ? 'Update' : 'Create' }}
+          {{ saving ? 'Saving...' : isEditing ? 'Update' : 'Create' }}
         </el-button>
       </template>
     </el-dialog>

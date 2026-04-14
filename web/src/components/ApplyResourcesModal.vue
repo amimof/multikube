@@ -178,7 +178,7 @@ function handleOpened() {
         :disabled="!canApply"
         @click="handleApply"
       >
-        Apply
+        {{ applying ? 'Applying...' : 'Apply' }}
       </el-button>
     </template>
   </el-dialog>

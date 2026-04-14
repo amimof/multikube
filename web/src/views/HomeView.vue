@@ -39,7 +39,12 @@ onMounted(() => {
               </div>
             </template>
             <div style="text-align: center">
-              <el-statistic :value="backendStore.items.length" />
+              <el-skeleton v-if="backendStore.loading" :rows="0" animated>
+                <template #template>
+                  <el-skeleton-item variant="text" style="width: 60px; height: 32px; margin: 0 auto" />
+                </template>
+              </el-skeleton>
+              <el-statistic v-else :value="backendStore.items.length" />
             </div>
           </el-card>
         </router-link>
@@ -54,7 +59,12 @@ onMounted(() => {
               </div>
             </template>
             <div style="text-align: center">
-              <el-statistic :value="routeStore.items.length" />
+              <el-skeleton v-if="routeStore.loading" :rows="0" animated>
+                <template #template>
+                  <el-skeleton-item variant="text" style="width: 60px; height: 32px; margin: 0 auto" />
+                </template>
+              </el-skeleton>
+              <el-statistic v-else :value="routeStore.items.length" />
             </div>
           </el-card>
         </router-link>
@@ -69,7 +79,12 @@ onMounted(() => {
               </div>
             </template>
             <div style="text-align: center">
-              <el-statistic :value="caStore.items.length" />
+              <el-skeleton v-if="caStore.loading" :rows="0" animated>
+                <template #template>
+                  <el-skeleton-item variant="text" style="width: 60px; height: 32px; margin: 0 auto" />
+                </template>
+              </el-skeleton>
+              <el-statistic v-else :value="caStore.items.length" />
             </div>
           </el-card>
         </router-link>
@@ -84,7 +99,12 @@ onMounted(() => {
               </div>
             </template>
             <div style="text-align: center">
-              <el-statistic :value="credentialStore.items.length" />
+              <el-skeleton v-if="credentialStore.loading" :rows="0" animated>
+                <template #template>
+                  <el-skeleton-item variant="text" style="width: 60px; height: 32px; margin: 0 auto" />
+                </template>
+              </el-skeleton>
+              <el-statistic v-else :value="credentialStore.items.length" />
             </div>
           </el-card>
         </router-link>
@@ -99,7 +119,12 @@ onMounted(() => {
               </div>
             </template>
             <div style="text-align: center">
-              <el-statistic :value="certificateStore.items.length" />
+              <el-skeleton v-if="certificateStore.loading" :rows="0" animated>
+                <template #template>
+                  <el-skeleton-item variant="text" style="width: 60px; height: 32px; margin: 0 auto" />
+                </template>
+              </el-skeleton>
+              <el-statistic v-else :value="certificateStore.items.length" />
             </div>
           </el-card>
         </router-link>
@@ -114,7 +139,12 @@ onMounted(() => {
               </div>
             </template>
             <div style="text-align: center">
-              <el-statistic :value="policyStore.items.length" />
+              <el-skeleton v-if="policyStore.loading" :rows="0" animated>
+                <template #template>
+                  <el-skeleton-item variant="text" style="width: 60px; height: 32px; margin: 0 auto" />
+                </template>
+              </el-skeleton>
+              <el-statistic v-else :value="policyStore.items.length" />
             </div>
           </el-card>
         </router-link>

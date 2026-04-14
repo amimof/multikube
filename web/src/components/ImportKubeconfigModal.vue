@@ -384,7 +384,7 @@ const authTypeLabel: Record<string, string> = {
             :disabled="!canImport"
             @click="handleImport"
           >
-            Import
+            {{ importing ? 'Importing...' : 'Import' }}
           </el-button>
           <el-button
             v-if="step === 'results' && !allSucceeded"

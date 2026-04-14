@@ -127,7 +127,9 @@ onMounted(() => {
     />
 
     <!-- Loading -->
-    <div v-if="backendStore.loading" v-loading="true" style="height: 200px" />
+    <el-card v-if="backendStore.loading" shadow="never" style="margin-bottom: 16px">
+      <el-skeleton :rows="6" animated />
+    </el-card>
 
     <!-- Not found -->
     <el-empty
