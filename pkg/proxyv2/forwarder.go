@@ -53,10 +53,13 @@ func cloneRequestForTarget(in *http.Request, target *BackendRuntime) *http.Reque
 	out.URL.Scheme = target.URL.Scheme
 	out.URL.Host = target.URL.Host
 
+	reqPath := stripMatchedPath(in)
+
 	basePath := strings.TrimRight(target.URL.Path, "/")
-	reqPath := in.URL.Path
 	if basePath != "" {
 		out.URL.Path = basePath + reqPath
+	} else {
+		out.URL.Path = reqPath
 	}
 
 	out.Host = target.URL.Host
@@ -64,6 +67,35 @@ func cloneRequestForTarget(in *http.Request, target *BackendRuntime) *http.Reque
 
 	copyForwardingHeaders(out, in)
 	return out
+}
+
+// stripMatchedPath removes the matched route prefix (or exact path) from the
+// incoming request path so the upstream sees a path relative to its own root.
+// For non-path route kinds (header, JWT, SNI) the original path is returned
+// unchanged.
+func stripMatchedPath(in *http.Request) string {
+	route, ok := MatchedRouteFromContext(in.Context())
+	if !ok {
+		return in.URL.Path
+	}
+
+	reqPath := in.URL.Path
+
+	switch route.Kind {
+	case RouteMatchKindPathPrefix:
+		reqPath = strings.TrimPrefix(reqPath, route.PathPrefix)
+	case RouteMatchKindPath:
+		reqPath = strings.TrimPrefix(reqPath, route.Path)
+	default:
+		return reqPath
+	}
+
+	// Guarantee the upstream path is absolute.
+	if reqPath == "" || reqPath[0] != '/' {
+		reqPath = "/" + reqPath
+	}
+
+	return reqPath
 }
 
 func copyForwardingHeaders(out, in *http.Request) {

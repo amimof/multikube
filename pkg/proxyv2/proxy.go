@@ -69,6 +69,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Store matched route on context so the forwarder can strip the
+	// matched path/prefix before proxying to the upstream.  The original
+	// r.URL.Path is preserved for K8s request parsing and policy evaluation.
+	ctx = WithMatchedRoute(ctx, route)
+	r = r.WithContext(ctx)
+
 	// Parse K8s from request
 	k8sReq := ParseK8sRequest(ctx, r)
 

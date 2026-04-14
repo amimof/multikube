@@ -205,6 +205,7 @@ const (
 	ctxKeyJWTClaims contextKey = "jwt_claims"
 	ctxKeySNI       contextKey = "sni"
 	ctxKeyPrincipal contextKey = "principal"
+	ctxKeyRoute     contextKey = "matched_route"
 )
 
 func JWTClaimsFromContext(ctx context.Context) (map[string]any, bool) {
@@ -249,4 +250,18 @@ func WithPrincipal(ctx context.Context, p *Principal) context.Context {
 
 func WithJWTClaims(ctx context.Context, claims map[string]any) context.Context {
 	return context.WithValue(ctx, ctxKeyJWTClaims, claims)
+}
+
+// WithMatchedRoute stores the matched RouteRuntime in the request context so
+// that downstream handlers (e.g. the forwarder) can inspect the route that was
+// selected during dispatch.
+func WithMatchedRoute(ctx context.Context, rr *RouteRuntime) context.Context {
+	return context.WithValue(ctx, ctxKeyRoute, rr)
+}
+
+// MatchedRouteFromContext retrieves the RouteRuntime stored by WithMatchedRoute.
+func MatchedRouteFromContext(ctx context.Context) (*RouteRuntime, bool) {
+	v := ctx.Value(ctxKeyRoute)
+	rr, ok := v.(*RouteRuntime)
+	return rr, ok
 }

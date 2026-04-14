@@ -84,6 +84,8 @@ config:
 ```
 
 Use this when one specific path should always go to one backend.
+The matched path is stripped before forwarding to the upstream, so
+`/api/v1/nodes` arrives at the backend as `/`.
 
 ### Route by path prefix
 
@@ -99,6 +101,8 @@ config:
 ```
 
 Use this when one group of URLs should map to the same backend.
+The matched prefix is stripped before forwarding to the upstream, so
+`/clusters/dev/api/v1/pods` arrives at the backend as `/api/v1/pods`.
 
 ### Route by header
 
@@ -193,6 +197,7 @@ Useful flags:
 - `backend_ref` must point to an existing compiled backend or the route becomes `INVALID`
 - duplicate matchers conflict; both conflicting routes are marked `CONFLICT` and removed from the active runtime
 - `path_prefix` routes are sorted by longest prefix first, so more specific prefixes win
+- `path_prefix` and `path` matchers strip the matched portion from the request path before forwarding to the upstream backend; header, JWT and SNI matchers forward the original path unchanged
 - `path` matching uses Go `path.Match`, which means it behaves like glob matching rather than strict literal comparison
 - JWT matching only works when JWT claims are present in the request context
 - SNI matching only works when SNI is present in the request context
