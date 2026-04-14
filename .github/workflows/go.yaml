@@ -86,6 +86,9 @@ jobs:
       - name: Compile Server
         run: make server
 
+      - name: Compile CLI
+        run: make cli
+
       - name: Upload binaries
         uses: actions/upload-artifact@v6
         with:

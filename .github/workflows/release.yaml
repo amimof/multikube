@@ -33,6 +33,16 @@ jobs:
           GOOS=darwin GOARCH=amd64 BINARY_NAME=multikube-darwin-amd64 make server
           GOOS=darwin GOARCH=arm64 BINARY_NAME=multikube-darwin-arm64 make server
 
+      - name: Build CLI Binaries
+        run: |
+          GOOS=linux GOARCH=amd64 BINARY_NAME=multikubectl-linux-amd64 make cli
+          GOOS=linux GOARCH=arm BINARY_NAME=multikubectl-linux-arm make cli
+          GOOS=linux GOARCH=arm64 BINARY_NAME=multikubectl-linux-arm64 make cli
+          GOOS=windows GOARCH=amd64 BINARY_NAME=multikubectl-windows-amd64.exe make cli
+          GOOS=windows GOARCH=arm64 BINARY_NAME=multikubectl-windows-arm64.exe make cli
+          GOOS=darwin GOARCH=amd64 BINARY_NAME=multikubectl-darwin-amd64 make cli
+          GOOS=darwin GOARCH=arm64 BINARY_NAME=multikubectl-darwin-arm64 make cli
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
