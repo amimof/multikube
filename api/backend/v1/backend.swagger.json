@@ -570,9 +570,6 @@
     "v1BackendConfig": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
         "servers": {
           "type": "array",
           "items": {

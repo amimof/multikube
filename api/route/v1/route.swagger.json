@@ -703,9 +703,6 @@
     "v1RouteConfig": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
         "match": {
           "$ref": "#/definitions/v1Match"
         },

@@ -75,7 +75,6 @@ message Certificate {
 message CertificateStatus {}
 
 message CertificateConfig {
-  string name = 1 [(buf.validate.field).string.min_len = 1];
   option (buf.validate.message).oneof = {
     fields: [
       "certificate",
@@ -83,8 +82,8 @@ message CertificateConfig {
     ]
     required: true
   };
-  string certificate = 2;
-  string certificate_data = 3;
+  string certificate = 1;
+  string certificate_data = 2;
   option (buf.validate.message).oneof = {
     fields: [
       "key",
@@ -92,8 +91,8 @@ message CertificateConfig {
     ]
     required: true
   };
-  string key = 4;
-  string key_data = 5;
+  string key = 3;
+  string key_data = 4;
 }
 
 message GetRequest {

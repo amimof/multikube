@@ -112,7 +112,7 @@ func buildCredentialConfig(name, token, basicUsername, basicPassword, certificat
 		return nil, fmt.Errorf("exactly one of --token, --certificate-ref, or basic auth flags must be set")
 	}
 
-	config := &credentialv1.CredentialConfig{Name: name}
+	config := &credentialv1.CredentialConfig{}
 
 	switch {
 	case token != "":

@@ -130,7 +130,6 @@ func runCreateRouteCmd(
 			Labels: cmdutil.ConvertKVStringsToMap(labelStrs),
 		},
 		Config: &routev1.RouteConfig{
-			Name:       name,
 			BackendRef: backendRef,
 			Match:      match,
 		},

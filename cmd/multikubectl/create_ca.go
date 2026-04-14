@@ -84,7 +84,6 @@ func runCreateCACmd(
 			Labels: cmdutil.ConvertKVStringsToMap(labelStrs),
 		},
 		Config: &cav1.CertificateAuthorityConfig{
-			Name:            name,
 			Certificate:     certificate,
 			CertificateData: certificateData,
 		},

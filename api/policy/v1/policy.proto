@@ -75,8 +75,7 @@ message Policy {
 message PolicyStatus {}
 
 message PolicyConfig {
-  string name = 1 [(buf.validate.field).string.min_len = 1];
-  repeated Rule rules = 2;
+  repeated Rule rules = 1;
 }
 
 message Rule {

@@ -324,7 +324,7 @@ func compileBackendPool(
 	}
 
 	pool := &proxy.BackendPool{
-		Name:     be.GetConfig().GetName(),
+		Name:     be.GetMeta().GetName(),
 		Targets:  out,
 		Iterator: iter,
 	}

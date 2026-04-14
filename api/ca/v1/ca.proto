@@ -75,7 +75,6 @@ message CertificateAuthority {
 message CertificateAuthorityStatus {}
 
 message CertificateAuthorityConfig {
-  string name = 1 [(buf.validate.field).string.min_len = 1];
   option (buf.validate.message).oneof = {
     fields: [
       "certificate",
@@ -83,8 +82,8 @@ message CertificateAuthorityConfig {
     ]
     required: true
   };
-  string certificate = 2;
-  string certificate_data = 3;
+  string certificate = 1;
+  string certificate_data = 2;
 }
 
 message GetRequest {

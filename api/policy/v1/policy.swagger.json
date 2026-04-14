@@ -666,9 +666,6 @@
     "v1PolicyConfig": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
         "rules": {
           "type": "array",
           "items": {

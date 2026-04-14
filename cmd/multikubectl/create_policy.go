@@ -69,9 +69,7 @@ func runCreatePolicyCmd(cmd *cobra.Command, args []string, cfg *client.Config, l
 			Name:   name,
 			Labels: cmdutil.ConvertKVStringsToMap(labelStrs),
 		},
-		Config: &policyv1.PolicyConfig{
-			Name: name,
-		},
+		Config: &policyv1.PolicyConfig{},
 	}
 
 	if err := c.PolicyV1().Create(ctx, policy); err != nil {

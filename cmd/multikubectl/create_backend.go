@@ -91,7 +91,6 @@ func runCreateBackendCmd(
 			Labels: cmdutil.ConvertKVStringsToMap(labelStrs),
 		},
 		Config: &backendv1.BackendConfig{
-			Name:                  name,
 			Servers:               server,
 			CaRef:                 caRef,
 			AuthRef:               authRef,

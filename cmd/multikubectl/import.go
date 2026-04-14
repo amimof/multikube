@@ -253,7 +253,6 @@ func buildImportPlan(kubeconfigPath, contextName string, kubeconfig *clientcmdap
 		plan.CA = &cav1.CertificateAuthority{
 			Meta: &metav1.Meta{Name: names.CertificateAuthority},
 			Config: &cav1.CertificateAuthorityConfig{
-				Name:            names.CertificateAuthority,
 				CertificateData: caPEM,
 			},
 		}
@@ -276,7 +275,6 @@ func buildImportPlan(kubeconfigPath, contextName string, kubeconfig *clientcmdap
 	backend := &backendv1.Backend{
 		Meta: &metav1.Meta{Name: names.Backend},
 		Config: &backendv1.BackendConfig{
-			Name:                  names.Backend,
 			Servers:               []string{cluster.Server},
 			InsecureSkipTlsVerify: cluster.InsecureSkipTLSVerify,
 		},
@@ -340,7 +338,7 @@ func buildImportedAuth(kubeconfigPath string, authInfo *clientcmdapi.AuthInfo, n
 		return nil, nil, nil
 	}
 
-	config := &credentialv1.CredentialConfig{Name: names.Credential}
+	config := &credentialv1.CredentialConfig{}
 	if hasToken {
 		config.Token = token
 		return config, nil, nil
@@ -364,7 +362,6 @@ func buildImportedAuth(kubeconfigPath string, authInfo *clientcmdapi.AuthInfo, n
 	certificateObj := &certificatev1.Certificate{
 		Meta: &metav1.Meta{Name: names.Certificate},
 		Config: &certificatev1.CertificateConfig{
-			Name:        names.Certificate,
 			Certificate: certificatePEM,
 			Key:         keyPEM,
 		},

@@ -95,7 +95,6 @@ func runCreateCertificateCmd(
 			Labels: cmdutil.ConvertKVStringsToMap(labelStrs),
 		},
 		Config: &certificatev1.CertificateConfig{
-			Name:            name,
 			Certificate:     certificate,
 			CertificateData: certificateData,
 			Key:             key,
