@@ -29,7 +29,6 @@ const deleteTarget = ref<V1Backend | null>(null)
 const selectedRows = ref<V1Backend[]>([])
 const bulkDeleteVisible = ref(false)
 const bulkDeleting = ref(false)
-const impersonationWasUnset = ref(false)
 
 const form = ref<V1Backend>(createEmptyBackend())
 
@@ -173,44 +172,11 @@ function viewStatus(row: V1Backend) {
 function openCreate() {
   form.value = createEmptyBackend()
   isEditing.value = false
-  impersonationWasUnset.value = false
   dialogVisible.value = true
 }
 
-// Normalize missing impersonation config for edit mode with empty placeholder
-function ensureImpersonationConfig(b: V1Backend): boolean {
-  if (!b.config) return true
-  if (!b.config.impersonationConfig) {
-    b.config.impersonationConfig = {
-      name: 'default',
-      enabled: false,
-      usernameClaim: '',
-      groupsClaim: '',
-      extraClaims: [],
-    }
-    return true
-  }
-  if (!b.config.impersonationConfig.extraClaims) {
-    b.config.impersonationConfig.extraClaims = []
-  }
-  return false
-}
-
-// Check if impersonation config is still an untouched placeholder
-function isUnsetImpersonationConfig(cfg?: { enabled?: boolean; usernameClaim?: string; groupsClaim?: string; extraClaims?: string[] }): boolean {
-  if (!cfg) return true
-  if (cfg.enabled) return false
-  if ((cfg.usernameClaim ?? '').trim().length > 0) return false
-  if ((cfg.groupsClaim ?? '').trim().length > 0) return false
-  if ((cfg.extraClaims ?? []).length > 0) return false
-  return true
-}
-
 function openEdit(row: V1Backend) {
-  const clone = structuredClone(toRaw(row))
-  const wasUnset = ensureImpersonationConfig(clone)
-  impersonationWasUnset.value = wasUnset
-  form.value = clone
+  form.value = structuredClone(toRaw(row))
   isEditing.value = true
   dialogVisible.value = true
 }
@@ -257,25 +223,11 @@ async function handleBulkDelete() {
 async function handleSave() {
   saving.value = true
   try {
-    const payload = structuredClone(toRaw(form.value))
-
-    // If editing an old backend that had no impersonation config and the user
-    // didn't touch the placeholder, omit it so the backend stays "unset".
-    if (
-      isEditing.value &&
-      impersonationWasUnset.value &&
-      isUnsetImpersonationConfig(payload.config?.impersonationConfig)
-    ) {
-      if (payload.config) {
-        delete payload.config.impersonationConfig
-      }
-    }
-
     if (isEditing.value) {
-      await backendStore.updateBackend(payload)
+      await backendStore.updateBackend(form.value)
       ElMessage.success('Backend updated')
     } else {
-      await backendStore.createBackend(payload)
+      await backendStore.createBackend(form.value)
       ElMessage.success('Backend created')
     }
     dialogVisible.value = false
