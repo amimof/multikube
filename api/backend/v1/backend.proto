@@ -88,6 +88,15 @@ message BackendConfig {
   bool insecure_skip_tls_verify = 4;
   google.protobuf.Duration cache_ttl = 5;
   LoadBalancingType type = 6;
+  ImpersonationConfig impersonation_config = 7;
+}
+
+message ImpersonationConfig {
+  string name = 1;
+  bool enabled = 2;
+  string username_claim = 3;
+  string groups_claim = 4;
+  repeated string extra_claims = 5;
 }
 
 message BackendStatus {

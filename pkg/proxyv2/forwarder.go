@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -26,6 +27,24 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 		}
 
 		outReq := cloneRequestForTarget(r, target)
+
+		// Always strip client-supplied impersonation headers — the proxy
+		// owns these exclusively when impersonation is configured.
+		stripImpersonationHeaders(outReq)
+
+		// Impersonation header injection.
+		if pool.Impersonation != nil && pool.Impersonation.Enabled {
+			principal, hasPrincipal := PrincipalFromContext(r.Context())
+			if !hasPrincipal || principal == nil {
+				http.Error(w, "Forbidden: authentication required for impersonation", http.StatusForbidden)
+				return
+			}
+			if err := injectImpersonationHeaders(outReq, principal, pool.Impersonation); err != nil {
+				http.Error(w, "Forbidden: "+err.Error(), http.StatusForbidden)
+				return
+			}
+		}
+
 		if target.AuthInjector != nil {
 			if err := target.AuthInjector.Apply(outReq); err != nil {
 				writeProxyError(w, err)
@@ -155,4 +174,89 @@ func (fw flushWriter) Write(p []byte) (int, error) {
 		f.Flush()
 	}
 	return n, err
+}
+
+// stripImpersonationHeaders removes all client-supplied Impersonate-* headers
+// from the outbound request. The proxy owns these headers exclusively.
+func stripImpersonationHeaders(req *http.Request) {
+	for key := range req.Header {
+		if strings.HasPrefix(strings.ToLower(key), "impersonate-") {
+			req.Header.Del(key)
+		}
+	}
+}
+
+// injectImpersonationHeaders sets Kubernetes impersonation headers on the
+// outbound request using the authenticated principal and the backend's
+// impersonation configuration.
+func injectImpersonationHeaders(req *http.Request, principal *Principal, cfg *ImpersonationRuntime) error {
+	// --- Impersonate-User ---
+	username, err := resolveUsername(principal, cfg.UsernameClaim)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Impersonate-User", username)
+
+	// --- Impersonate-Group ---
+	groups := resolveGroups(principal, cfg.GroupsClaim)
+	for _, g := range groups {
+		req.Header.Add("Impersonate-Group", g)
+	}
+
+	// --- Impersonate-Extra-<claim> ---
+	for _, claim := range cfg.ExtraClaims {
+		vals := resolveClaimValues(principal, claim)
+		if len(vals) == 0 {
+			continue // skip missing extra claims
+		}
+		headerName := "Impersonate-Extra-" + claim
+		for _, v := range vals {
+			req.Header.Add(headerName, v)
+		}
+	}
+
+	return nil
+}
+
+// resolveUsername extracts the username string from the principal based on the
+// configured claim name.
+func resolveUsername(principal *Principal, claim string) (string, error) {
+	if claim == "sub" {
+		if principal.Subject == "" {
+			return "", fmt.Errorf("username claim %q is empty", claim)
+		}
+		return principal.Subject, nil
+	}
+	v, ok := principal.Claims[claim]
+	if !ok {
+		return "", fmt.Errorf("username claim %q not found in JWT", claim)
+	}
+	s, ok := v.(string)
+	if !ok || s == "" {
+		return "", fmt.Errorf("username claim %q is not a non-empty string", claim)
+	}
+	return s, nil
+}
+
+// resolveGroups extracts group strings from the principal based on the
+// configured claim name. Returns nil if the claim is missing.
+func resolveGroups(principal *Principal, claim string) []string {
+	if claim == "groups" {
+		return principal.Groups
+	}
+	v, ok := principal.Claims[claim]
+	if !ok {
+		return nil
+	}
+	return toStringSlice(v)
+}
+
+// resolveClaimValues extracts string values for a single claim, supporting
+// both scalar string and array-of-string JWT claim shapes.
+func resolveClaimValues(principal *Principal, claim string) []string {
+	v, ok := principal.Claims[claim]
+	if !ok {
+		return nil
+	}
+	return toStringSlice(v)
 }

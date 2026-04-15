@@ -75,22 +75,32 @@ func (l *BackendService) List(ctx context.Context, limit int32) ([]*backendv1.Ba
 	return l.Repo.List(ctx, limit)
 }
 
-func (l *BackendService) Create(ctx context.Context, volume *backendv1.Backend) (*backendv1.Backend, error) {
+func (l *BackendService) Create(ctx context.Context, be *backendv1.Backend) (*backendv1.Backend, error) {
 	ctx, span := tracer.Start(ctx, "volume.Create")
 	defer span.End()
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Default impersionation config
+	if be.GetConfig().GetImpersonationConfig() == nil {
+		be.GetConfig().ImpersonationConfig = &backendv1.ImpersonationConfig{
+			Name:          "default",
+			Enabled:       true,
+			UsernameClaim: "sub",
+			GroupsClaim:   "groups",
+		}
+	}
+
 	// Create volume in repo
-	newVolume, err := l.Repo.Create(ctx, volume)
+	newVolume, err := l.Repo.Create(ctx, be)
 	if err != nil {
 		l.Logger.Error("error creating volume", "error", err, "name", newVolume.GetMeta().GetName())
 		return nil, err
 	}
 
 	// Publish event that volume is created
-	err = l.Exchange.Forward(ctx, events.NewEvent(events.BackendCreate, volume))
+	err = l.Exchange.Forward(ctx, events.NewEvent(events.BackendCreate, be))
 	if err != nil {
 		l.Logger.Error("error publishing volume create event", "error", err, "name", newVolume.GetMeta().GetName())
 		return nil, err

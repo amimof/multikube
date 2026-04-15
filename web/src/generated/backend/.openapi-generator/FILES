@@ -8,6 +8,7 @@ docs/V1BackendConfig.md
 docs/V1BackendStatus.md
 docs/V1CreateResponse.md
 docs/V1GetResponse.md
+docs/V1ImpersonationConfig.md
 docs/V1ListResponse.md
 docs/V1LoadBalancingType.md
 docs/V1Meta.md
@@ -22,6 +23,7 @@ models/V1BackendConfig.ts
 models/V1BackendStatus.ts
 models/V1CreateResponse.ts
 models/V1GetResponse.ts
+models/V1ImpersonationConfig.ts
 models/V1ListResponse.ts
 models/V1LoadBalancingType.ts
 models/V1Meta.ts

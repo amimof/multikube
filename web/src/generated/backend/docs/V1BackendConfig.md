@@ -12,6 +12,7 @@ Name | Type
 `insecureSkipTlsVerify` | boolean
 `cacheTtl` | string
 `type` | [V1LoadBalancingType](V1LoadBalancingType.md)
+`impersonationConfig` | [V1ImpersonationConfig](V1ImpersonationConfig.md)
 
 ## Example
 
@@ -26,6 +27,7 @@ const example = {
   "insecureSkipTlsVerify": null,
   "cacheTtl": null,
   "type": null,
+  "impersonationConfig": null,
 } satisfies V1BackendConfig
 
 console.log(example)

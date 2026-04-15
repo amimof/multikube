@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -38,15 +39,21 @@ func ExtractJWT(r *http.Request, pubKey *ecdsa.PublicKey) (*Principal, map[strin
 		return nil, nil, fmt.Errorf("unexpected claims type")
 	}
 
-	// Build flat string map for route matching (ctxKeyJWTClaims)
+	// Build flat string map for route matching (ctxKeyJWTClaims).
+	// This is a separate map used for route matching and policy evaluation;
+	// Principal.Claims preserves the raw JWT values (arrays, nested types).
 	flat := make(map[string]any, len(mapClaims))
 	for k, v := range mapClaims {
 		flat[k] = fmt.Sprintf("%v", v)
 	}
 
+	// Build raw claims map preserving original types for impersonation.
+	rawClaims := make(map[string]any, len(mapClaims))
+	maps.Copy(rawClaims, mapClaims)
+
 	// Extract well-known identity claims
 	principal := &Principal{
-		Claims: flat,
+		Claims: rawClaims,
 	}
 
 	if sub, ok := mapClaims["sub"].(string); ok {

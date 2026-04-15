@@ -324,12 +324,45 @@ func compileBackendPool(
 	}
 
 	pool := &proxy.BackendPool{
-		Name:     be.GetMeta().GetName(),
-		Targets:  out,
-		Iterator: iter,
+		Name:          be.GetMeta().GetName(),
+		Targets:       out,
+		Iterator:      iter,
+		Impersonation: compileImpersonationConfig(be.GetConfig().GetImpersonationConfig()),
 	}
 
 	return pool, fwd, nil
+}
+
+// compileImpersonationConfig converts the proto ImpersonationConfig into an
+// ImpersonationRuntime. When cfg is nil (not configured), a default is
+// synthesised: enabled=true, username_claim="sub", groups_claim="groups".
+// When cfg is present, empty claim fields are defaulted.
+func compileImpersonationConfig(cfg *backendv1.ImpersonationConfig) *proxy.ImpersonationRuntime {
+	if cfg == nil {
+		return &proxy.ImpersonationRuntime{
+			Name:          "default",
+			Enabled:       true,
+			UsernameClaim: "sub",
+			GroupsClaim:   "groups",
+		}
+	}
+
+	usernameClaim := cfg.GetUsernameClaim()
+	if usernameClaim == "" {
+		usernameClaim = "sub"
+	}
+	groupsClaim := cfg.GetGroupsClaim()
+	if groupsClaim == "" {
+		groupsClaim = "groups"
+	}
+
+	return &proxy.ImpersonationRuntime{
+		Name:          cfg.GetName(),
+		Enabled:       cfg.GetEnabled(),
+		UsernameClaim: usernameClaim,
+		GroupsClaim:   groupsClaim,
+		ExtraClaims:   cfg.GetExtraClaims(),
+	}
 }
 
 func getIteratorForLoadBalancingType(typ backendv1.LoadBalancingType) (proxy.BackendIterator, error) {

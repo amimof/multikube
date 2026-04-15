@@ -46,9 +46,22 @@ type RouteRuntime struct {
 }
 
 type BackendPool struct {
-	Name     string
-	Targets  []*BackendRuntime
-	Iterator BackendIterator
+	Name          string
+	Targets       []*BackendRuntime
+	Iterator      BackendIterator
+	Impersonation *ImpersonationRuntime
+}
+
+// ImpersonationRuntime holds the compiled impersonation configuration for a
+// backend pool. When non-nil and Enabled is true, the proxy injects
+// Impersonate-User, Impersonate-Group, and Impersonate-Extra-* headers on the
+// outbound request using claims from the authenticated principal's JWT.
+type ImpersonationRuntime struct {
+	Name          string
+	Enabled       bool
+	UsernameClaim string
+	GroupsClaim   string
+	ExtraClaims   []string
 }
 
 func (p *BackendPool) Next(r *http.Request) (*BackendRuntime, bool) {

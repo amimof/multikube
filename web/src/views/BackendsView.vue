@@ -29,6 +29,7 @@ const deleteTarget = ref<V1Backend | null>(null)
 const selectedRows = ref<V1Backend[]>([])
 const bulkDeleteVisible = ref(false)
 const bulkDeleting = ref(false)
+const impersonationWasUnset = ref(false)
 
 const form = ref<V1Backend>(createEmptyBackend())
 
@@ -41,8 +42,15 @@ function createEmptyBackend(): V1Backend {
       caRef: '',
       authRef: '',
       insecureSkipTlsVerify: false,
-      cacheTtl: '',
+      cacheTtl: '30s',
       type: V1LoadBalancingType.LoadBalancingTypeRoundRobin,
+      impersonationConfig: {
+        name: 'default',
+        enabled: true,
+        usernameClaim: 'sub',
+        groupsClaim: 'groups',
+        extraClaims: [],
+      },
     },
   }
 }
@@ -67,7 +75,8 @@ const lbTypeLabels: Record<string, string> = {
 const isFormValid = computed(() => {
   const name = (form.value.meta?.name ?? '').trim()
   const servers = form.value.config?.servers ?? []
-  return name.length > 0 && servers.length > 0
+  const cacheTtl = (form.value.config?.cacheTtl ?? '').trim()
+  return name.length > 0 && servers.length > 0 && cacheTtl.length > 0
 })
 
 // Servers as a newline-separated string for textarea editing
@@ -86,6 +95,16 @@ const formLabels = computed({
   set: (val: Record<string, string>) => {
     if (form.value.meta) {
       form.value.meta.labels = val
+    }
+  },
+})
+
+// Extra claims as a newline-separated string for textarea editing
+const extraClaimsText = computed({
+  get: () => (form.value.config?.impersonationConfig?.extraClaims ?? []).join('\n'),
+  set: (val: string) => {
+    if (form.value.config?.impersonationConfig) {
+      form.value.config.impersonationConfig.extraClaims = val.split('\n').filter((s) => s.trim() !== '')
     }
   },
 })
@@ -154,11 +173,44 @@ function viewStatus(row: V1Backend) {
 function openCreate() {
   form.value = createEmptyBackend()
   isEditing.value = false
+  impersonationWasUnset.value = false
   dialogVisible.value = true
 }
 
+// Normalize missing impersonation config for edit mode with empty placeholder
+function ensureImpersonationConfig(b: V1Backend): boolean {
+  if (!b.config) return true
+  if (!b.config.impersonationConfig) {
+    b.config.impersonationConfig = {
+      name: 'default',
+      enabled: false,
+      usernameClaim: '',
+      groupsClaim: '',
+      extraClaims: [],
+    }
+    return true
+  }
+  if (!b.config.impersonationConfig.extraClaims) {
+    b.config.impersonationConfig.extraClaims = []
+  }
+  return false
+}
+
+// Check if impersonation config is still an untouched placeholder
+function isUnsetImpersonationConfig(cfg?: { enabled?: boolean; usernameClaim?: string; groupsClaim?: string; extraClaims?: string[] }): boolean {
+  if (!cfg) return true
+  if (cfg.enabled) return false
+  if ((cfg.usernameClaim ?? '').trim().length > 0) return false
+  if ((cfg.groupsClaim ?? '').trim().length > 0) return false
+  if ((cfg.extraClaims ?? []).length > 0) return false
+  return true
+}
+
 function openEdit(row: V1Backend) {
-  form.value = structuredClone(toRaw(row))
+  const clone = structuredClone(toRaw(row))
+  const wasUnset = ensureImpersonationConfig(clone)
+  impersonationWasUnset.value = wasUnset
+  form.value = clone
   isEditing.value = true
   dialogVisible.value = true
 }
@@ -205,11 +257,25 @@ async function handleBulkDelete() {
 async function handleSave() {
   saving.value = true
   try {
+    const payload = structuredClone(toRaw(form.value))
+
+    // If editing an old backend that had no impersonation config and the user
+    // didn't touch the placeholder, omit it so the backend stays "unset".
+    if (
+      isEditing.value &&
+      impersonationWasUnset.value &&
+      isUnsetImpersonationConfig(payload.config?.impersonationConfig)
+    ) {
+      if (payload.config) {
+        delete payload.config.impersonationConfig
+      }
+    }
+
     if (isEditing.value) {
-      await backendStore.updateBackend(form.value)
+      await backendStore.updateBackend(payload)
       ElMessage.success('Backend updated')
     } else {
-      await backendStore.createBackend(form.value)
+      await backendStore.createBackend(payload)
       ElMessage.success('Backend created')
     }
     dialogVisible.value = false
@@ -406,13 +472,48 @@ onMounted(() => {
           </el-select>
         </el-form-item>
 
-        <el-form-item label="Cache TTL">
+        <el-form-item label="Cache TTL" required>
           <el-input v-model="form.config!.cacheTtl" placeholder="e.g. 30s, 5m" />
         </el-form-item>
 
         <el-form-item label="Skip TLS Verify">
           <el-switch v-model="form.config!.insecureSkipTlsVerify" />
         </el-form-item>
+
+        <!-- Advanced section -->
+        <el-collapse style="margin-top: 12px">
+          <el-collapse-item title="Advanced" name="advanced">
+            <el-form-item label="Enable Impersonation" style="margin-top: 12px">
+              <el-switch v-model="form.config!.impersonationConfig!.enabled" />
+            </el-form-item>
+
+            <el-form-item label="Username Claim">
+              <el-input
+                v-model="form.config!.impersonationConfig!.usernameClaim"
+                placeholder="sub"
+                :disabled="!form.config!.impersonationConfig!.enabled"
+              />
+            </el-form-item>
+
+            <el-form-item label="Groups Claim">
+              <el-input
+                v-model="form.config!.impersonationConfig!.groupsClaim"
+                placeholder="groups"
+                :disabled="!form.config!.impersonationConfig!.enabled"
+              />
+            </el-form-item>
+
+            <el-form-item label="Extra Claims">
+              <el-input
+                v-model="extraClaimsText"
+                type="textarea"
+                :rows="3"
+                placeholder="One claim per line"
+                :disabled="!form.config!.impersonationConfig!.enabled"
+              />
+            </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
       </el-form>
 
       <template #footer>

@@ -590,6 +590,9 @@
         },
         "type": {
           "$ref": "#/definitions/v1LoadBalancingType"
+        },
+        "impersonationConfig": {
+          "$ref": "#/definitions/v1ImpersonationConfig"
         }
       }
     },
@@ -617,6 +620,29 @@
       "properties": {
         "backend": {
           "$ref": "#/definitions/v1Backend"
+        }
+      }
+    },
+    "v1ImpersonationConfig": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "usernameClaim": {
+          "type": "string"
+        },
+        "groupsClaim": {
+          "type": "string"
+        },
+        "extraClaims": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

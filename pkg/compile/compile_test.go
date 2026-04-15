@@ -816,3 +816,152 @@ func TestCompile_BackendClientCredentialMissingCertificate_Error(t *testing.T) {
 		t.Fatal("expected error for missing certificate ref, got nil")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Tests — Impersonation config compilation
+// ---------------------------------------------------------------------------
+
+func TestCompile_ImpersonationConfig_DefaultWhenNil(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": newBackend("be", srv.URL), // no impersonation_config set
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pool := res.Runtime.Backends["be"]
+	if pool == nil {
+		t.Fatal("expected backend pool")
+	}
+	imp := pool.Impersonation
+	if imp == nil {
+		t.Fatal("expected default impersonation config")
+	}
+	if imp.Name != "default" {
+		t.Errorf("name = %q, want %q", imp.Name, "default")
+	}
+	if !imp.Enabled {
+		t.Error("expected enabled=true by default")
+	}
+	if imp.UsernameClaim != "sub" {
+		t.Errorf("username_claim = %q, want %q", imp.UsernameClaim, "sub")
+	}
+	if imp.GroupsClaim != "groups" {
+		t.Errorf("groups_claim = %q, want %q", imp.GroupsClaim, "groups")
+	}
+	if len(imp.ExtraClaims) != 0 {
+		t.Errorf("extra_claims = %v, want empty", imp.ExtraClaims)
+	}
+}
+
+func TestCompile_ImpersonationConfig_ExplicitEnabled(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers:               []string{srv.URL},
+					InsecureSkipTlsVerify: true,
+					ImpersonationConfig: &backendv1.ImpersonationConfig{
+						Name:          "custom",
+						Enabled:       true,
+						UsernameClaim: "email",
+						GroupsClaim:   "roles",
+						ExtraClaims:   []string{"scopes", "tenant"},
+					},
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	imp := res.Runtime.Backends["be"].Impersonation
+	if imp == nil {
+		t.Fatal("expected impersonation config")
+	}
+	if imp.Name != "custom" {
+		t.Errorf("name = %q, want %q", imp.Name, "custom")
+	}
+	if !imp.Enabled {
+		t.Error("expected enabled=true")
+	}
+	if imp.UsernameClaim != "email" {
+		t.Errorf("username_claim = %q, want %q", imp.UsernameClaim, "email")
+	}
+	if imp.GroupsClaim != "roles" {
+		t.Errorf("groups_claim = %q, want %q", imp.GroupsClaim, "roles")
+	}
+	if len(imp.ExtraClaims) != 2 || imp.ExtraClaims[0] != "scopes" || imp.ExtraClaims[1] != "tenant" {
+		t.Errorf("extra_claims = %v, want [scopes tenant]", imp.ExtraClaims)
+	}
+}
+
+func TestCompile_ImpersonationConfig_ExplicitDisabled(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers:               []string{srv.URL},
+					InsecureSkipTlsVerify: true,
+					ImpersonationConfig: &backendv1.ImpersonationConfig{
+						Name:    "off",
+						Enabled: false,
+					},
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	imp := res.Runtime.Backends["be"].Impersonation
+	if imp == nil {
+		t.Fatal("expected impersonation config")
+	}
+	if imp.Enabled {
+		t.Error("expected enabled=false")
+	}
+	// Empty claim fields should be defaulted.
+	if imp.UsernameClaim != "sub" {
+		t.Errorf("username_claim = %q, want %q (defaulted)", imp.UsernameClaim, "sub")
+	}
+	if imp.GroupsClaim != "groups" {
+		t.Errorf("groups_claim = %q, want %q (defaulted)", imp.GroupsClaim, "groups")
+	}
+}

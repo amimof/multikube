@@ -220,6 +220,35 @@ onMounted(() => {
         </el-descriptions>
       </el-card>
 
+      <!-- Impersonation -->
+      <el-card shadow="never" style="margin-bottom: 16px">
+        <template #header>
+          <span style="font-weight: 600">Impersonation</span>
+        </template>
+        <el-descriptions :column="2" border size="default">
+          <el-descriptions-item label="Enabled">
+            <el-tag
+              :type="backend.config?.impersonationConfig?.enabled ? 'success' : 'info'"
+              size="small"
+            >
+              {{ backend.config?.impersonationConfig?.enabled ? 'Yes' : 'No' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="Username Claim">
+            {{ backend.config?.impersonationConfig?.usernameClaim || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="Groups Claim">
+            {{ backend.config?.impersonationConfig?.groupsClaim || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="Extra Claims">
+            <span v-if="(backend.config?.impersonationConfig?.extraClaims ?? []).length > 0">
+              {{ backend.config!.impersonationConfig!.extraClaims!.join(', ') }}
+            </span>
+            <span v-else style="color: #909399">-</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </el-card>
+
       <!-- Target Health -->
       <el-card shadow="never" style="margin-bottom: 16px">
         <template #header>

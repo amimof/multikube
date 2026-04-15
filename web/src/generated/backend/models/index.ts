@@ -7,6 +7,7 @@ export * from './V1BackendConfig';
 export * from './V1BackendStatus';
 export * from './V1CreateResponse';
 export * from './V1GetResponse';
+export * from './V1ImpersonationConfig';
 export * from './V1ListResponse';
 export * from './V1LoadBalancingType';
 export * from './V1Meta';

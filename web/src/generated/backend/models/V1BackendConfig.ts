@@ -20,6 +20,13 @@ import {
     V1LoadBalancingTypeToJSON,
     V1LoadBalancingTypeToJSONTyped,
 } from './V1LoadBalancingType';
+import type { V1ImpersonationConfig } from './V1ImpersonationConfig';
+import {
+    V1ImpersonationConfigFromJSON,
+    V1ImpersonationConfigFromJSONTyped,
+    V1ImpersonationConfigToJSON,
+    V1ImpersonationConfigToJSONTyped,
+} from './V1ImpersonationConfig';
 
 /**
  * 
@@ -63,6 +70,12 @@ export interface V1BackendConfig {
      * @memberof V1BackendConfig
      */
     type?: V1LoadBalancingType;
+    /**
+     * 
+     * @type {V1ImpersonationConfig}
+     * @memberof V1BackendConfig
+     */
+    impersonationConfig?: V1ImpersonationConfig;
 }
 
 
@@ -90,6 +103,7 @@ export function V1BackendConfigFromJSONTyped(json: any, ignoreDiscriminator: boo
         'insecureSkipTlsVerify': json['insecureSkipTlsVerify'] == null ? undefined : json['insecureSkipTlsVerify'],
         'cacheTtl': json['cacheTtl'] == null ? undefined : json['cacheTtl'],
         'type': json['type'] == null ? undefined : V1LoadBalancingTypeFromJSON(json['type']),
+        'impersonationConfig': json['impersonationConfig'] == null ? undefined : V1ImpersonationConfigFromJSON(json['impersonationConfig']),
     };
 }
 
@@ -110,6 +124,7 @@ export function V1BackendConfigToJSONTyped(value?: V1BackendConfig | null, ignor
         'insecureSkipTlsVerify': value['insecureSkipTlsVerify'],
         'cacheTtl': value['cacheTtl'],
         'type': V1LoadBalancingTypeToJSON(value['type']),
+        'impersonationConfig': V1ImpersonationConfigToJSON(value['impersonationConfig']),
     };
 }
 

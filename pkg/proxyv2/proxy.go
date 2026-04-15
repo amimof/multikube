@@ -54,7 +54,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var err error
 		principal, flat, err = ExtractJWT(r, p.pubKey)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusForbidden)
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 		ctx = WithPrincipal(ctx, principal)
