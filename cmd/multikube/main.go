@@ -538,7 +538,9 @@ func main() {
 	}
 
 	// Close audit store
-	store.Close()
+	defer func() {
+		_ = store.Close()
+	}()
 
 	// Shut down server with force shutdown as fallback
 	serverShutdownDone := make(chan struct{})

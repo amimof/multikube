@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"sync"
 
 	"github.com/amimof/multikube/internal/infra"
 	"github.com/amimof/multikube/pkg/audit"
@@ -17,9 +16,6 @@ type AuditService struct {
 	Exchange *events.Exchange
 	Manager  infra.SessionManager
 	Store    audit.Store
-
-	activeLogStreams map[string]context.CancelFunc
-	logStreamsMu     sync.RWMutex
 }
 
 // AuditLog streams audit entries

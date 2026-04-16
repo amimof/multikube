@@ -32,7 +32,6 @@ type subscriber struct {
 
 type FileStore struct {
 	path         string
-	sink         Sink
 	mu           sync.RWMutex
 	entries      []*auditv1.AuditEntry
 	nextSeq      uint64
@@ -45,7 +44,6 @@ type FileStore struct {
 	subscribers  map[uint64]*subscriber
 	nextSubID    uint64
 	startOnce    sync.Once
-	closeOnce    sync.Once
 	closed       atomic.Bool
 	logger       logger.Logger
 }
@@ -245,7 +243,7 @@ func (s *FileStore) Close() error {
 		return nil
 	}
 
-	s.file.Close()
+	_ = s.file.Close()
 
 	s.subMu.Lock()
 	defer s.subMu.Unlock()

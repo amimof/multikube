@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	"github.com/amimof/multikube/pkg/events"
@@ -90,6 +92,14 @@ func (l *BackendService) Create(ctx context.Context, be *backendv1.Backend) (*ba
 			UsernameClaim: "sub",
 			GroupsClaim:   "groups",
 		}
+	}
+
+	if be.GetConfig().CacheTtl == nil {
+		be.GetConfig().CacheTtl = durationpb.New(time.Second + 30)
+	}
+
+	if be.GetConfig().Type == 0 {
+		be.GetConfig().Type = backendv1.LoadBalancingType_LOAD_BALANCING_TYPE_ROUND_ROBIN
 	}
 
 	// Create volume in repo
@@ -190,7 +200,7 @@ func (l *BackendService) Patch(ctx context.Context, id keys.ID, patch *backendv1
 	return nil
 }
 
-func (l *BackendService) Update(ctx context.Context, id keys.ID, volume *backendv1.Backend) error {
+func (l *BackendService) Update(ctx context.Context, id keys.ID, be *backendv1.Backend) error {
 	ctx, span := tracer.Start(ctx, "volume.Update")
 	defer span.End()
 
@@ -198,19 +208,37 @@ func (l *BackendService) Update(ctx context.Context, id keys.ID, volume *backend
 	defer l.mu.Unlock()
 
 	// Get the existing volume before updating so we can compare specs
-	existingVolume, err := l.Repo.Get(ctx, id)
+	existingBackend, err := l.Repo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if be.GetConfig().CacheTtl == nil {
+		be.GetConfig().CacheTtl = durationpb.New(time.Second + 30)
+	}
+
+	if be.GetConfig().Type == 0 {
+		be.GetConfig().Type = backendv1.LoadBalancingType_LOAD_BALANCING_TYPE_ROUND_ROBIN
+	}
+
+	// Default impersionation config
+	if be.GetConfig().GetImpersonationConfig() == nil {
+		be.GetConfig().ImpersonationConfig = &backendv1.ImpersonationConfig{
+			Name:          "default",
+			Enabled:       true,
+			UsernameClaim: "sub",
+			GroupsClaim:   "groups",
+		}
 	}
 
 	// Update the volume
-	updated, err := l.Repo.Update(ctx, id, volume)
+	updated, err := l.Repo.Update(ctx, id, be)
 	if err != nil {
-		l.Logger.Error("error updating volume", "error", err, "name", volume.GetMeta().GetName())
+		l.Logger.Error("error updating volume", "error", err, "name", be.GetMeta().GetName())
 		return err
 	}
 
-	equal, err := protoutils.SpecEqual(existingVolume.GetConfig(), updated.GetConfig())
+	equal, err := protoutils.SpecEqual(existingBackend.GetConfig(), updated.GetConfig())
 	if err != nil {
 		return err
 	}
