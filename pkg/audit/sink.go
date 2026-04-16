@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	auditv1 "github.com/amimof/multikube/api/audit/v1"
 )
 
 type Sink interface {
-	WriteBatch(ctx context.Context, events []*AuditEvent) error
+	WriteBatch(ctx context.Context, events []*auditv1.AuditEntry) error
 	Close() error
 }
 
@@ -32,7 +34,7 @@ func NewFileSink(path string) (*FileSink, error) {
 	}, nil
 }
 
-func (s *FileSink) WriteBatch(ctx context.Context, events []*AuditEvent) error {
+func (s *FileSink) WriteBatch(ctx context.Context, events []*auditv1.AuditEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

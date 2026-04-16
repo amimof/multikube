@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	auditv1 "github.com/amimof/multikube/api/audit/v1"
 	"github.com/amimof/multikube/pkg/logger"
 )
 
@@ -18,7 +19,7 @@ func WithLogger(logger logger.Logger) NewPublisherOpts {
 }
 
 type Publisher interface {
-	Publish(*AuditEvent)
+	Publish(*auditv1.AuditEntry)
 }
 
 type AsyncPublisher struct {
@@ -30,7 +31,7 @@ type AsyncPublisher struct {
 
 	sink      Sink
 	logger    logger.Logger
-	ch        chan *AuditEvent
+	ch        chan *auditv1.AuditEntry
 	stopCh    chan struct{}
 	doneCh    chan struct{}
 	closeOnce sync.Once
@@ -47,13 +48,13 @@ func NewAsyncPublisher(sink Sink, opts ...NewPublisherOpts) *AsyncPublisher {
 		OverflowPolicy: OverflowDrop,
 		sink:           sink,
 		logger:         logger.ConsoleLogger{},
-		ch:             make(chan *AuditEvent, 4096),
+		ch:             make(chan *auditv1.AuditEntry, 4096),
 		stopCh:         make(chan struct{}),
 		doneCh:         make(chan struct{}),
 	}
 }
 
-func (p *AsyncPublisher) Publish(ev *AuditEvent) {
+func (p *AsyncPublisher) Publish(ev *auditv1.AuditEntry) {
 	if ev == nil {
 		return
 	}
@@ -104,7 +105,7 @@ func (p *AsyncPublisher) run() {
 	ticker := time.NewTicker(p.FlushInterval)
 	defer ticker.Stop()
 
-	batch := make([]*AuditEvent, 0, p.BatchSize)
+	batch := make([]*auditv1.AuditEntry, 0, p.BatchSize)
 
 	flush := func() {
 		if len(batch) == 0 {
@@ -147,7 +148,7 @@ func (p *AsyncPublisher) run() {
 	}
 }
 
-func (p *AsyncPublisher) flush(events []*AuditEvent) {
+func (p *AsyncPublisher) flush(events []*auditv1.AuditEntry) {
 	p.stats.Flushes.Add(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), p.WriteTimeout)

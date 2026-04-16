@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	auditv1 "github.com/amimof/multikube/api/audit/v1"
 	"github.com/amimof/multikube/pkg/audit"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type auditEventKey struct{}
@@ -22,13 +24,13 @@ func EventFromContext(ctx context.Context) (*audit.AuditEvent, bool) {
 
 type auditResponseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode int32
 	bytes      int64
 }
 
-func (w *auditResponseWriter) WriterHeader(code int) {
-	w.statusCode = code
-	w.WriteHeader(code)
+func (w *auditResponseWriter) WriteHeader(code int) {
+	w.statusCode = int32(code)
+	w.ResponseWriter.WriteHeader(code)
 }
 
 func (w *auditResponseWriter) Write(p []byte) (int, error) {
@@ -55,11 +57,11 @@ func AuditMiddleware(pub audit.Publisher) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			ev := &audit.AuditEvent{
-				Timestamp: start,
+			ev := &auditv1.AuditEntry{
+				Timestamp: timestamppb.Now(),
 				Method:    r.Method,
 				Path:      r.URL.Path,
-				SourceIP:  clientIP(r.RemoteAddr),
+				SourceIp:  clientIP(r.RemoteAddr),
 				UserAgent: r.UserAgent(),
 			}
 

@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package audit.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/amimof/multikube/api/audit/v1;audit";
+
+service AuditService {
+  rpc AuditLog(AuditLogRequest) returns (stream AuditLogResponse) {
+    option (google.api.http) = {get: "/api/v1/audit"};
+  }
+}
+
+message AuditLogRequest {
+  string session_id = 1;
+  bool watch = 2;
+  int64 since_seconds = 3;
+  int64 tail = 4;
+  int64 limit = 5;
+}
+
+message AuditLogResponse {
+  string session_id = 1;
+  AuditEntry entry = 2;
+}
+
+message AuditEntry {
+  uint64 seq = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string request_id = 3;
+  string subject = 4;
+  string username = 5;
+  repeated string groups = 6;
+  string issuer = 7;
+
+  string cluster = 8;
+  string backend = 9;
+  string route = 10;
+
+  string method = 11;
+  string path = 12;
+  string source_ip = 13;
+  string user_agent = 14;
+
+  string k8s_verb = 15;
+  string api_group = 16;
+  string resource = 17;
+  string namespace = 18;
+  string name = 19;
+  string sub_resource = 20;
+
+  bool allowed = 21;
+  int32 status_code = 22;
+  int64 duration_ms = 23;
+  string error = 24;
+
+  repeated string policy_ids = 25;
+  uint64 config_version = 26;
+}

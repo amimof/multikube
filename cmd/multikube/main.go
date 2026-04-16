@@ -284,6 +284,24 @@ func main() {
 		SigningKeyID: "key-2026-04",
 	})
 
+	// Context
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	auditLogFilePath := filepath.Join(dataPath, "audit.json")
+	store := audit.NewFileStore(auditLogFilePath, audit.WithFileStoreLogger(log))
+	if err := store.Start(ctx); err != nil {
+		log.Error("failed to load audit file", "err", err)
+		os.Exit(1)
+	}
+
+	auditService := transport.NewAuditService(&app.AuditService{
+		Exchange: exchange,
+		Logger:   log,
+		Store:    store,
+	})
+
 	validator, err := protovalidate.New()
 	if err != nil {
 		log.Error("Failed to create protovalidate validator", "error", err)
@@ -365,12 +383,8 @@ func main() {
 		policyService,
 		credentialService,
 		tokenService,
+		auditService,
 	)
-
-	// Context
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	// Used by clientset and the gateway to connect internally
 	socketAddr := fmt.Sprintf("unix:///%s", socketPath)
@@ -394,6 +408,7 @@ func main() {
 		policyService,
 		credentialService,
 		tokenService,
+		auditService,
 	)
 	if err != nil {
 		log.Error("error registering service handler", "error", err)
@@ -438,7 +453,7 @@ func main() {
 	log.Info("started proxy Controller")
 
 	// Setup Audit logging
-	fileSink, err := audit.NewFileSink(filepath.Join(dataPath, "audit.json"))
+	fileSink, err := audit.NewFileSink(auditLogFilePath)
 	if err != nil {
 		log.Error("error setting up file sink for audit logging", "error", err)
 		os.Exit(1)
@@ -521,6 +536,9 @@ func main() {
 	case <-ctx.Done():
 		log.Info("context cancelled externally")
 	}
+
+	// Close audit store
+	store.Close()
 
 	// Shut down server with force shutdown as fallback
 	serverShutdownDone := make(chan struct{})
