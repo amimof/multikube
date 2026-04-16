@@ -39,6 +39,12 @@ func WithTLSConfig(t *tls.Config) NewGatewayOption {
 	}
 }
 
+func WithServeMux(mux *runtime.ServeMux) NewGatewayOption {
+	return func(g *Gateway) {
+		g.mux = mux
+	}
+}
+
 func (g *Gateway) Serve(lis net.Listener) error {
 	return g.srv.Serve(lis)
 }

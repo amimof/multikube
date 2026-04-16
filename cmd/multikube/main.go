@@ -11,9 +11,11 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"math/big"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path"
@@ -23,6 +25,7 @@ import (
 	"time"
 
 	"buf.build/go/protovalidate"
+	ui "github.com/amimof/multikube"
 	"github.com/amimof/multikube/pkg/audit"
 	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/compile"
@@ -318,16 +321,37 @@ func main() {
 		os.Exit(1)
 	}
 
+	// grpc server TLS config
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
 
+	// Gateway TLS config
 	tlsConfigGw := &tls.Config{
 		InsecureSkipVerify: true,
 	}
+
+	// Web console
+	mux := transport.DefaultMux
+	uiSub, err := fs.Sub(ui.WebFS, "web/dist")
+	if err != nil {
+		log.Error("error ui subtree", "error", err)
+		os.Exit(1)
+	}
+	ui := http.FileServer(http.FS(uiSub))
+
+	root := http.NewServeMux()
+	root.Handle("/api/v1/", mux)
+	root.Handle("/console/", http.StripPrefix("/console/", ui))
+
+	go func() {
+		http.ListenAndServe(":8711", ui)
+	}()
+
 	gatewayOpts = append(gatewayOpts,
 		transport.WithTLSConfig(tlsConfig),
 		transport.WithGrpcDialOption(grpc.WithTransportCredentials(credentials.NewTLS(tlsConfigGw))),
+		transport.WithServeMux(transport.DefaultMux),
 	)
 
 	// Enable mTLS for gRPC server, if CA cert provided
@@ -415,7 +439,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go serveGateway(gatewayAddress, gw, errChan)
+	go serveMux(gatewayAddress, tlsConfig, root, errChan)
 
 	// Only allow one of the flags rs256-public-key and oidc-issuer-url
 	// TODO: Remove these from flags. They are now in the API instead
@@ -612,14 +636,40 @@ func serveProxyServer(ps *server.Server, errChan chan error) {
 	}
 }
 
-func serveGateway(addr string, gw *transport.Gateway, errChan chan error) {
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		errChan <- fmt.Errorf("error creating gateway listener: %v", err)
-		return
+// func serveGateway(addr string, gw *transport.Gateway, errChan chan error) {
+// 	l, err := net.Listen("tcp", addr)
+// 	if err != nil {
+// 		errChan <- fmt.Errorf("error creating gateway listener: %v", err)
+// 		return
+// 	}
+// 	log.Info("gateway listening", "address", addr)
+// 	if err := gw.ServeTLS(l, tlsCertificate, tlsCertificateKey); err != nil {
+// 		errChan <- fmt.Errorf("error serving gateway: %v", err)
+// 		return
+// 	}
+// }
+
+func serveMux(addr string, tlsConfig *tls.Config, mux *http.ServeMux, errChan chan error) {
+	// Create the server
+	s := &server.Server{
+		EnabledListeners: []string{"https"},
+		CleanupTimeout:   cleanupTimeout,
+		MaxHeaderSize:    maxHeaderSize,
+		ListenLimit:      listenLimit,
+		KeepAlive:        keepAlive,
+		ReadTimeout:      readTimeout,
+		WriteTimeout:     writeTimeout,
+		TLSAddress:       addr,
+		TLSConfig:        tlsConfig,
+		TLSListenLimit:   tlsListenLimit,
+		TLSKeepAlive:     tlsKeepAlive,
+		TLSReadTimeout:   tlsReadTimeout,
+		TLSWriteTimeout:  tlsWriteTimeout,
+		Logger:           log,
+		Handler:          mux,
 	}
-	log.Info("gateway listening", "address", addr)
-	if err := gw.ServeTLS(l, tlsCertificate, tlsCertificateKey); err != nil {
+	log.Info("gateway and console listening", "address", addr)
+	if err := s.Serve(); err != nil {
 		errChan <- fmt.Errorf("error serving gateway: %v", err)
 		return
 	}

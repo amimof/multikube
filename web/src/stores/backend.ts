@@ -5,6 +5,7 @@ import type { V1Backend } from '@/generated/backend'
 export const useBackendStore = defineStore('backend', {
   state: () => ({
     items: [] as V1Backend[],
+    current: null as V1Backend | null,
     loading: false,
     error: null as string | null,
   }),
@@ -23,6 +24,27 @@ export const useBackendStore = defineStore('backend', {
       } finally {
         this.loading = false
       }
+    },
+
+    async fetchBackend(name: string) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await api.backendService.backendServiceGet2({ name })
+        this.current = response.backend ?? null
+      } catch (err) {
+        this.current = null
+        this.error = err instanceof Error ? err.message : 'Failed to load backend'
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
+    clearCurrent() {
+      this.current = null
+      this.error = null
     },
 
     async createBackend(backend: V1Backend) {

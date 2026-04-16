@@ -52,6 +52,7 @@ declare module 'vue' {
     ImportKubeconfigModal: typeof import('./src/components/ImportKubeconfigModal.vue')['default']
     LabelEditor: typeof import('./src/components/LabelEditor.vue')['default']
     MetadataDisplay: typeof import('./src/components/MetadataDisplay.vue')['default']
+    NetworkTopology: typeof import('./src/components/NetworkTopology.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
@@ -102,6 +103,7 @@ declare global {
   const ImportKubeconfigModal: typeof import('./src/components/ImportKubeconfigModal.vue')['default']
   const LabelEditor: typeof import('./src/components/LabelEditor.vue')['default']
   const MetadataDisplay: typeof import('./src/components/MetadataDisplay.vue')['default']
+  const NetworkTopology: typeof import('./src/components/NetworkTopology.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }
