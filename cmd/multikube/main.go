@@ -344,10 +344,6 @@ func main() {
 	root.Handle("/api/v1/", mux)
 	root.Handle("/console/", http.StripPrefix("/console/", ui))
 
-	go func() {
-		http.ListenAndServe(":8711", ui)
-	}()
-
 	gatewayOpts = append(gatewayOpts,
 		transport.WithTLSConfig(tlsConfig),
 		transport.WithGrpcDialOption(grpc.WithTransportCredentials(credentials.NewTLS(tlsConfigGw))),
