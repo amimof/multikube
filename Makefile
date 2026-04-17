@@ -84,11 +84,11 @@ $(TBIN)/go-licenses: PACKAGE=github.com/google/go-licenses/v2@v2.0.1
 # Tests
 .PHONY: lint
 lint: | $(GOCILINT) ; $(info $(M) running golangci-lint) @ ## Runs static code analysis using golangci-lint
-	$Q $(GOCILINT) run --timeout=5m
+	$Q $(GOCILINT) run --build-tags=testui_stub --timeout=5m
 
 .PHONY: test
 test: ; $(info $(M) running go test) @ ## Runs unit tests
-	$Q $(GO) test -count=1 -v ./...
+	$Q $(GO) test  -tags=testui_stub -count=1 -v ./...
 
 .PHONY: e2e-setup
 e2e-setup: ; $(info $(M) setting up e2e environment) @ ## Creates kind clusters and builds local test assets
