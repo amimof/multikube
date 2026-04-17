@@ -116,20 +116,20 @@ fmt: ; $(info $(M) running gofmt) @ ## Formats Go code
 
 .PHONY: vet
 vet: ; $(info $(M) running go vet) @ ## Examines Go source code and reports suspicious constructs, such as Printf calls whose arguments do not align with the format string
-	$Q $(GO) vet ./...
+	$Q $(GO) vet -tags=testui_stub ./...
 
 .PHONY: race
 race: ; $(info $(M) running go race) @ ## Runs tests with data race detection
-	$Q CGO_ENABLED=1 $(GO) test -race -short ./...
+	$Q CGO_ENABLED=1 $(GO) test -tags=testui_stub -race -short ./...
 
 .PHONY: benchmark
 benchmark: ; $(info $(M) running go benchmark test) @ ## Benchmark tests to examine performance
-	$Q $(GO) test -run=__absolutelynothing__ -bench=. $(PKGS)
+	$Q $(GO) test -tags=testui_stub -run=__absolutelynothing__ -bench=. $(PKGS)
 
 .PHONY: coverage
 coverage: ; $(info $(M) running go coverage) @ ## Runs tests and generates code coverage report at ./test/coverage.out
 	$Q mkdir -p $(CURDIR)/test/
-	$Q $(GO) test -coverprofile="$(CURDIR)/test/coverage.out" ./...
+	$Q $(GO) test -tags=testui_stub -coverprofile="$(CURDIR)/test/coverage.out" ./...
 	$Q $(GO) tool cover -html "$(CURDIR)/test/coverage.out" -o "$(CURDIR)/test/coverage.html"
 
 .PHONY: checkfmt
