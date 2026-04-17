@@ -89,7 +89,10 @@ jobs:
           node-version: 24
 
       - name: Build Web UI
-        run: npm run build
+        run: |
+          cd web/
+          npm install
+          npm run build
 
       - name: Compile Server
         run: make server
