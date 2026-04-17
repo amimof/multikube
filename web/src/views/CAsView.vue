@@ -32,7 +32,6 @@ function createEmptyCa(): V1CertificateAuthority {
 		version: 'certificate_authority/v1',
 		meta: { name: '', labels: {} },
 		config: {
-			certificate: '',
 			certificateData: '',
 		},
 	}
@@ -47,13 +46,11 @@ const formLabels = computed({
 	},
 })
 
-// Form validation: name required, exactly one of certificate or certificateData
+// Form validation: name and certificateData required
 const isFormValid = computed(() => {
 	const name = (form.value.meta?.name ?? '').trim()
-	const cert = (form.value.config?.certificate ?? '').trim()
 	const certData = (form.value.config?.certificateData ?? '').trim()
-	const hasExactlyOne = (cert.length > 0) !== (certData.length > 0)
-	return name.length > 0 && hasExactlyOne
+	return name.length > 0 && certData.length > 0
 })
 
 function sortByCreated(a: any, b: any): number {
@@ -63,8 +60,8 @@ function sortByCreated(a: any, b: any): number {
 }
 
 function sortByCertificate(a: any, b: any): number {
-	const la = a.config?.certificate ? a.config.certificate : a.config?.certificateData ? 'Inline data' : ''
-	const lb = b.config?.certificate ? b.config.certificate : b.config?.certificateData ? 'Inline data' : ''
+	const la = a.config?.certificateData ? 'Yes' : ''
+	const lb = b.config?.certificateData ? 'Yes' : ''
 	return la.localeCompare(lb)
 }
 
@@ -192,10 +189,12 @@ onMounted(() => {
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
 				<el-table-column prop="meta.name" label="Name" min-width="200" sortable />
-				<el-table-column label="Certificate" min-width="200" sortable :sort-method="sortByCertificate">
+				<el-table-column label="Certificate Data" min-width="200" sortable :sort-method="sortByCertificate">
 					<template #default="{ row }">
-						<span v-if="row.config?.certificate">{{ row.config.certificate }}</span>
-						<el-tag v-else-if="row.config?.certificateData" size="small" type="info">Inline data</el-tag>
+						<span v-if="row.config?.certificateData" style="font-family: monospace; font-size: 12px">
+							{{ row.config.certificateData.length > 40 ? row.config.certificateData.substring(0, 40) + '...' :
+								row.config.certificateData }}
+						</span>
 						<span v-else>-</span>
 					</template>
 				</el-table-column>
@@ -215,8 +214,8 @@ onMounted(() => {
 
 		<!-- Create / Edit Dialog -->
 		<el-dialog v-model="dialogVisible"
-			:title="isEditing ? 'Edit Certificate Authority' : 'Create Certificate Authority'" width="600" destroy-on-close>
-			<el-form label-width="160px" label-position="right">
+			:title="isEditing ? 'Edit Certificate Authority' : 'Create Certificate Authority'" width="700" destroy-on-close>
+			<el-form label-width="120px" label-position="right">
 				<el-collapse v-if="isEditing" style="margin-bottom: 20px">
 					<el-collapse-item title="Metadata" name="metadata">
 						<MetadataDisplay :meta="form.meta" />
@@ -233,20 +232,11 @@ onMounted(() => {
 
 				<el-divider content-position="left">Config</el-divider>
 
-				<el-form-item label="Certificate">
-					<el-input v-model="form.config!.certificate" placeholder="Path to certificate file"
-						:disabled="(form.config!.certificateData ?? '').trim().length > 0" />
+				<el-form-item label="Data" required>
+					<el-input v-model="form.config!.certificateData" type="textarea" :rows="8"
+						:input-style="{ fontFamily: 'monospace', fontSize: '13px' }"
+						placeholder="Paste PEM certificate data here" />
 				</el-form-item>
-
-				<el-form-item label="Certificate Data">
-					<el-input v-model="form.config!.certificateData" type="textarea" :rows="6"
-						placeholder="Paste PEM certificate data here"
-						:disabled="(form.config!.certificate ?? '').trim().length > 0" />
-				</el-form-item>
-				<el-alert
-					v-if="(form.config!.certificate ?? '').trim().length > 0 && (form.config!.certificateData ?? '').trim().length > 0"
-					title="Provide either a certificate path or inline data, not both." type="warning" :closable="false" show-icon
-					style="margin-bottom: 16px" />
 			</el-form>
 
 			<template #footer>

@@ -31,7 +31,7 @@ func newCreateBackendCmd(cfg *client.Config) *cobra.Command {
 		Short: "Create a new backend",
 		Long:  `Create a new backend and register it with the server.`,
 		Args:  cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			return runCreateBackendCmd(cmd, args, cfg, server, caRef, authRef, insecureSkipTLS, cacheTTL, labels)
 		}),
 	}
@@ -69,21 +69,6 @@ func runCreateBackendCmd(
 
 	name := args[0]
 
-	// Setup client
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
 	// Build the backend object
 	backend := &backendv1.Backend{
 		Meta: &metav1.Meta{
@@ -102,7 +87,7 @@ func runCreateBackendCmd(
 		backend.Config.CacheTtl = durationpb.New(cacheTTL)
 	}
 
-	if err := c.BackendV1().Create(ctx, backend); err != nil {
+	if err := clientSet.BackendV1().Create(ctx, backend); err != nil {
 		logrus.Fatalf("error creating backend: %v", err)
 	}
 

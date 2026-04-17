@@ -55,7 +55,7 @@ The NAME argument is required and sets the route's name.`,
   multikubectl route create my-route --backend-ref my-cluster \
     --label env=production --label team=platform`,
 		Args: cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			return runCreateRouteCmd(cmd, args, cfg, backendRef, path, pathPrefix, sni, headerName, headerValue, jwtClaim, jwtValue, labels)
 		}),
 	}
@@ -90,20 +90,6 @@ func runCreateRouteCmd(
 
 	name := args[0]
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
 	match := &routev1.Match{
 		Sni:        sni,
 		Path:       path,
@@ -135,7 +121,7 @@ func runCreateRouteCmd(
 		},
 	}
 
-	if err := c.RouteV1().Create(ctx, route); err != nil {
+	if err := clientSet.RouteV1().Create(ctx, route); err != nil {
 		logrus.Fatalf("error creating route: %v", err)
 	}
 

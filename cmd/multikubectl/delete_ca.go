@@ -23,7 +23,7 @@ func newDeleteCertificateAuthorityCmd(cfg *client.Config) *cobra.Command {
   # Delete many cas
   multikubectl delete ca prod-cert-v1 cloud-cert external-clients-cert`,
 		Args: cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			return runDeleteCertificateAuthorityCmd(cmd, args, cfg)
 		}),
 	}
@@ -46,21 +46,7 @@ func runDeleteCertificateAuthorityCmd(
 
 	name := args[0]
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
-	if err := c.CAV1().Delete(ctx, name); err != nil {
+	if err := clientSet.CAV1().Delete(ctx, name); err != nil {
 		logrus.Fatalf("error creating ca: %v", err)
 	}
 

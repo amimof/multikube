@@ -26,10 +26,13 @@ This guide walks you through running a single-instance containerized Multikube c
    docker run -d \
      --name multikube \
      -p 5743:5743 \
+     -p 6443:6443 \
      -p 8443:8443 \
      -v multikube-data:/.local/state/multikube  \
      ghcr.io/amimof/multikube:latest
    ```
+
+2. **Access the web console at https://localhost:6443/console**
 
 ## Downloading and Installing the CLI
 
@@ -40,7 +43,7 @@ This guide walks you through running a single-instance containerized Multikube c
    > I'm working on publishing it on popular repositories
 
    ```bash
-   curl -LOs https://github.com/amimof/multikube/releases/latest/download/multikube-linux-amd64
+   curl -LOs https://github.com/amimof/multikube/releases/latest/download/multikubectl-linux-amd64
    ```
 
 2. **Install `multikubectl`**
@@ -48,13 +51,13 @@ This guide walks you through running a single-instance containerized Multikube c
    Place the downloaded binary in your `$PATH`. Either use the `install` command or move the binary manually
 
    ```bash
-   sudo install multikube-darwin-amd64 /usr/local/bin/multikube
+   sudo install multikubectl-darwin-amd64 /usr/local/bin/multikubectl
    ```
 
    or
 
    ```bash
-   sudo mv multikube-darwin-amd64 /usr/local/bin/multikube
+   sudo mv multikubectl-darwin-amd64 /usr/local/bin/multikubectl
    ```
 
 3. Verify installation

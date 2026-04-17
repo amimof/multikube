@@ -28,7 +28,7 @@ func newCreateCredentialCmd(cfg *client.Config) *cobra.Command {
 		Short: "Create a new credential",
 		Long:  `Create a new credential and register it with the server.`,
 		Args:  cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			return runCreateCredentialCmd(cmd, args, cfg, token, basicUsername, basicPassword, certificateRef, labels)
 		}),
 	}
@@ -56,21 +56,6 @@ func runCreateCredentialCmd(
 	ctx, span := tracer.Start(ctx, "multikubectl.credential.create")
 	defer span.End()
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
 	credentialConfig, err := buildCredentialConfig(args[0], token, basicUsername, basicPassword, certificateRef)
 	if err != nil {
 		return err
@@ -84,7 +69,7 @@ func runCreateCredentialCmd(
 		Config: credentialConfig,
 	}
 
-	if err := c.CredentialV1().Create(ctx, credential); err != nil {
+	if err := clientSet.CredentialV1().Create(ctx, credential); err != nil {
 		logrus.Fatalf("error creating credential: %v", err)
 	}
 

@@ -35,32 +35,15 @@ const labelEntries = computed(() => {
 	return Object.entries(labels)
 })
 
-const certSource = computed(() => {
-	if (certificate.value?.config?.certificate) return 'File'
-	if (certificate.value?.config?.certificateData) return 'Inline data'
-	return '-'
-})
-
 const certValue = computed(() => {
-	if (certificate.value?.config?.certificate) return certificate.value.config.certificate
-	if (certificate.value?.config?.certificateData) {
-		const data = certificate.value.config.certificateData
-		if (data.length > 80) return data.substring(0, 80) + '...'
-		return data
-	}
-	return '-'
+	const data = certificate.value?.config?.certificateData
+	if (!data) return '-'
+	if (data.length > 80) return data.substring(0, 80) + '...'
+	return data
 })
 
-const keySource = computed(() => {
-	if (certificate.value?.config?.key) return 'File'
-	if (certificate.value?.config?.keyData) return 'Inline data'
-	return '-'
-})
-
-const keyValue = computed(() => {
-	if (certificate.value?.config?.key) return certificate.value.config.key
-	if (certificate.value?.config?.keyData) return '********'
-	return '-'
+const hasKeyData = computed(() => {
+	return !!(certificate.value?.config?.keyData)
 })
 
 function handleRefresh() {
@@ -146,23 +129,17 @@ onUnmounted(() => {
 
 				<!-- Certificate section -->
 				<h4 class="section-title">Certificate</h4>
-				<el-descriptions :column="2" border size="default">
-					<el-descriptions-item label="Source">
-						<el-tag size="small">{{ certSource }}</el-tag>
-					</el-descriptions-item>
-					<el-descriptions-item label="Value">
+				<el-descriptions :column="1" border size="default">
+					<el-descriptions-item label="Certificate Data">
 						<span style="font-family: monospace; font-size: 12px">{{ certValue }}</span>
 					</el-descriptions-item>
 				</el-descriptions>
 
 				<!-- Private Key section -->
 				<h4 class="section-title">Private Key</h4>
-				<el-descriptions :column="2" border size="default">
-					<el-descriptions-item label="Source">
-						<el-tag size="small">{{ keySource }}</el-tag>
-					</el-descriptions-item>
-					<el-descriptions-item label="Value">
-						<span style="font-family: monospace; font-size: 12px">{{ keyValue }}</span>
+				<el-descriptions :column="1" border size="default">
+					<el-descriptions-item label="Key Data">
+						<span style="font-family: monospace; font-size: 12px">{{ hasKeyData ? '********' : '-' }}</span>
 					</el-descriptions-item>
 				</el-descriptions>
 			</el-card>

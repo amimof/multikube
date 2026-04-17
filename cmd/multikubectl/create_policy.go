@@ -30,7 +30,7 @@ The NAME argument is required and sets the policy's name.`,
   # Create a policy with labels
   multikubectl create policy my-policy --label env=production`,
 		Args: cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			return runCreatePolicyCmd(cmd, args, cfg, labels)
 		}),
 	}
@@ -50,20 +50,6 @@ func runCreatePolicyCmd(cmd *cobra.Command, args []string, cfg *client.Config, l
 
 	name := args[0]
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
 	policy := &policyv1.Policy{
 		Meta: &metav1.Meta{
 			Name:   name,
@@ -72,7 +58,7 @@ func runCreatePolicyCmd(cmd *cobra.Command, args []string, cfg *client.Config, l
 		Config: &policyv1.PolicyConfig{},
 	}
 
-	if err := c.PolicyV1().Create(ctx, policy); err != nil {
+	if err := clientSet.PolicyV1().Create(ctx, policy); err != nil {
 		logrus.Fatalf("error creating policy: %v", err)
 	}
 

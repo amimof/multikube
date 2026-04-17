@@ -468,13 +468,7 @@
     "v1CertificateConfig": {
       "type": "object",
       "properties": {
-        "certificate": {
-          "type": "string"
-        },
         "certificateData": {
-          "type": "string"
-        },
-        "key": {
           "type": "string"
         },
         "keyData": {

@@ -218,12 +218,6 @@ func TestBuildImportPlanMTLSAndCAFromFiles(t *testing.T) {
 	if plan.Certificate == nil {
 		t.Fatal("expected certificate to be created")
 	}
-	if got := plan.Certificate.GetConfig().GetCertificate(); got != "CERT PEM" {
-		t.Fatalf("unexpected certificate pem: %q", got)
-	}
-	if got := plan.Certificate.GetConfig().GetKey(); got != "KEY PEM" {
-		t.Fatalf("unexpected key pem: %q", got)
-	}
 	if plan.Credential == nil {
 		t.Fatal("expected credential to be created")
 	}

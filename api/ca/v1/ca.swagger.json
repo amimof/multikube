@@ -468,9 +468,6 @@
     "v1CertificateAuthorityConfig": {
       "type": "object",
       "properties": {
-        "certificate": {
-          "type": "string"
-        },
         "certificateData": {
           "type": "string"
         }

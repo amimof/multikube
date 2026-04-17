@@ -36,7 +36,7 @@ func newCreateTokenCmd(cfg *client.Config) *cobra.Command {
 		Example: `  multikubectl create token --subject alice
   multikubectl create token --subject alice --group platform --service-account default/builder --claim team=platform`,
 		Args: cobra.ExactArgs(0),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
 			return runCreateTokenCmd(cmd, cfg, subject, username, groups, serviceAccts, audience, scopes, clusters, ttl, extraClaims)
 		}),
 	}
@@ -86,20 +86,6 @@ func runCreateTokenCmd(
 	ctx, span := tracer.Start(ctx, "multikubectl.token.create")
 	defer span.End()
 
-	currentSrv, err := cfg.CurrentServer()
-	if err != nil {
-		logrus.Fatal(err)
-	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
-
 	extraClaimsMap, err := claimMapFromStringArray(extraClaims)
 	if err != nil {
 		logrus.Fatalf("%v", err)
@@ -119,7 +105,7 @@ func runCreateTokenCmd(
 		},
 	}
 
-	res, err := c.TokenV1().IssueToken(ctx, req)
+	res, err := clientSet.TokenV1().IssueToken(ctx, req)
 	if err != nil {
 		logrus.Fatalf("error creating token: %v", err)
 	}

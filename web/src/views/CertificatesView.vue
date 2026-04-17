@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch, toRaw } from 'vue'
+import { onMounted, ref, computed, toRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Refresh, Delete, Search, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -25,12 +25,6 @@ const selectedRows = ref<V1Certificate[]>([])
 const bulkDeleteVisible = ref(false)
 const bulkDeleting = ref(false)
 
-type CertSourceMode = '' | 'certificate' | 'certificateData'
-type KeySourceMode = '' | 'key' | 'keyData'
-
-const certSourceMode = ref<CertSourceMode>('')
-const keySourceMode = ref<KeySourceMode>('')
-
 const form = ref<V1Certificate>(createEmptyCertificate())
 
 function createEmptyCertificate(): V1Certificate {
@@ -50,48 +44,6 @@ const formLabels = computed({
 	},
 })
 
-// Infer modes from existing config
-function inferCertSourceMode(config: V1Certificate['config']): CertSourceMode {
-	if (!config) return ''
-	if (config.certificate) return 'certificate'
-	if (config.certificateData) return 'certificateData'
-	return ''
-}
-
-function inferKeySourceMode(config: V1Certificate['config']): KeySourceMode {
-	if (!config) return ''
-	if (config.key) return 'key'
-	if (config.keyData) return 'keyData'
-	return ''
-}
-
-// When cert source mode changes, reset only the certificate/certificateData fields
-watch(certSourceMode, (newMode, oldMode) => {
-	if (newMode === oldMode) return
-	if (!form.value.config) form.value.config = {}
-	// Clear both, then set the active one to empty string
-	delete form.value.config.certificate
-	delete form.value.config.certificateData
-	if (newMode === 'certificate') {
-		form.value.config.certificate = ''
-	} else if (newMode === 'certificateData') {
-		form.value.config.certificateData = ''
-	}
-})
-
-// When key source mode changes, reset only the key/keyData fields
-watch(keySourceMode, (newMode, oldMode) => {
-	if (newMode === oldMode) return
-	if (!form.value.config) form.value.config = {}
-	delete form.value.config.key
-	delete form.value.config.keyData
-	if (newMode === 'key') {
-		form.value.config.key = ''
-	} else if (newMode === 'keyData') {
-		form.value.config.keyData = ''
-	}
-})
-
 // Form validation
 const isFormValid = computed(() => {
 	const name = (form.value.meta?.name ?? '').trim()
@@ -100,44 +52,23 @@ const isFormValid = computed(() => {
 	const config = form.value.config
 	if (!config) return false
 
-	// Certificate source: exactly one must be set and non-empty
-	if (!certSourceMode.value) return false
-	if (certSourceMode.value === 'certificate' && !(config.certificate ?? '').trim()) return false
-	if (certSourceMode.value === 'certificateData' && !(config.certificateData ?? '').trim()) return false
-
-	// Key source: exactly one must be set and non-empty
-	if (!keySourceMode.value) return false
-	if (keySourceMode.value === 'key' && !(config.key ?? '').trim()) return false
-	if (keySourceMode.value === 'keyData' && !(config.keyData ?? '').trim()) return false
+	if (!(config.certificateData ?? '').trim()) return false
+	if (!(config.keyData ?? '').trim()) return false
 
 	return true
 })
 
 // Table helpers
-function certSourceLabel(row: V1Certificate): string {
-	if (row.config?.certificate) return 'File'
-	if (row.config?.certificateData) return 'Inline data'
-	return '-'
-}
-
-function keySourceLabel(row: V1Certificate): string {
-	if (row.config?.key) return 'File'
-	if (row.config?.keyData) return 'Inline data'
-	return '-'
-}
-
 function sortByCreated(a: any, b: any): number {
 	const ta = new Date(a.meta?.created ?? 0).getTime()
 	const tb = new Date(b.meta?.created ?? 0).getTime()
 	return ta - tb
 }
 
-function sortByCertSource(a: any, b: any): number {
-	return certSourceLabel(a).localeCompare(certSourceLabel(b))
-}
-
-function sortByKeySource(a: any, b: any): number {
-	return keySourceLabel(a).localeCompare(keySourceLabel(b))
+function sortByCertificate(a: any, b: any): number {
+	const va = (a.config?.certificateData ?? '').substring(0, 40)
+	const vb = (b.config?.certificateData ?? '').substring(0, 40)
+	return va.localeCompare(vb)
 }
 
 // Selection
@@ -175,8 +106,6 @@ async function handleBulkDelete() {
 
 function openCreate() {
 	form.value = createEmptyCertificate()
-	certSourceMode.value = ''
-	keySourceMode.value = ''
 	isEditing.value = false
 	dialogVisible.value = true
 }
@@ -184,8 +113,6 @@ function openCreate() {
 function openEdit(row: V1Certificate) {
 	form.value = structuredClone(toRaw(row))
 	if (!form.value.config) form.value.config = {}
-	certSourceMode.value = inferCertSourceMode(form.value.config)
-	keySourceMode.value = inferKeySourceMode(form.value.config)
 	isEditing.value = true
 	dialogVisible.value = true
 }
@@ -269,17 +196,17 @@ onMounted(() => {
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
 				<el-table-column prop="meta.name" label="Name" min-width="180" sortable />
-				<el-table-column label="Certificate Source" min-width="140" sortable :sort-method="sortByCertSource">
+				<el-table-column label="Certificate" min-width="200" sortable :sort-method="sortByCertificate">
 					<template #default="{ row }">
-						<el-tag v-if="row.config?.certificate" size="small">File</el-tag>
-						<el-tag v-else-if="row.config?.certificateData" size="small" type="info">Inline data</el-tag>
+						<span v-if="row.config?.certificateData" style="font-family: monospace; font-size: 12px">
+							{{ row.config.certificateData.substring(0, 40) }}...
+						</span>
 						<span v-else>-</span>
 					</template>
 				</el-table-column>
-				<el-table-column label="Key Source" min-width="120" sortable :sort-method="sortByKeySource">
+				<el-table-column label="Key" min-width="120">
 					<template #default="{ row }">
-						<el-tag v-if="row.config?.key" size="small">File</el-tag>
-						<el-tag v-else-if="row.config?.keyData" size="small" type="info">Inline data</el-tag>
+						<span v-if="row.config?.keyData">********</span>
 						<span v-else>-</span>
 					</template>
 				</el-table-column>
@@ -298,9 +225,9 @@ onMounted(() => {
 		</template>
 
 		<!-- Create / Edit Dialog -->
-		<el-dialog v-model="dialogVisible" :title="isEditing ? 'Edit Certificate' : 'Create Certificate'" width="640"
+		<el-dialog v-model="dialogVisible" :title="isEditing ? 'Edit Certificate' : 'Create Certificate'" width="700"
 			destroy-on-close>
-			<el-form label-width="180px" label-position="right">
+			<el-form label-width="120px" label-position="right">
 				<el-collapse v-if="isEditing" style="margin-bottom: 20px">
 					<el-collapse-item title="Metadata" name="metadata">
 						<MetadataDisplay :meta="form.meta" />
@@ -315,43 +242,19 @@ onMounted(() => {
 					<LabelEditor v-model="formLabels" />
 				</el-form-item>
 
-				<el-divider content-position="left">Config</el-divider>
-
-				<!-- Certificate source oneof -->
 				<el-divider content-position="left">Certificate</el-divider>
 
-				<el-form-item label="Certificate Source" required>
-					<el-select v-model="certSourceMode" placeholder="Select source type" style="width: 100%">
-						<el-option label="File path" value="certificate" />
-						<el-option label="Inline PEM data" value="certificateData" />
-					</el-select>
-				</el-form-item>
-
-				<el-form-item v-if="certSourceMode === 'certificate'" label="Certificate Path" required>
-					<el-input v-model="form.config!.certificate" placeholder="Path to certificate file" />
-				</el-form-item>
-
-				<el-form-item v-if="certSourceMode === 'certificateData'" label="Certificate Data" required>
-					<el-input v-model="form.config!.certificateData" type="textarea" :rows="6"
+				<el-form-item label="Data" required>
+					<el-input v-model="form.config!.certificateData" type="textarea" :rows="8"
+						:input-style="{ fontFamily: 'monospace', fontSize: '13px' }"
 						placeholder="Paste PEM certificate data here" />
 				</el-form-item>
 
-				<!-- Key source oneof -->
 				<el-divider content-position="left">Private Key</el-divider>
 
-				<el-form-item label="Key Source" required>
-					<el-select v-model="keySourceMode" placeholder="Select source type" style="width: 100%">
-						<el-option label="File path" value="key" />
-						<el-option label="Inline PEM data" value="keyData" />
-					</el-select>
-				</el-form-item>
-
-				<el-form-item v-if="keySourceMode === 'key'" label="Key Path" required>
-					<el-input v-model="form.config!.key" placeholder="Path to private key file" />
-				</el-form-item>
-
-				<el-form-item v-if="keySourceMode === 'keyData'" label="Key Data" required>
-					<el-input v-model="form.config!.keyData" type="textarea" :rows="6"
+				<el-form-item label="Data" required>
+					<el-input v-model="form.config!.keyData" type="textarea" :rows="8"
+						:input-style="{ fontFamily: 'monospace', fontSize: '13px' }"
 						placeholder="Paste PEM private key data here" />
 				</el-form-item>
 			</el-form>

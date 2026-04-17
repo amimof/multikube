@@ -362,8 +362,8 @@ func buildImportedAuth(kubeconfigPath string, authInfo *clientcmdapi.AuthInfo, n
 	certificateObj := &certificatev1.Certificate{
 		Meta: &metav1.Meta{Name: names.Certificate},
 		Config: &certificatev1.CertificateConfig{
-			Certificate: certificatePEM,
-			Key:         keyPEM,
+			CertificateData: certificatePEM,
+			KeyData:         keyPEM,
 		},
 	}
 	config.ClientCertificateRef = names.Certificate

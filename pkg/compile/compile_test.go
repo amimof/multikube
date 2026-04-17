@@ -95,17 +95,8 @@ func newCertificate(name, certPEM, keyPEM string) *certificatev1.Certificate {
 	return &certificatev1.Certificate{
 		Meta: &metav1.Meta{Name: name},
 		Config: &certificatev1.CertificateConfig{
-			Certificate: certPEM,
-			Key:         keyPEM,
-		},
-	}
-}
-
-func newCAFromRef(name, certRef string) *cav1.CertificateAuthority {
-	return &cav1.CertificateAuthority{
-		Meta: &metav1.Meta{Name: name},
-		Config: &cav1.CertificateAuthorityConfig{
-			Certificate: certRef,
+			CertificateData: certPEM,
+			KeyData:         keyPEM,
 		},
 	}
 }
@@ -525,47 +516,6 @@ func TestCompile_CA_InlinePEM(t *testing.T) {
 	_ = rc // successful compile is enough; CA pool is internal to compileBackends
 }
 
-func TestCompile_CA_CertificateRef(t *testing.T) {
-	certPEM, keyPEM := selfSignedPEM(t)
-
-	c := NewCompiler()
-	st := &State{
-		Backends: map[string]*backendv1.Backend{},
-		Routes:   map[string]*routev1.Route{},
-		Certificates: map[string]*certificatev1.Certificate{
-			"mycert": newCertificate("mycert", certPEM, keyPEM),
-		},
-		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
-			"myca": newCAFromRef("myca", "mycert"),
-		},
-		Credentials: map[string]*credentialv1.Credential{},
-	}
-
-	rc, err := c.Compile(st)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	_ = rc
-}
-
-func TestCompile_CA_MissingCertRef_Error(t *testing.T) {
-	c := NewCompiler()
-	st := &State{
-		Backends:     map[string]*backendv1.Backend{},
-		Routes:       map[string]*routev1.Route{},
-		Certificates: map[string]*certificatev1.Certificate{}, // empty — ref won't resolve
-		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
-			"myca": newCAFromRef("myca", "does-not-exist"),
-		},
-		Credentials: map[string]*credentialv1.Credential{},
-	}
-
-	_, err := c.Compile(st)
-	if err == nil {
-		t.Fatal("expected error for missing cert ref, got nil")
-	}
-}
-
 func TestCompile_CA_InvalidPEM_Error(t *testing.T) {
 	c := NewCompiler()
 	st := &State{
@@ -596,7 +546,7 @@ func TestCompile_Certificate_MissingCert_Error(t *testing.T) {
 		Certificates: map[string]*certificatev1.Certificate{
 			"bad": {
 				Meta:   &metav1.Meta{Name: "bad"},
-				Config: &certificatev1.CertificateConfig{Certificate: "", Key: "somekey"},
+				Config: &certificatev1.CertificateConfig{CertificateData: "", KeyData: "somekey"},
 			},
 		},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
@@ -619,7 +569,7 @@ func TestCompile_Certificate_MissingKey_Error(t *testing.T) {
 		Certificates: map[string]*certificatev1.Certificate{
 			"bad": {
 				Meta:   &metav1.Meta{Name: "bad"},
-				Config: &certificatev1.CertificateConfig{Certificate: certPEM, Key: ""},
+				Config: &certificatev1.CertificateConfig{CertificateData: certPEM, KeyData: ""},
 			},
 		},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},

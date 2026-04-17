@@ -35,20 +35,11 @@ const labelEntries = computed(() => {
 	return Object.entries(labels)
 })
 
-const certSource = computed(() => {
-	if (ca.value?.config?.certificate) return 'File'
-	if (ca.value?.config?.certificateData) return 'Inline data'
-	return '-'
-})
-
 const certValue = computed(() => {
-	if (ca.value?.config?.certificate) return ca.value.config.certificate
-	if (ca.value?.config?.certificateData) {
-		const data = ca.value.config.certificateData
-		if (data.length > 80) return data.substring(0, 80) + '...'
-		return data
-	}
-	return '-'
+	const data = ca.value?.config?.certificateData
+	if (!data) return '-'
+	if (data.length > 80) return data.substring(0, 80) + '...'
+	return data
 })
 
 function handleRefresh() {
@@ -133,11 +124,8 @@ onUnmounted(() => {
 
 				<!-- Certificate section -->
 				<h4 class="section-title">Certificate</h4>
-				<el-descriptions :column="2" border size="default">
-					<el-descriptions-item label="Source">
-						<el-tag size="small">{{ certSource }}</el-tag>
-					</el-descriptions-item>
-					<el-descriptions-item label="Value">
+				<el-descriptions :column="1" border size="default">
+					<el-descriptions-item label="Certificate Data">
 						<span style="font-family: monospace; font-size: 12px">{{ certValue }}</span>
 					</el-descriptions-item>
 				</el-descriptions>

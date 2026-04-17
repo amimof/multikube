@@ -24,19 +24,7 @@ export interface V1CertificateConfig {
      * @type {string}
      * @memberof V1CertificateConfig
      */
-    certificate?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof V1CertificateConfig
-     */
     certificateData?: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof V1CertificateConfig
-     */
-    key?: string;
     /**
      * 
      * @type {string}
@@ -62,9 +50,7 @@ export function V1CertificateConfigFromJSONTyped(json: any, ignoreDiscriminator:
     }
     return {
         
-        'certificate': json['certificate'] == null ? undefined : json['certificate'],
         'certificateData': json['certificateData'] == null ? undefined : json['certificateData'],
-        'key': json['key'] == null ? undefined : json['key'],
         'keyData': json['keyData'] == null ? undefined : json['keyData'],
     };
 }
@@ -80,9 +66,7 @@ export function V1CertificateConfigToJSONTyped(value?: V1CertificateConfig | nul
 
     return {
         
-        'certificate': value['certificate'],
         'certificateData': value['certificateData'],
-        'key': value['key'],
         'keyData': value['keyData'],
     };
 }

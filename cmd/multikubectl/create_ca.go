@@ -16,9 +16,8 @@ import (
 
 func newCreateCACmd(cfg *client.Config) *cobra.Command {
 	var (
-		certificate     string
-		certificateData string
-		labels          []string
+		certificate string
+		labels      []string
 	)
 
 	cmd := &cobra.Command{
@@ -26,22 +25,18 @@ func newCreateCACmd(cfg *client.Config) *cobra.Command {
 		Short: "Create a new certificate authority",
 		Long:  `Create a new certificate authority and register it with the server.`,
 		Example: `  # Create a CA with an inline PEM certificate
-  multikubectl create ca my-ca --certificate "$(cat ca.crt)"
-
-  # Create a CA with a certificate file path
-  multikubectl create ca my-ca --certificate-data /etc/ssl/ca.crt
+  multikubectl create ca my-ca --certificate /etc/ssl/ca.crt
 
   # Create a CA with labels
-  multikubectl create ca my-ca --certificate-data /etc/ssl/ca.crt \
+  multikubectl create ca my-ca --certificate /etc/ssl/ca.crt \
     --label env=production --label team=platform`,
 		Args: cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
-			return runCreateCACmd(cmd, args, cfg, certificate, certificateData, labels)
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
+			return runCreateCACmd(cmd, args, cfg, certificate, labels)
 		}),
 	}
 
-	cmd.Flags().StringVar(&certificate, "certificate", "", "PEM-encoded CA certificate (inline)")
-	cmd.Flags().StringVar(&certificateData, "certificate-data", "", "Path to the PEM-encoded CA certificate file")
+	cmd.Flags().StringVar(&certificate, "certificate", "", "Path to PEM-encoded CA certificate")
 	cmd.Flags().StringArrayVar(&labels, "label", nil, "Labels to attach in key=value format (can be specified multiple times)")
 
 	return cmd
@@ -52,7 +47,7 @@ func runCreateCACmd(
 	cmd *cobra.Command,
 	args []string,
 	cfg *client.Config,
-	certificate, certificateData string,
+	certificate string,
 	labelStrs []string,
 ) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
@@ -64,19 +59,10 @@ func runCreateCACmd(
 
 	name := args[0]
 
-	currentSrv, err := cfg.CurrentServer()
+	caData, err := readFileFromPath(certificate)
 	if err != nil {
-		logrus.Fatal(err)
+		return err
 	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
-	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
 
 	ca := &cav1.CertificateAuthority{
 		Meta: &metav1.Meta{
@@ -84,12 +70,11 @@ func runCreateCACmd(
 			Labels: cmdutil.ConvertKVStringsToMap(labelStrs),
 		},
 		Config: &cav1.CertificateAuthorityConfig{
-			Certificate:     certificate,
-			CertificateData: certificateData,
+			CertificateData: string(caData),
 		},
 	}
 
-	if err := c.CAV1().Create(ctx, ca); err != nil {
+	if err := clientSet.CAV1().Create(ctx, ca); err != nil {
 		logrus.Fatalf("error creating certificate authority: %v", err)
 	}
 

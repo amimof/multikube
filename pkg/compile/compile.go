@@ -124,17 +124,6 @@ func compileCA(ca *cav1.CertificateAuthority, certs map[string]*certificatev1.Ce
 	var pemBytes []byte
 
 	switch {
-	case ca.GetConfig().GetCertificate() != "":
-		ref := ca.GetConfig().GetCertificate()
-		certObj, ok := certs[ref]
-		if !ok {
-			return nil, fmt.Errorf("certificate ref %q not found", ref)
-		}
-		inline := certObj.GetConfig().GetCertificate()
-		if inline == "" {
-			return nil, fmt.Errorf("certificate ref %q has no inline certificate data", ref)
-		}
-		pemBytes = []byte(inline)
 	case ca.GetConfig().GetCertificateData() != "":
 		pemBytes = []byte(ca.GetConfig().GetCertificateData())
 	default:
@@ -164,16 +153,10 @@ func compileCerts(certs map[string]*certificatev1.Certificate) (map[string]tls.C
 func compileCert(cert *certificatev1.Certificate) (tls.Certificate, error) {
 	certPEM := cert.GetConfig().GetCertificateData()
 	if certPEM == "" {
-		certPEM = cert.GetConfig().GetCertificate()
-	}
-	if certPEM == "" {
 		return tls.Certificate{}, fmt.Errorf("certificate has no inline PEM data")
 	}
 
 	keyPEM := cert.GetConfig().GetKeyData()
-	if keyPEM == "" {
-		keyPEM = cert.GetConfig().GetKey()
-	}
 	if keyPEM == "" {
 		return tls.Certificate{}, fmt.Errorf("key has no inline PEM data")
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
@@ -16,11 +17,9 @@ import (
 
 func newCreateCertificateCmd(cfg *client.Config) *cobra.Command {
 	var (
-		certificate     string
-		certificateData string
-		key             string
-		keyData         string
-		labels          []string
+		certificate string
+		key         string
+		labels      []string
 	)
 
 	cmd := &cobra.Command{
@@ -30,32 +29,33 @@ func newCreateCertificateCmd(cfg *client.Config) *cobra.Command {
 		Long:    `Create a new certificate and register it with the server.`,
 		Example: `  # Create a certificate with inline PEM certificate and key
   multikubectl create certificate my-cert \
-    --certificate "$(cat tls.crt)" \
-    --key "$(cat tls.key)"
-
-  # Create a certificate with file paths
-  multikubectl create certificate my-cert \
-    --certificate-data /etc/ssl/tls.crt \
-    --key-data /etc/ssl/tls.key
+    --certificate /etc/ssl/tls.crt \
+    --key /etc/ssl/tls.key 
 
   # Create a certificate with labels
   multikubectl create certificate my-cert \
-    --certificate-data /etc/ssl/tls.crt \
-    --key-data /etc/ssl/tls.key \
+    --certificate /etc/ssl/tls.crt \
+    --key /etc/ssl/tls.key \
     --label env=production --label team=platform`,
 		Args: cobra.ExactArgs(1),
-		RunE: withConfig(func(cmd *cobra.Command, args []string) error {
-			return runCreateCertificateCmd(cmd, args, cfg, certificate, certificateData, key, keyData, labels)
+		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
+			return runCreateCertificateCmd(cmd, args, cfg, certificate, key, labels)
 		}),
 	}
 
-	cmd.Flags().StringVar(&certificate, "certificate", "", "PEM-encoded certificate (inline)")
-	cmd.Flags().StringVar(&certificateData, "certificate-data", "", "Path to the PEM-encoded certificate file")
-	cmd.Flags().StringVar(&key, "key", "", "PEM-encoded private key (inline)")
-	cmd.Flags().StringVar(&keyData, "key-data", "", "Path to the PEM-encoded private key file")
+	cmd.Flags().StringVar(&certificate, "certificate", "", "Path to PEM-encoded certificate")
+	cmd.Flags().StringVar(&key, "key", "", "Path to PEM-encoded private key")
 	cmd.Flags().StringArrayVar(&labels, "label", nil, "Labels to attach in key=value format (can be specified multiple times)")
 
 	return cmd
+}
+
+func readFileFromPath(certPath string) ([]byte, error) {
+	b, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // runCreateCertificateCmd creates a new certificate
@@ -63,7 +63,7 @@ func runCreateCertificateCmd(
 	cmd *cobra.Command,
 	args []string,
 	cfg *client.Config,
-	certificate, certificateData, key, keyData string,
+	certificate, key string,
 	labelStrs []string,
 ) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
@@ -75,19 +75,14 @@ func runCreateCertificateCmd(
 
 	name := args[0]
 
-	currentSrv, err := cfg.CurrentServer()
+	certData, err := readFileFromPath(certificate)
 	if err != nil {
-		logrus.Fatal(err)
+		return err
 	}
-	c, err := client.New(currentSrv.Address, client.WithTLSConfigFromCfg(cfg))
+	keyData, err := readFileFromPath(key)
 	if err != nil {
-		logrus.Fatalf("error setting up client: %v", err)
+		return err
 	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Errorf("error closing client connection: %v", err)
-		}
-	}()
 
 	cert := &certificatev1.Certificate{
 		Meta: &metav1.Meta{
@@ -95,14 +90,12 @@ func runCreateCertificateCmd(
 			Labels: cmdutil.ConvertKVStringsToMap(labelStrs),
 		},
 		Config: &certificatev1.CertificateConfig{
-			Certificate:     certificate,
-			CertificateData: certificateData,
-			Key:             key,
-			KeyData:         keyData,
+			CertificateData: string(certData),
+			KeyData:         string(keyData),
 		},
 	}
 
-	if err := c.CertificateV1().Create(ctx, cert); err != nil {
+	if err := clientSet.CertificateV1().Create(ctx, cert); err != nil {
 		logrus.Fatalf("error creating certificate: %v", err)
 	}
 
