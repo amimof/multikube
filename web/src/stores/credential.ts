@@ -5,11 +5,33 @@ import type { V1Credential } from '@/generated/credential'
 export const useCredentialStore = defineStore('credential', {
   state: () => ({
     items: [] as V1Credential[],
+    current: null as V1Credential | null,
     loading: false,
     error: null as string | null,
   }),
 
   actions: {
+    async fetchCredential(name: string) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await api.credentialService.credentialServiceGet2({ name })
+        this.current = response.credential ?? null
+      } catch (err) {
+        this.current = null
+        this.error = err instanceof Error ? err.message : 'Failed to load credential'
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
+    clearCurrent() {
+      this.current = null
+      this.error = null
+    },
+
     async fetchCredentials() {
       this.loading = true
       this.error = null

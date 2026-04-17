@@ -5,11 +5,33 @@ import type { V1CertificateAuthority } from '@/generated/ca'
 export const useCaStore = defineStore('ca', {
   state: () => ({
     items: [] as V1CertificateAuthority[],
+    current: null as V1CertificateAuthority | null,
     loading: false,
     error: null as string | null,
   }),
 
   actions: {
+    async fetchCa(name: string) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await api.certificateAuthorityService.certificateAuthorityServiceGet2({ name })
+        this.current = response.certificateAuthority ?? null
+      } catch (err) {
+        this.current = null
+        this.error = err instanceof Error ? err.message : 'Failed to load certificate authority'
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
+    clearCurrent() {
+      this.current = null
+      this.error = null
+    },
+
     async fetchCas() {
       this.loading = true
       this.error = null

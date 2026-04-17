@@ -5,11 +5,33 @@ import type { V1Certificate } from '@/generated/certificate'
 export const useCertificateStore = defineStore('certificate', {
   state: () => ({
     items: [] as V1Certificate[],
+    current: null as V1Certificate | null,
     loading: false,
     error: null as string | null,
   }),
 
   actions: {
+    async fetchCertificate(name: string) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await api.certificateService.certificateServiceGet2({ name })
+        this.current = response.certificate ?? null
+      } catch (err) {
+        this.current = null
+        this.error = err instanceof Error ? err.message : 'Failed to load certificate'
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
+    clearCurrent() {
+      this.current = null
+      this.error = null
+    },
+
     async fetchCertificates() {
       this.loading = true
       this.error = null

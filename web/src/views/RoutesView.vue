@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch, toRaw } from 'vue'
-import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Plus, Refresh, Delete, Search, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRouteStore } from '@/stores/route'
 import { useBackendStore } from '@/stores/backend'
@@ -15,6 +16,7 @@ type RouteMatchMode = '' | 'sni' | 'path' | 'pathPrefix' | 'header' | 'jwt'
 
 const routeStore = useRouteStore()
 const backendStore = useBackendStore()
+const router = useRouter()
 
 const { nameFilter, displayItems } = useResourceTable(computed(() => routeStore.items))
 
@@ -148,7 +150,7 @@ function handleSelectionChange(rows: V1Route[]) {
 
 function handleRowClick(row: V1Route, column: any) {
 	if (column?.type === 'selection') return
-	openEdit(row)
+	router.push(`/routes/${row.meta?.name}`)
 }
 
 function confirmBulkDelete() {
@@ -295,7 +297,7 @@ onMounted(() => {
 				<el-table-column label="Status" width="100" sortable :sort-method="sortByStatus">
 					<template #default="{ row }">
 						<el-tag v-if="row.status?.phase"
-							:type="row.status.phase === 'Active' ? 'success' : row.status.phase === 'Inactive' ? 'info' : 'warning'"
+							:type="row.status.phase === 'READY' ? 'success' : row.status.phase === 'Inactive' ? 'info' : 'warning'"
 							effect="dark" size="small">
 							{{ row.status.phase }}
 						</el-tag>
@@ -317,8 +319,9 @@ onMounted(() => {
 						{{ formatDate(row.meta?.created) }}
 					</template>
 				</el-table-column>
-				<el-table-column label="Actions" width="80" fixed="right">
+				<el-table-column label="Actions" width="120" fixed="right">
 					<template #default="{ row }">
+						<el-button :icon="EditPen" type="primary" size="small" plain @click.stop="openEdit(row)" />
 						<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
 					</template>
 				</el-table-column>

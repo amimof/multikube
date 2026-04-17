@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch, toRaw } from 'vue'
-import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Plus, Refresh, Delete, Search, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
 import { useCertificateStore } from '@/stores/certificate'
@@ -13,6 +14,7 @@ import ConfirmDelete from '@/components/ConfirmDelete.vue'
 
 const credentialStore = useCredentialStore()
 const certificateStore = useCertificateStore()
+const router = useRouter()
 
 const { nameFilter, displayItems } = useResourceTable(computed(() => credentialStore.items))
 
@@ -135,7 +137,7 @@ function handleSelectionChange(rows: V1Credential[]) {
 
 function handleRowClick(row: V1Credential, column: any) {
 	if (column?.type === 'selection') return
-	openEdit(row)
+	router.push(`/credentials/${row.meta?.name}`)
 }
 
 function confirmBulkDelete() {
@@ -273,8 +275,9 @@ onMounted(() => {
 						{{ formatDate(row.meta?.created) }}
 					</template>
 				</el-table-column>
-				<el-table-column label="Actions" width="80" fixed="right">
+				<el-table-column label="Actions" width="120" fixed="right">
 					<template #default="{ row }">
+						<el-button :icon="EditPen" type="primary" size="small" plain @click.stop="openEdit(row)" />
 						<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
 					</template>
 				</el-table-column>

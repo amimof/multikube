@@ -5,6 +5,7 @@ import type { V1Route } from '@/generated/route'
 export const useRouteStore = defineStore('route', {
   state: () => ({
     items: [] as V1Route[],
+    current: null as V1Route | null,
     loading: false,
     error: null as string | null,
   }),
@@ -23,6 +24,27 @@ export const useRouteStore = defineStore('route', {
       } finally {
         this.loading = false
       }
+    },
+
+    async fetchRoute(name: string) {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await api.routeService.routeServiceGet2({ name })
+        this.current = response.route ?? null
+      } catch (err) {
+        this.current = null
+        this.error = err instanceof Error ? err.message : 'Failed to load route'
+        throw err
+      } finally {
+        this.loading = false
+      }
+    },
+
+    clearCurrent() {
+      this.current = null
+      this.error = null
     },
 
     async createRoute(route: V1Route) {

@@ -24,9 +24,19 @@ const router = createRouter({
       component: () => import('@/views/RoutesView.vue'),
     },
     {
+      path: '/routes/:name',
+      name: 'route-status',
+      component: () => import('@/views/RouteStatusView.vue'),
+    },
+    {
       path: '/cas',
       name: 'cas',
       component: () => import('@/views/CAsView.vue'),
+    },
+    {
+      path: '/cas/:name',
+      name: 'ca-status',
+      component: () => import('@/views/CAStatusView.vue'),
     },
     {
       path: '/credentials',
@@ -34,9 +44,19 @@ const router = createRouter({
       component: () => import('@/views/CredentialsView.vue'),
     },
     {
+      path: '/credentials/:name',
+      name: 'credential-status',
+      component: () => import('@/views/CredentialStatusView.vue'),
+    },
+    {
       path: '/certificates',
       name: 'certificates',
       component: () => import('@/views/CertificatesView.vue'),
+    },
+    {
+      path: '/certificates/:name',
+      name: 'certificate-status',
+      component: () => import('@/views/CertificateStatusView.vue'),
     },
     {
       path: '/policies',
