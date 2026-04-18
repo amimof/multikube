@@ -45,6 +45,7 @@ docker run -d \
   --name multikube \
   --network kind  \
   -p 5743:5743 \
+  -p 6443:6443 \
   -p 8443:8443 \
   -v multikube-data:/.local/state/multikube  \
   multikube:latest

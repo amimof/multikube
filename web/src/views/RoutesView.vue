@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, ref, computed, watch, toRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -35,6 +35,7 @@ function createEmptyRoute(): V1Route {
 		version: 'route/v1',
 		meta: { name: '', labels: {} },
 		config: {
+			enabled: true,
 			backendRef: '',
 			match: undefined,
 		},
@@ -209,6 +210,18 @@ async function handleSave() {
 	}
 }
 
+async function handleToggleEnabled(row: V1Route, enabled: boolean) {
+	try {
+		const updated = structuredClone(toRaw(row))
+		if (!updated.config) updated.config = {}
+		updated.config.enabled = enabled
+		await routeStore.updateRoute(updated)
+		ElMessage.success(`${row.meta?.name} ${enabled ? 'enabled' : 'disabled'}`)
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Update failed')
+	}
+}
+
 function handleRefresh() {
 	routeStore.fetchRoutes().catch(() => { })
 }
@@ -265,6 +278,12 @@ onMounted(() => {
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
 				<el-table-column prop="meta.name" label="Name" min-width="150" sortable />
+				<el-table-column label="Enabled" width="90">
+					<template #default="{ row }">
+						<el-switch :model-value="row.config?.enabled ?? true"
+							@update:model-value="handleToggleEnabled(row, $event)" @click.stop />
+					</template>
+				</el-table-column>
 				<el-table-column label="Status" width="100" sortable :sort-method="sortByStatus">
 					<template #default="{ row }">
 						<el-tag v-if="row.status?.phase"
@@ -310,6 +329,10 @@ onMounted(() => {
 				</el-form-item>
 
 				<el-divider content-position="left">Config</el-divider>
+
+				<el-form-item label="Enabled">
+					<el-switch v-model="form.config!.enabled" />
+				</el-form-item>
 
 				<el-form-item label="Backend Ref" required>
 					<el-select v-model="form.config!.backendRef" placeholder="Select Backend" style="width: 100%" clearable

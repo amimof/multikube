@@ -160,6 +160,10 @@ onUnmounted(() => {
 
 					<el-divider content-position="left">Certificate</el-divider>
 
+					<el-form-item label="Enabled">
+						<el-switch v-model="form.config!.enabled" />
+					</el-form-item>
+
 					<el-form-item label="Data">
 						<el-input v-model="form.config!.certificateData" type="textarea" :rows="8"
 							:input-style="{ fontFamily: 'monospace', fontSize: '13px' }"

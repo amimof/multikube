@@ -53,18 +53,19 @@ watch(credential, (val) => {
 // When mode changes, reset config auth fields
 watch(credentialMode, (newMode, oldMode) => {
 	if (newMode === oldMode) return
+	const enabled = form.value.config?.enabled
 	switch (newMode) {
 		case 'clientCertificateRef':
-			form.value.config = { clientCertificateRef: '' }
+			form.value.config = { enabled, clientCertificateRef: '' }
 			break
 		case 'token':
-			form.value.config = { token: '' }
+			form.value.config = { enabled, token: '' }
 			break
 		case 'basic':
-			form.value.config = { basic: { username: '', password: '' } }
+			form.value.config = { enabled, basic: { username: '', password: '' } }
 			break
 		default:
-			form.value.config = {}
+			form.value.config = { enabled }
 			break
 	}
 })
@@ -213,6 +214,10 @@ onUnmounted(() => {
 							</el-form-item>
 
 							<el-divider content-position="left">Config</el-divider>
+
+							<el-form-item label="Enabled">
+								<el-switch v-model="form.config!.enabled" />
+							</el-form-item>
 
 							<el-form-item label="Credential Type">
 								<el-select v-model="credentialMode" placeholder="Select credential type" style="width: 100%">

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, toRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -36,6 +36,7 @@ function createEmptyBackend(): V1Backend {
 		version: 'backend/v1',
 		meta: { name: '', labels: {} },
 		config: {
+			enabled: true,
 			servers: [],
 			caRef: '',
 			authRef: '',
@@ -199,6 +200,18 @@ async function handleSave() {
 	}
 }
 
+async function handleToggleEnabled(row: V1Backend, enabled: boolean) {
+	try {
+		const updated = structuredClone(toRaw(row))
+		if (!updated.config) updated.config = {}
+		updated.config.enabled = enabled
+		await backendStore.updateBackend(updated)
+		ElMessage.success(`${row.meta?.name} ${enabled ? 'enabled' : 'disabled'}`)
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Update failed')
+	}
+}
+
 function handleRefresh() {
 	backendStore.fetchBackends().catch(() => { })
 }
@@ -246,6 +259,12 @@ onMounted(() => {
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
 				<el-table-column prop="meta.name" label="Name" min-width="150" sortable />
+				<el-table-column label="Enabled" width="90">
+					<template #default="{ row }">
+						<el-switch :model-value="row.config?.enabled ?? true"
+							@update:model-value="handleToggleEnabled(row, $event)" @click.stop />
+					</template>
+				</el-table-column>
 				<el-table-column label="Ready" width="100" sortable :sort-method="sortByReady">
 					<template #default="{ row }">
 						<el-tag
@@ -291,6 +310,10 @@ onMounted(() => {
 				</el-form-item>
 
 				<el-divider content-position="left">Config</el-divider>
+
+				<el-form-item label="Enabled">
+					<el-switch v-model="form.config!.enabled" />
+				</el-form-item>
 
 				<el-form-item label="Servers">
 					<el-input v-model="serversText" type="textarea" :rows="3"

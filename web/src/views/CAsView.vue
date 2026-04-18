@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, toRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -30,6 +30,7 @@ function createEmptyCa(): V1CertificateAuthority {
 		version: 'certificate_authority/v1',
 		meta: { name: '', labels: {} },
 		config: {
+			enabled: true,
 			certificateData: '',
 		},
 	}
@@ -130,6 +131,18 @@ async function handleSave() {
 	}
 }
 
+async function handleToggleEnabled(row: V1CertificateAuthority, enabled: boolean) {
+	try {
+		const updated = structuredClone(toRaw(row))
+		if (!updated.config) updated.config = {}
+		updated.config.enabled = enabled
+		await caStore.updateCa(updated)
+		ElMessage.success(`${row.meta?.name} ${enabled ? 'enabled' : 'disabled'}`)
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Update failed')
+	}
+}
+
 function handleRefresh() {
 	caStore.fetchCas().catch(() => { })
 }
@@ -174,6 +187,12 @@ onMounted(() => {
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
 				<el-table-column prop="meta.name" label="Name" min-width="200" sortable />
+				<el-table-column label="Enabled" width="90">
+					<template #default="{ row }">
+						<el-switch :model-value="row.config?.enabled ?? true"
+							@update:model-value="handleToggleEnabled(row, $event)" @click.stop />
+					</template>
+				</el-table-column>
 				<el-table-column label="Certificate Data" min-width="200" sortable :sort-method="sortByCertificate">
 					<template #default="{ row }">
 						<span v-if="row.config?.certificateData" style="font-family: monospace; font-size: 12px">
@@ -208,6 +227,10 @@ onMounted(() => {
 				</el-form-item>
 
 				<el-divider content-position="left">Config</el-divider>
+
+				<el-form-item label="Enabled">
+					<el-switch v-model="form.config!.enabled" />
+				</el-form-item>
 
 				<el-form-item label="Data" required>
 					<el-input v-model="form.config!.certificateData" type="textarea" :rows="8"

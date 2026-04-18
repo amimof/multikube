@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, watch } from 'vue'
+import { onMounted, ref, computed, watch, toRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -34,7 +34,7 @@ function createEmptyCredential(): V1Credential {
 	return {
 		version: 'credential/v1',
 		meta: { name: '', labels: {} },
-		config: {},
+		config: { enabled: true },
 	}
 }
 
@@ -59,18 +59,19 @@ function inferMode(config: V1Credential['config']): CredentialMode {
 // When mode changes, reset config auth fields
 watch(credentialMode, (newMode, oldMode) => {
 	if (newMode === oldMode) return
+	const enabled = form.value.config?.enabled
 	switch (newMode) {
 		case 'clientCertificateRef':
-			form.value.config = { clientCertificateRef: '' }
+			form.value.config = { enabled, clientCertificateRef: '' }
 			break
 		case 'token':
-			form.value.config = { token: '' }
+			form.value.config = { enabled, token: '' }
 			break
 		case 'basic':
-			form.value.config = { basic: { username: '', password: '' } }
+			form.value.config = { enabled, basic: { username: '', password: '' } }
 			break
 		default:
-			form.value.config = {}
+			form.value.config = { enabled }
 			break
 	}
 })
@@ -196,6 +197,18 @@ async function handleSave() {
 	}
 }
 
+async function handleToggleEnabled(row: V1Credential, enabled: boolean) {
+	try {
+		const updated = structuredClone(toRaw(row))
+		if (!updated.config) updated.config = {}
+		updated.config.enabled = enabled
+		await credentialStore.updateCredential(updated)
+		ElMessage.success(`${row.meta?.name} ${enabled ? 'enabled' : 'disabled'}`)
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Update failed')
+	}
+}
+
 function handleRefresh() {
 	credentialStore.fetchCredentials().catch(() => { })
 }
@@ -242,6 +255,12 @@ onMounted(() => {
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
 				<el-table-column prop="meta.name" label="Name" min-width="200" sortable />
+				<el-table-column label="Enabled" width="90">
+					<template #default="{ row }">
+						<el-switch :model-value="row.config?.enabled ?? true"
+							@update:model-value="handleToggleEnabled(row, $event)" @click.stop />
+					</template>
+				</el-table-column>
 				<el-table-column label="Type" min-width="150" sortable :sort-method="sortByCredentialType">
 					<template #default="{ row }">
 						<el-tag size="small">{{ credentialTypeLabel(row) }}</el-tag>
@@ -279,6 +298,10 @@ onMounted(() => {
 				</el-form-item>
 
 				<el-divider content-position="left">Config</el-divider>
+
+				<el-form-item label="Enabled">
+					<el-switch v-model="form.config!.enabled" />
+				</el-form-item>
 
 				<el-form-item label="Credential Type" required>
 					<el-select v-model="credentialMode" placeholder="Select credential type" style="width: 100%">

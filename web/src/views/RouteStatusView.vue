@@ -236,6 +236,10 @@ onUnmounted(() => {
 
 							<el-divider content-position="left">Config</el-divider>
 
+							<el-form-item label="Enabled">
+								<el-switch v-model="form.config!.enabled" />
+							</el-form-item>
+
 							<el-form-item label="Backend Ref">
 								<el-select v-model="form.config!.backendRef" placeholder="Select Backend" style="width: 100%" clearable
 									filterable :loading="backendStore.loading">

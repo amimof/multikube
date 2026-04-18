@@ -235,6 +235,10 @@ onUnmounted(() => {
 
 							<el-divider content-position="left">Config</el-divider>
 
+							<el-form-item label="Enabled">
+								<el-switch v-model="form.config!.enabled" />
+							</el-form-item>
+
 							<el-form-item label="Servers">
 								<el-input v-model="serversText" type="textarea" :rows="3"
 									placeholder="One server per line (e.g. https://10.0.0.1:6443)" />
