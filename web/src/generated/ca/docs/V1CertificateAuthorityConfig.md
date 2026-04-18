@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `certificateData` | string
+`enabled` | boolean
 
 ## Example
 
@@ -16,6 +17,7 @@ import type { V1CertificateAuthorityConfig } from ''
 // TODO: Update the object below with actual values
 const example = {
   "certificateData": null,
+  "enabled": null,
 } satisfies V1CertificateAuthorityConfig
 
 console.log(example)

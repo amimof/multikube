@@ -44,6 +44,11 @@ func (l *CertificateAuthorityService) Create(ctx context.Context, ca *cav1.Certi
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Ensure status field
+	if err := EnsureCertInStatus(ca.GetConfig().GetCertificateData(), ca); err != nil {
+		l.Logger.Error("error ensuring certificate status fields", "error", err, "name", ca.GetMeta().GetName())
+	}
+
 	// Create ca in repo
 	newCert, err := l.Repo.Create(ctx, ca)
 	if err != nil {
@@ -116,6 +121,11 @@ func (l *CertificateAuthorityService) Patch(ctx context.Context, id keys.ID, pat
 	updated := maskedUpdate.(*cav1.CertificateAuthority)
 	existing = protoutils.StrategicMerge(existing, updated)
 
+	// Ensure status field
+	if err := EnsureCertInStatus(existing.GetConfig().GetCertificateData(), existing); err != nil {
+		l.Logger.Error("error ensuring certificate status fields", "error", err, "name", existing.GetMeta().GetName())
+	}
+
 	// Update the ca
 	ca, err := l.Repo.Update(ctx, id, existing)
 	if err != nil {
@@ -151,6 +161,11 @@ func (l *CertificateAuthorityService) Update(ctx context.Context, id keys.ID, ca
 	existingCert, err := l.Repo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// Ensure status field
+	if err := EnsureCertInStatus(ca.GetConfig().GetCertificateData(), ca); err != nil {
+		l.Logger.Error("error ensuring certificate status fields", "error", err, "name", ca.GetMeta().GetName())
 	}
 
 	// Update the ca

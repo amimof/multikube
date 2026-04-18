@@ -4,9 +4,9 @@ package certificate_authority.v1;
 
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
-import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
 import "meta/v1/meta.proto";
 
 option go_package = "github.com/amimof/multikube/api/certificate_authority/v1;certificate_authority";
@@ -72,10 +72,23 @@ message CertificateAuthority {
   CertificateAuthorityStatus status = 4;
 }
 
-message CertificateAuthorityStatus {}
+message CertificateAuthorityStatus {
+  string subject_cn = 1;
+  string issuer = 2;
+  google.protobuf.Timestamp not_before = 3;
+  google.protobuf.Timestamp not_after = 4;
+  string serial_number = 5;
+  repeated string sans = 6;
+  string signature_algorithm = 7;
+  string public_key_algorithm = 8;
+  bool is_ca = 9;
+  repeated string ip_addresses = 10;
+  repeated string uris = 11;
+}
 
 message CertificateAuthorityConfig {
   string certificate_data = 1 [(buf.validate.field).string.min_len = 1];
+  bool enabled = 2;
 }
 
 message GetRequest {

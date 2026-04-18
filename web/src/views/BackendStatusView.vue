@@ -1,27 +1,86 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, toRaw } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, Refresh, Document } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useBackendStore } from '@/stores/backend'
-import { stringify as yamlStringify } from 'yaml'
+import { useCaStore } from '@/stores/ca'
+import { useCredentialStore } from '@/stores/credential'
+import { stringify as yamlStringify, parse as yamlParse } from 'yaml'
 import { Codemirror } from 'vue-codemirror'
 import { yaml as yamlLang } from '@codemirror/lang-yaml'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorState } from '@codemirror/state'
 import NetworkTopology from '@/components/NetworkTopology.vue'
 import type { NormalizedServer } from '@/components/NetworkTopology.vue'
+import LabelEditor from '@/components/LabelEditor.vue'
+import MetadataDisplay from '@/components/MetadataDisplay.vue'
+import EditYamlModal from '@/components/EditYamlModal.vue'
 import { lbLabel, countHealthyServers, countTotalServers, healthTagType } from '@/utils/backend'
+import { V1LoadBalancingType } from '@/generated/backend'
+import type { V1Backend } from '@/generated/backend'
 import { formatDate, formatDateFull } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
 const backendStore = useBackendStore()
+const caStore = useCaStore()
+const credentialStore = useCredentialStore()
 
 const backendName = computed(() => route.params.name as string)
-
 const backend = computed(() => backendStore.current)
 
-// Normalized server list: config.servers joined with status.targetStatuses
+const saving = ref(false)
+const yamlModalVisible = ref(false)
+
+// Editable form, initialized from fetched resource
+const form = ref<V1Backend>({})
+
+watch(backend, (val) => {
+	if (val) {
+		form.value = structuredClone(toRaw(val))
+	}
+}, { immediate: true })
+
+const lbTypeOptions = [
+	{ label: 'Unspecified', value: V1LoadBalancingType.LoadBalancingTypeUnspecified },
+	{ label: 'Round Robin', value: V1LoadBalancingType.LoadBalancingTypeRoundRobin },
+	{ label: 'Least Connections', value: V1LoadBalancingType.LoadBalancingTypeLeastConnections },
+	{ label: 'Random', value: V1LoadBalancingType.LoadBalancingTypeRandom },
+	{ label: 'Weighted Round Robin', value: V1LoadBalancingType.LoadBalancingTypeWeightedRoundRobin },
+]
+
+// Servers as a newline-separated string for textarea editing
+const serversText = computed({
+	get: () => (form.value.config?.servers ?? []).join('\n'),
+	set: (val: string) => {
+		if (form.value.config) {
+			form.value.config.servers = val.split('\n').filter((s) => s.trim() !== '')
+		}
+	},
+})
+
+// Labels computed for LabelEditor
+const formLabels = computed({
+	get: () => form.value.meta?.labels ?? {},
+	set: (val: Record<string, string>) => {
+		if (form.value.meta) {
+			form.value.meta.labels = val
+		}
+	},
+})
+
+// Extra claims as a newline-separated string
+const extraClaimsText = computed({
+	get: () => (form.value.config?.impersonationConfig?.extraClaims ?? []).join('\n'),
+	set: (val: string) => {
+		if (form.value.config?.impersonationConfig) {
+			form.value.config.impersonationConfig.extraClaims = val.split('\n').filter((s) => s.trim() !== '')
+		}
+	},
+})
+
+// Normalized server list for topology display (from store, not form)
 const normalizedServers = computed<NormalizedServer[]>(() => {
 	const servers = backend.value?.config?.servers ?? []
 	const statuses = backend.value?.status?.targetStatuses ?? {}
@@ -40,13 +99,12 @@ const healthyCount = computed(() =>
 	countHealthyServers(backend.value?.config?.servers ?? [], backend.value?.status?.targetStatuses),
 )
 const totalCount = computed(() => countTotalServers(backend.value?.config?.servers ?? []))
-
 const healthTag = computed(() => healthTagType(healthyCount.value, totalCount.value))
 
 const yamlContent = computed(() => {
-	if (!backend.value) return ''
+	if (!form.value || !form.value.version) return ''
 	try {
-		const raw = structuredClone(toRaw(backend.value))
+		const raw = structuredClone(toRaw(form.value))
 		return yamlStringify(raw, { lineWidth: 120 })
 	} catch {
 		return '# Failed to serialize resource'
@@ -55,14 +113,39 @@ const yamlContent = computed(() => {
 
 const cmExtensions = [yamlLang(), oneDark, EditorState.readOnly.of(true)]
 
-const labelEntries = computed(() => {
-	const labels = backend.value?.meta?.labels
-	if (!labels) return []
-	return Object.entries(labels)
-})
+async function handleSave() {
+	saving.value = true
+	try {
+		await backendStore.updateBackend(form.value)
+		await backendStore.fetchBackend(backendName.value)
+		ElMessage.success('Backend updated')
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
+	} finally {
+		saving.value = false
+	}
+}
+
+async function handleYamlSave(parsed: unknown) {
+	saving.value = true
+	try {
+		const resource = parsed as V1Backend
+		if (!resource.meta?.name) {
+			resource.meta = { ...resource.meta, name: backendName.value }
+		}
+		await backendStore.updateBackend(resource)
+		await backendStore.fetchBackend(backendName.value)
+		ElMessage.success('Backend updated from YAML')
+		yamlModalVisible.value = false
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
+	} finally {
+		saving.value = false
+	}
+}
 
 function handleRefresh() {
-	backendStore.fetchBackend(backendName.value).catch(() => {})
+	backendStore.fetchBackend(backendName.value).catch(() => { })
 }
 
 function goBack() {
@@ -70,7 +153,9 @@ function goBack() {
 }
 
 onMounted(() => {
-	backendStore.fetchBackend(backendName.value).catch(() => {})
+	backendStore.fetchBackend(backendName.value).catch(() => { })
+	caStore.fetchCas().catch(() => { })
+	credentialStore.fetchCredentials().catch(() => { })
 })
 
 onUnmounted(() => {
@@ -82,17 +167,21 @@ onUnmounted(() => {
 	<div>
 		<!-- Header -->
 		<el-row justify="space-between" align="middle" style="margin-bottom: 16px">
-			<el-col :span="16">
+			<el-col :span="12">
 				<div style="display: flex; align-items: center; gap: 12px">
 					<el-button :icon="ArrowLeft" @click="goBack" text>Backends</el-button>
 					<h2 style="margin: 0">{{ backendName }}</h2>
-          <el-tag :type="healthTag" effect="dark" size="small">
-            {{ healthyCount }}/{{ totalCount }} Healthy
-          </el-tag>
+					<el-tag :type="healthTag" effect="dark" size="small">
+						{{ healthyCount }}/{{ totalCount }} Healthy
+					</el-tag>
 				</div>
 			</el-col>
-			<el-col :span="8" style="text-align: right">
+			<el-col :span="12" style="text-align: right">
 				<el-button :icon="Refresh" @click="handleRefresh">Reload</el-button>
+				<el-button :icon="Document" @click="yamlModalVisible = true">Edit YAML</el-button>
+				<el-button type="primary" :loading="saving" @click="handleSave">
+					{{ saving ? 'Saving...' : 'Save' }}
+				</el-button>
 			</el-col>
 		</el-row>
 
@@ -121,91 +210,90 @@ onUnmounted(() => {
 
 			<!-- Two-column layout: Configuration + Target Health -->
 			<el-row :gutter="16" style="margin-bottom: 16px">
-				<!-- Configuration (left) -->
+				<!-- Configuration (left) - editable form -->
 				<el-col :span="14">
 					<el-card shadow="never" style="height: 100%">
 						<template #header>
 							<span style="font-weight: 600">Configuration</span>
 						</template>
 
-						<!-- General section -->
-						<h4 class="section-title">General</h4>
-						<el-descriptions :column="2" border size="default">
-							<el-descriptions-item label="Name">
-								{{ backend.meta?.name ?? '-' }}
-							</el-descriptions-item>
-							<el-descriptions-item label="Load Balancing">
-								{{ lbLabel(backend.config?.type as string) }}
-							</el-descriptions-item>
-							<el-descriptions-item label="Created">
-								<el-tooltip :content="formatDateFull(backend.meta?.created)" placement="top">
-									<span>{{ formatDate(backend.meta?.created) }}</span>
-								</el-tooltip>
-							</el-descriptions-item>
-							<el-descriptions-item label="Updated">
-								<el-tooltip :content="formatDateFull(backend.meta?.updated)" placement="top">
-									<span>{{ formatDate(backend.meta?.updated) }}</span>
-								</el-tooltip>
-							</el-descriptions-item>
-							<el-descriptions-item label="UID">
-								<span style="font-family: monospace; font-size: 12px">{{ backend.meta?.uid ?? '-' }}</span>
-							</el-descriptions-item>
-							<el-descriptions-item label="Cache TTL">
-								{{ backend.config?.cacheTtl || '-' }}
-							</el-descriptions-item>
-							<el-descriptions-item label="Labels" :span="2">
-								<template v-if="labelEntries.length > 0">
-									<el-tag v-for="[key, value] in labelEntries" :key="key" size="small" style="margin: 0 6px 4px 0">
-										{{ key }}={{ value }}
-									</el-tag>
-								</template>
-								<span v-else style="color: #909399">-</span>
-							</el-descriptions-item>
-						</el-descriptions>
+						<!-- Metadata (read-only) -->
+						<el-collapse style="margin-bottom: 20px">
+							<el-collapse-item title="Metadata" name="metadata">
+								<MetadataDisplay :meta="backend.meta" />
+							</el-collapse-item>
+						</el-collapse>
 
-						<!-- Authentication section -->
-						<h4 class="section-title">Authentication</h4>
-						<el-descriptions :column="2" border size="default">
-							<el-descriptions-item label="CA Reference">
-								<router-link v-if="backend.config?.caRef" :to="'/cas'" style="text-decoration: none">
-									<el-link type="primary">{{ backend.config.caRef }}</el-link>
-								</router-link>
-								<span v-else style="color: #909399">-</span>
-							</el-descriptions-item>
-							<el-descriptions-item label="Auth Reference">
-								<router-link v-if="backend.config?.authRef" :to="'/credentials'" style="text-decoration: none">
-									<el-link type="primary">{{ backend.config.authRef }}</el-link>
-								</router-link>
-								<span v-else style="color: #909399">-</span>
-							</el-descriptions-item>
-							<el-descriptions-item label="Skip TLS Verify">
-								<el-tag :type="backend.config?.insecureSkipTlsVerify ? 'warning' : 'info'" size="small">
-									{{ backend.config?.insecureSkipTlsVerify ? 'Yes' : 'No' }}
-								</el-tag>
-							</el-descriptions-item>
-						</el-descriptions>
+						<el-form label-width="160px" label-position="right">
+							<el-form-item label="Name">
+								<el-input :model-value="form.meta?.name" disabled />
+							</el-form-item>
 
-						<!-- Impersonation section -->
-						<h4 class="section-title">Impersonation</h4>
-						<el-descriptions :column="2" border size="default">
-							<el-descriptions-item label="Enabled">
-								<el-tag :type="backend.config?.impersonationConfig?.enabled ? 'success' : 'info'" size="small">
-									{{ backend.config?.impersonationConfig?.enabled ? 'Yes' : 'No' }}
-								</el-tag>
-							</el-descriptions-item>
-							<el-descriptions-item label="Username Claim">
-								{{ backend.config?.impersonationConfig?.usernameClaim || '-' }}
-							</el-descriptions-item>
-							<el-descriptions-item label="Groups Claim">
-								{{ backend.config?.impersonationConfig?.groupsClaim || '-' }}
-							</el-descriptions-item>
-							<el-descriptions-item label="Extra Claims">
-								<span v-if="(backend.config?.impersonationConfig?.extraClaims ?? []).length > 0">
-									{{ backend.config!.impersonationConfig!.extraClaims!.join(', ') }}
-								</span>
-								<span v-else style="color: #909399">-</span>
-							</el-descriptions-item>
-						</el-descriptions>
+							<el-form-item label="Labels">
+								<LabelEditor v-model="formLabels" />
+							</el-form-item>
+
+							<el-divider content-position="left">Config</el-divider>
+
+							<el-form-item label="Servers">
+								<el-input v-model="serversText" type="textarea" :rows="3"
+									placeholder="One server per line (e.g. https://10.0.0.1:6443)" />
+							</el-form-item>
+
+							<el-form-item label="Load Balancing Type">
+								<el-select v-model="form.config!.type" style="width: 100%">
+									<el-option v-for="opt in lbTypeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+								</el-select>
+							</el-form-item>
+
+							<el-form-item label="CA Ref">
+								<el-select v-model="form.config!.caRef" placeholder="Select Certificate Authority" style="width: 100%"
+									clearable filterable :loading="caStore.loading">
+									<el-option v-for="item in caStore.items" :key="item.meta?.name" :label="item.meta?.name"
+										:value="item.meta?.name" />
+								</el-select>
+							</el-form-item>
+
+							<el-form-item label="Auth Ref">
+								<el-select v-model="form.config!.authRef" placeholder="Select Credential" style="width: 100%" clearable
+									filterable :loading="credentialStore.loading">
+									<el-option v-for="item in credentialStore.items" :key="item.meta?.name" :label="item.meta?.name"
+										:value="item.meta?.name" />
+								</el-select>
+							</el-form-item>
+
+							<el-form-item label="Cache TTL">
+								<el-input v-model="form.config!.cacheTtl" placeholder="e.g. 30s, 5m" />
+							</el-form-item>
+
+							<el-form-item label="Skip TLS Verify">
+								<el-switch v-model="form.config!.insecureSkipTlsVerify" />
+							</el-form-item>
+
+							<!-- Advanced section -->
+							<el-collapse style="margin-top: 12px">
+								<el-collapse-item title="Advanced" name="advanced">
+									<el-form-item label="Enable Impersonation" style="margin-top: 12px">
+										<el-switch v-model="form.config!.impersonationConfig!.enabled" />
+									</el-form-item>
+
+									<el-form-item label="Username Claim">
+										<el-input v-model="form.config!.impersonationConfig!.usernameClaim" placeholder="sub"
+											:disabled="!form.config!.impersonationConfig!.enabled" />
+									</el-form-item>
+
+									<el-form-item label="Groups Claim">
+										<el-input v-model="form.config!.impersonationConfig!.groupsClaim" placeholder="groups"
+											:disabled="!form.config!.impersonationConfig!.enabled" />
+									</el-form-item>
+
+									<el-form-item label="Extra Claims">
+										<el-input v-model="extraClaimsText" type="textarea" :rows="3" placeholder="One claim per line"
+											:disabled="!form.config!.impersonationConfig!.enabled" />
+									</el-form-item>
+								</el-collapse-item>
+							</el-collapse>
+						</el-form>
 					</el-card>
 				</el-col>
 
@@ -215,9 +303,9 @@ onUnmounted(() => {
 						<template #header>
 							<div style="display: flex; justify-content: space-between; align-items: center">
 								<span style="font-weight: 600">Target Health</span>
-                <el-tag :type="healthTag" effect="dark" size="small">
-                  {{ healthyCount }}/{{ totalCount }}
-                </el-tag>
+								<el-tag :type="healthTag" effect="dark" size="small">
+									{{ healthyCount }}/{{ totalCount }}
+								</el-tag>
 							</div>
 						</template>
 
@@ -256,17 +344,10 @@ onUnmounted(() => {
 					</el-card>
 				</el-col>
 			</el-row>
-
-			<!-- YAML -->
-			<el-card shadow="never" style="margin-bottom: 16px">
-				<template #header>
-					<span style="font-weight: 600">YAML</span>
-				</template>
-				<div class="yaml-editor">
-					<Codemirror :model-value="yamlContent" :extensions="cmExtensions" :style="{ fontSize: '13px' }" />
-				</div>
-			</el-card>
 		</template>
+
+		<!-- Edit YAML Modal -->
+		<EditYamlModal v-model:visible="yamlModalVisible" :yaml-content="yamlContent" @save="handleYamlSave" />
 	</div>
 </template>
 

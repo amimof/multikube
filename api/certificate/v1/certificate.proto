@@ -7,6 +7,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
 import "meta/v1/meta.proto";
 
 option go_package = "github.com/amimof/multikube/api/certificate/v1;certificate";
@@ -72,11 +73,24 @@ message Certificate {
   CertificateStatus status = 4;
 }
 
-message CertificateStatus {}
+message CertificateStatus {
+  string subject_cn = 1;
+  string issuer = 2;
+  google.protobuf.Timestamp not_before = 3;
+  google.protobuf.Timestamp not_after = 4;
+  string serial_number = 5;
+  repeated string sans = 6;
+  string signature_algorithm = 7;
+  string public_key_algorithm = 8;
+  bool is_ca = 9;
+  repeated string ip_addresses = 10;
+  repeated string uris = 11;
+}
 
 message CertificateConfig {
   string certificate_data = 1 [(buf.validate.field).string.min_len = 1];
   string key_data = 2 [(buf.validate.field).string.min_len = 1];
+  bool enabled = 3;
 }
 
 message GetRequest {

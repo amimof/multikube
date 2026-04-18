@@ -8,6 +8,7 @@ Name | Type
 ------------ | -------------
 `certificateData` | string
 `keyData` | string
+`enabled` | boolean
 
 ## Example
 
@@ -18,6 +19,7 @@ import type { V1CertificateConfig } from ''
 const example = {
   "certificateData": null,
   "keyData": null,
+  "enabled": null,
 } satisfies V1CertificateConfig
 
 console.log(example)

@@ -5,6 +5,7 @@ docs/ProtobufAny.md
 docs/RpcStatus.md
 docs/V1Certificate.md
 docs/V1CertificateConfig.md
+docs/V1CertificateStatus.md
 docs/V1CreateResponse.md
 docs/V1GetResponse.md
 docs/V1ListResponse.md
@@ -16,6 +17,7 @@ models/ProtobufAny.ts
 models/RpcStatus.ts
 models/V1Certificate.ts
 models/V1CertificateConfig.ts
+models/V1CertificateStatus.ts
 models/V1CreateResponse.ts
 models/V1GetResponse.ts
 models/V1ListResponse.ts

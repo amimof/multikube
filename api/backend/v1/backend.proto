@@ -58,7 +58,7 @@ service BackendService {
   rpc UpdateStatus(UpdateStatusRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       put: "/api/v1/backends/{uid}/status"
-      body: "status",
+      body: "status"
       additional_bindings: {
         put: "/api/v1/backends/{name}/status"
         body: "status"
@@ -89,6 +89,7 @@ message BackendConfig {
   google.protobuf.Duration cache_ttl = 5;
   LoadBalancingType type = 6;
   ImpersonationConfig impersonation_config = 7;
+  bool enabled = 8;
 }
 
 message ImpersonationConfig {

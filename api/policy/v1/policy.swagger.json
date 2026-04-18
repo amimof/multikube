@@ -672,6 +672,9 @@
             "type": "object",
             "$ref": "#/definitions/policyv1Rule"
           }
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     },

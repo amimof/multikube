@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, toRaw } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Refresh, Delete, Search, EditPen } from '@element-plus/icons-vue'
+import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useBackendStore } from '@/stores/backend'
 import { useCaStore } from '@/stores/ca'
@@ -12,7 +12,6 @@ import { formatDate } from '@/utils/format'
 import { V1LoadBalancingType } from '@/generated/backend'
 import type { V1Backend } from '@/generated/backend'
 import LabelEditor from '@/components/LabelEditor.vue'
-import MetadataDisplay from '@/components/MetadataDisplay.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 
 const backendStore = useBackendStore()
@@ -23,7 +22,6 @@ const router = useRouter()
 const { nameFilter, displayItems } = useResourceTable(computed(() => backendStore.items))
 
 const dialogVisible = ref(false)
-const isEditing = ref(false)
 const saving = ref(false)
 const deleteDialogVisible = ref(false)
 const deleteTarget = ref<V1Backend | null>(null)
@@ -146,13 +144,6 @@ function viewStatus(row: V1Backend) {
 
 function openCreate() {
 	form.value = createEmptyBackend()
-	isEditing.value = false
-	dialogVisible.value = true
-}
-
-function openEdit(row: V1Backend) {
-	form.value = structuredClone(toRaw(row))
-	isEditing.value = true
 	dialogVisible.value = true
 }
 
@@ -198,13 +189,8 @@ async function handleBulkDelete() {
 async function handleSave() {
 	saving.value = true
 	try {
-		if (isEditing.value) {
-			await backendStore.updateBackend(form.value)
-			ElMessage.success('Backend updated')
-		} else {
-			await backendStore.createBackend(form.value)
-			ElMessage.success('Backend created')
-		}
+		await backendStore.createBackend(form.value)
+		ElMessage.success('Backend created')
 		dialogVisible.value = false
 	} catch (err) {
 		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
@@ -285,28 +271,19 @@ onMounted(() => {
 						{{ formatDate(row.meta?.created) }}
 					</template>
 				</el-table-column>
-				<el-table-column label="Actions" width="120" fixed="right">
-					<template #default="{ row }">
-						<el-button :icon="EditPen" type="primary" size="small" plain @click.stop="openEdit(row)" />
-						<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
-					</template>
-				</el-table-column>
+			<el-table-column label="Actions" width="80" fixed="right">
+				<template #default="{ row }">
+					<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
+				</template>
+			</el-table-column>
 			</el-table>
 		</template>
 
-		<!-- Create / Edit Dialog -->
-		<el-dialog v-model="dialogVisible" :title="isEditing ? 'Edit Backend' : 'Create Backend'" width="600"
-			destroy-on-close>
+		<!-- Create Dialog -->
+		<el-dialog v-model="dialogVisible" title="Create Backend" width="600" destroy-on-close>
 			<el-form label-width="160px" label-position="right">
-				<!-- Metadata section (read-only when editing) -->
-				<el-collapse v-if="isEditing" style="margin-bottom: 20px">
-					<el-collapse-item title="Metadata" name="metadata">
-						<MetadataDisplay :meta="form.meta" />
-					</el-collapse-item>
-				</el-collapse>
-
 				<el-form-item label="Name" required>
-					<el-input v-model="form.meta!.name" :disabled="isEditing" placeholder="my-backend" />
+					<el-input v-model="form.meta!.name" placeholder="my-backend" />
 				</el-form-item>
 
 				<el-form-item label="Labels">
@@ -377,9 +354,9 @@ onMounted(() => {
 
 			<template #footer>
 				<el-button @click="dialogVisible = false">Cancel</el-button>
-				<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
-					{{ saving ? 'Saving...' : isEditing ? 'Update' : 'Create' }}
-				</el-button>
+			<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
+				{{ saving ? 'Saving...' : 'Create' }}
+			</el-button>
 			</template>
 		</el-dialog>
 

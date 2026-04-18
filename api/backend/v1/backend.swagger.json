@@ -593,6 +593,9 @@
         },
         "impersonationConfig": {
           "$ref": "#/definitions/v1ImpersonationConfig"
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     },

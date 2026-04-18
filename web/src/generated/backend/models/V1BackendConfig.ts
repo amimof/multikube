@@ -76,6 +76,12 @@ export interface V1BackendConfig {
      * @memberof V1BackendConfig
      */
     impersonationConfig?: V1ImpersonationConfig;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof V1BackendConfig
+     */
+    enabled?: boolean;
 }
 
 
@@ -104,6 +110,7 @@ export function V1BackendConfigFromJSONTyped(json: any, ignoreDiscriminator: boo
         'cacheTtl': json['cacheTtl'] == null ? undefined : json['cacheTtl'],
         'type': json['type'] == null ? undefined : V1LoadBalancingTypeFromJSON(json['type']),
         'impersonationConfig': json['impersonationConfig'] == null ? undefined : V1ImpersonationConfigFromJSON(json['impersonationConfig']),
+        'enabled': json['enabled'] == null ? undefined : json['enabled'],
     };
 }
 
@@ -125,6 +132,7 @@ export function V1BackendConfigToJSONTyped(value?: V1BackendConfig | null, ignor
         'cacheTtl': value['cacheTtl'],
         'type': V1LoadBalancingTypeToJSON(value['type']),
         'impersonationConfig': V1ImpersonationConfigToJSON(value['impersonationConfig']),
+        'enabled': value['enabled'],
     };
 }
 

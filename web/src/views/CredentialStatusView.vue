@@ -1,21 +1,82 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, toRaw } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, Refresh, Document } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useCredentialStore } from '@/stores/credential'
+import { useCertificateStore } from '@/stores/certificate'
 import { stringify as yamlStringify } from 'yaml'
 import { Codemirror } from 'vue-codemirror'
 import { yaml as yamlLang } from '@codemirror/lang-yaml'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorState } from '@codemirror/state'
 import { formatDate, formatDateFull } from '@/utils/format'
+import type { V1Credential } from '@/generated/credential'
+import LabelEditor from '@/components/LabelEditor.vue'
+import MetadataDisplay from '@/components/MetadataDisplay.vue'
+import EditYamlModal from '@/components/EditYamlModal.vue'
+
+type CredentialMode = '' | 'clientCertificateRef' | 'token' | 'basic'
 
 const route = useRoute()
 const router = useRouter()
 const credentialStore = useCredentialStore()
+const certificateStore = useCertificateStore()
 
 const credentialName = computed(() => route.params.name as string)
 const credential = computed(() => credentialStore.current)
+
+const saving = ref(false)
+const yamlModalVisible = ref(false)
+const credentialMode = ref<CredentialMode>('')
+
+const form = ref<V1Credential>({})
+
+function inferMode(config: V1Credential['config']): CredentialMode {
+	if (!config) return ''
+	if (config.clientCertificateRef) return 'clientCertificateRef'
+	if (config.token) return 'token'
+	if (config.basic) return 'basic'
+	return ''
+}
+
+// Initialize form from store
+watch(credential, (val) => {
+	if (val) {
+		const raw = structuredClone(toRaw(val))
+		if (!raw.config) raw.config = {}
+		form.value = raw
+		credentialMode.value = inferMode(raw.config)
+	}
+}, { immediate: true })
+
+// When mode changes, reset config auth fields
+watch(credentialMode, (newMode, oldMode) => {
+	if (newMode === oldMode) return
+	switch (newMode) {
+		case 'clientCertificateRef':
+			form.value.config = { clientCertificateRef: '' }
+			break
+		case 'token':
+			form.value.config = { token: '' }
+			break
+		case 'basic':
+			form.value.config = { basic: { username: '', password: '' } }
+			break
+		default:
+			form.value.config = {}
+			break
+	}
+})
+
+const formLabels = computed({
+	get: () => form.value.meta?.labels ?? {},
+	set: (val: Record<string, string>) => {
+		if (form.value.meta) {
+			form.value.meta.labels = val
+		}
+	},
+})
 
 const healthyTag = computed(() => {
 	if (credential.value?.status?.healthy === true) return 'success'
@@ -29,19 +90,10 @@ const healthyLabel = computed(() => {
 	return 'Unknown'
 })
 
-const credentialType = computed(() => {
-	const config = credential.value?.config
-	if (!config) return '-'
-	if (config.clientCertificateRef) return 'Client Certificate'
-	if (config.token) return 'Token'
-	if (config.basic) return 'Basic Auth'
-	return '-'
-})
-
 const yamlContent = computed(() => {
-	if (!credential.value) return ''
+	if (!form.value || !form.value.version) return ''
 	try {
-		const raw = structuredClone(toRaw(credential.value))
+		const raw = structuredClone(toRaw(form.value))
 		return yamlStringify(raw, { lineWidth: 120 })
 	} catch {
 		return '# Failed to serialize resource'
@@ -50,14 +102,39 @@ const yamlContent = computed(() => {
 
 const cmExtensions = [yamlLang(), oneDark, EditorState.readOnly.of(true)]
 
-const labelEntries = computed(() => {
-	const labels = credential.value?.meta?.labels
-	if (!labels) return []
-	return Object.entries(labels)
-})
+async function handleSave() {
+	saving.value = true
+	try {
+		await credentialStore.updateCredential(form.value)
+		await credentialStore.fetchCredential(credentialName.value)
+		ElMessage.success('Credential updated')
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
+	} finally {
+		saving.value = false
+	}
+}
+
+async function handleYamlSave(parsed: unknown) {
+	saving.value = true
+	try {
+		const resource = parsed as V1Credential
+		if (!resource.meta?.name) {
+			resource.meta = { ...resource.meta, name: credentialName.value }
+		}
+		await credentialStore.updateCredential(resource)
+		await credentialStore.fetchCredential(credentialName.value)
+		ElMessage.success('Credential updated from YAML')
+		yamlModalVisible.value = false
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
+	} finally {
+		saving.value = false
+	}
+}
 
 function handleRefresh() {
-	credentialStore.fetchCredential(credentialName.value).catch(() => {})
+	credentialStore.fetchCredential(credentialName.value).catch(() => { })
 }
 
 function goBack() {
@@ -65,7 +142,8 @@ function goBack() {
 }
 
 onMounted(() => {
-	credentialStore.fetchCredential(credentialName.value).catch(() => {})
+	credentialStore.fetchCredential(credentialName.value).catch(() => { })
+	certificateStore.fetchCertificates().catch(() => { })
 })
 
 onUnmounted(() => {
@@ -77,7 +155,7 @@ onUnmounted(() => {
 	<div>
 		<!-- Header -->
 		<el-row justify="space-between" align="middle" style="margin-bottom: 16px">
-			<el-col :span="16">
+			<el-col :span="12">
 				<div style="display: flex; align-items: center; gap: 12px">
 					<el-button :icon="ArrowLeft" @click="goBack" text>Credentials</el-button>
 					<h2 style="margin: 0">{{ credentialName }}</h2>
@@ -86,8 +164,12 @@ onUnmounted(() => {
 					</el-tag>
 				</div>
 			</el-col>
-			<el-col :span="8" style="text-align: right">
+			<el-col :span="12" style="text-align: right">
 				<el-button :icon="Refresh" @click="handleRefresh">Reload</el-button>
+				<el-button :icon="Document" @click="yamlModalVisible = true">Edit YAML</el-button>
+				<el-button type="primary" :loading="saving" @click="handleSave">
+					{{ saving ? 'Saving...' : 'Save' }}
+				</el-button>
 			</el-col>
 		</el-row>
 
@@ -107,71 +189,64 @@ onUnmounted(() => {
 		<!-- Content -->
 		<template v-else>
 			<el-row :gutter="16" style="margin-bottom: 16px">
-				<!-- Configuration (left) -->
+				<!-- Configuration (left) - editable form -->
 				<el-col :span="14">
 					<el-card shadow="never" style="height: 100%">
 						<template #header>
 							<span style="font-weight: 600">Configuration</span>
 						</template>
 
-						<!-- General section -->
-						<h4 class="section-title">General</h4>
-						<el-descriptions :column="2" border size="default">
-							<el-descriptions-item label="Name">
-								{{ credential.meta?.name ?? '-' }}
-							</el-descriptions-item>
-							<el-descriptions-item label="Created">
-								<el-tooltip :content="formatDateFull(credential.meta?.created)" placement="top">
-									<span>{{ formatDate(credential.meta?.created) }}</span>
-								</el-tooltip>
-							</el-descriptions-item>
-							<el-descriptions-item label="Updated">
-								<el-tooltip :content="formatDateFull(credential.meta?.updated)" placement="top">
-									<span>{{ formatDate(credential.meta?.updated) }}</span>
-								</el-tooltip>
-							</el-descriptions-item>
-							<el-descriptions-item label="UID">
-								<span style="font-family: monospace; font-size: 12px">{{ credential.meta?.uid ?? '-' }}</span>
-							</el-descriptions-item>
-							<el-descriptions-item label="Labels" :span="2">
-								<template v-if="labelEntries.length > 0">
-									<el-tag v-for="[key, value] in labelEntries" :key="key" size="small" style="margin: 0 6px 4px 0">
-										{{ key }}={{ value }}
-									</el-tag>
-								</template>
-								<span v-else style="color: #909399">-</span>
-							</el-descriptions-item>
-						</el-descriptions>
+						<!-- Metadata (read-only) -->
+						<el-collapse style="margin-bottom: 20px">
+							<el-collapse-item title="Metadata" name="metadata">
+								<MetadataDisplay :meta="credential.meta" />
+							</el-collapse-item>
+						</el-collapse>
 
-						<!-- Authentication section -->
-						<h4 class="section-title">Authentication</h4>
-						<el-descriptions :column="2" border size="default">
-							<el-descriptions-item label="Type">
-								<el-tag size="small">{{ credentialType }}</el-tag>
-							</el-descriptions-item>
+						<el-form label-width="180px" label-position="right">
+							<el-form-item label="Name">
+								<el-input :model-value="form.meta?.name" disabled />
+							</el-form-item>
 
-							<!-- Client Certificate Ref -->
-							<el-descriptions-item v-if="credential.config?.clientCertificateRef" label="Certificate Ref">
-								<router-link :to="`/certificates/${credential.config.clientCertificateRef}`" style="text-decoration: none">
-									<el-link type="primary">{{ credential.config.clientCertificateRef }}</el-link>
-								</router-link>
-							</el-descriptions-item>
+							<el-form-item label="Labels">
+								<LabelEditor v-model="formLabels" />
+							</el-form-item>
 
-							<!-- Token -->
-							<el-descriptions-item v-if="credential.config?.token" label="Token">
-								<span style="font-family: monospace; font-size: 12px">********</span>
-							</el-descriptions-item>
+							<el-divider content-position="left">Config</el-divider>
 
-							<!-- Basic Auth -->
-							<template v-if="credential.config?.basic">
-								<el-descriptions-item label="Username">
-									{{ credential.config.basic.username ?? '-' }}
-								</el-descriptions-item>
-								<el-descriptions-item label="Password">
-									<span style="font-family: monospace; font-size: 12px">********</span>
-								</el-descriptions-item>
+							<el-form-item label="Credential Type">
+								<el-select v-model="credentialMode" placeholder="Select credential type" style="width: 100%">
+									<el-option label="Client Certificate" value="clientCertificateRef" />
+									<el-option label="Token" value="token" />
+									<el-option label="Basic Auth" value="basic" />
+								</el-select>
+							</el-form-item>
+
+							<!-- Client Certificate Ref mode -->
+							<el-form-item v-if="credentialMode === 'clientCertificateRef'" label="Client Certificate">
+								<el-select v-model="form.config!.clientCertificateRef" placeholder="Select a certificate"
+									style="width: 100%" filterable clearable :loading="certificateStore.loading">
+									<el-option v-for="cert in certificateStore.items" :key="cert.meta?.name" :label="cert.meta?.name"
+										:value="cert.meta?.name ?? ''" />
+								</el-select>
+							</el-form-item>
+
+							<!-- Token mode -->
+							<el-form-item v-if="credentialMode === 'token'" label="Token">
+								<el-input v-model="form.config!.token" type="textarea" :rows="4" placeholder="Bearer token" />
+							</el-form-item>
+
+							<!-- Basic Auth mode -->
+							<template v-if="credentialMode === 'basic'">
+								<el-form-item label="Username">
+									<el-input v-model="form.config!.basic!.username" placeholder="Username" />
+								</el-form-item>
+								<el-form-item label="Password">
+									<el-input v-model="form.config!.basic!.password" type="password" placeholder="Password"
+										show-password />
+								</el-form-item>
 							</template>
-						</el-descriptions>
+						</el-form>
 					</el-card>
 				</el-col>
 
@@ -189,8 +264,10 @@ onUnmounted(() => {
 
 						<el-descriptions :column="1" border size="default">
 							<el-descriptions-item label="Healthy">
-								<el-tag v-if="credential.status?.healthy === true" type="success" effect="dark" size="small">Yes</el-tag>
-								<el-tag v-else-if="credential.status?.healthy === false" type="danger" effect="dark" size="small">No</el-tag>
+								<el-tag v-if="credential.status?.healthy === true" type="success" effect="dark"
+									size="small">Yes</el-tag>
+								<el-tag v-else-if="credential.status?.healthy === false" type="danger" effect="dark"
+									size="small">No</el-tag>
 								<span v-else style="color: #909399">-</span>
 							</el-descriptions-item>
 						</el-descriptions>
@@ -198,16 +275,10 @@ onUnmounted(() => {
 				</el-col>
 			</el-row>
 
-			<!-- YAML -->
-			<el-card shadow="never" style="margin-bottom: 16px">
-				<template #header>
-					<span style="font-weight: 600">YAML</span>
-				</template>
-				<div class="yaml-editor">
-					<Codemirror :model-value="yamlContent" :extensions="cmExtensions" :style="{ fontSize: '13px' }" />
-				</div>
-			</el-card>
 		</template>
+
+		<!-- Edit YAML Modal -->
+		<EditYamlModal v-model:visible="yamlModalVisible" :yaml-content="yamlContent" @save="handleYamlSave" />
 	</div>
 </template>
 

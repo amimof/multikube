@@ -45,6 +45,12 @@ export interface V1CredentialConfig {
      * @memberof V1CredentialConfig
      */
     basic?: V1CredentialBasic;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof V1CredentialConfig
+     */
+    enabled?: boolean;
 }
 
 /**
@@ -67,6 +73,7 @@ export function V1CredentialConfigFromJSONTyped(json: any, ignoreDiscriminator: 
         'clientCertificateRef': json['clientCertificateRef'] == null ? undefined : json['clientCertificateRef'],
         'token': json['token'] == null ? undefined : json['token'],
         'basic': json['basic'] == null ? undefined : V1CredentialBasicFromJSON(json['basic']),
+        'enabled': json['enabled'] == null ? undefined : json['enabled'],
     };
 }
 
@@ -84,6 +91,7 @@ export function V1CredentialConfigToJSONTyped(value?: V1CredentialConfig | null,
         'clientCertificateRef': value['clientCertificateRef'],
         'token': value['token'],
         'basic': V1CredentialBasicToJSON(value['basic']),
+        'enabled': value['enabled'],
     };
 }
 

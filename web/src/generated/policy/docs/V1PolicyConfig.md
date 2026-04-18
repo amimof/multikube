@@ -7,6 +7,7 @@
 Name | Type
 ------------ | -------------
 `rules` | [Array&lt;Policyv1Rule&gt;](Policyv1Rule.md)
+`enabled` | boolean
 
 ## Example
 
@@ -16,6 +17,7 @@ import type { V1PolicyConfig } from ''
 // TODO: Update the object below with actual values
 const example = {
   "rules": null,
+  "enabled": null,
 } satisfies V1PolicyConfig
 
 console.log(example)

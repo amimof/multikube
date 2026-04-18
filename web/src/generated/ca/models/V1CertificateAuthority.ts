@@ -13,6 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
+import type { V1CertificateAuthorityStatus } from './V1CertificateAuthorityStatus';
+import {
+    V1CertificateAuthorityStatusFromJSON,
+    V1CertificateAuthorityStatusFromJSONTyped,
+    V1CertificateAuthorityStatusToJSON,
+    V1CertificateAuthorityStatusToJSONTyped,
+} from './V1CertificateAuthorityStatus';
 import type { V1CertificateAuthorityConfig } from './V1CertificateAuthorityConfig';
 import {
     V1CertificateAuthorityConfigFromJSON,
@@ -54,10 +61,10 @@ export interface V1CertificateAuthority {
     config?: V1CertificateAuthorityConfig;
     /**
      * 
-     * @type {object}
+     * @type {V1CertificateAuthorityStatus}
      * @memberof V1CertificateAuthority
      */
-    status?: object;
+    status?: V1CertificateAuthorityStatus;
 }
 
 /**
@@ -80,7 +87,7 @@ export function V1CertificateAuthorityFromJSONTyped(json: any, ignoreDiscriminat
         'version': json['version'] == null ? undefined : json['version'],
         'meta': json['meta'] == null ? undefined : V1MetaFromJSON(json['meta']),
         'config': json['config'] == null ? undefined : V1CertificateAuthorityConfigFromJSON(json['config']),
-        'status': json['status'] == null ? undefined : json['status'],
+        'status': json['status'] == null ? undefined : V1CertificateAuthorityStatusFromJSON(json['status']),
     };
 }
 
@@ -98,7 +105,7 @@ export function V1CertificateAuthorityToJSONTyped(value?: V1CertificateAuthority
         'version': value['version'],
         'meta': V1MetaToJSON(value['meta']),
         'config': V1CertificateAuthorityConfigToJSON(value['config']),
-        'status': value['status'],
+        'status': V1CertificateAuthorityStatusToJSON(value['status']),
     };
 }
 

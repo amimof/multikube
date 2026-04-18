@@ -25,6 +25,12 @@ export interface V1CertificateAuthorityConfig {
      * @memberof V1CertificateAuthorityConfig
      */
     certificateData?: string;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof V1CertificateAuthorityConfig
+     */
+    enabled?: boolean;
 }
 
 /**
@@ -45,6 +51,7 @@ export function V1CertificateAuthorityConfigFromJSONTyped(json: any, ignoreDiscr
     return {
         
         'certificateData': json['certificateData'] == null ? undefined : json['certificateData'],
+        'enabled': json['enabled'] == null ? undefined : json['enabled'],
     };
 }
 
@@ -60,6 +67,7 @@ export function V1CertificateAuthorityConfigToJSONTyped(value?: V1CertificateAut
     return {
         
         'certificateData': value['certificateData'],
+        'enabled': value['enabled'],
     };
 }
 

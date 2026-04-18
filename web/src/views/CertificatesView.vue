@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, toRaw } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Refresh, Delete, Search, EditPen } from '@element-plus/icons-vue'
+import { Plus, Refresh, Delete, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useCertificateStore } from '@/stores/certificate'
 import { useResourceTable } from '@/composables/useResourceTable'
 import { formatDate } from '@/utils/format'
 import type { V1Certificate } from '@/generated/certificate'
 import LabelEditor from '@/components/LabelEditor.vue'
-import MetadataDisplay from '@/components/MetadataDisplay.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
 
 const certificateStore = useCertificateStore()
@@ -17,7 +16,6 @@ const router = useRouter()
 const { nameFilter, displayItems } = useResourceTable(computed(() => certificateStore.items))
 
 const dialogVisible = ref(false)
-const isEditing = ref(false)
 const saving = ref(false)
 const deleteDialogVisible = ref(false)
 const deleteTarget = ref<V1Certificate | null>(null)
@@ -106,14 +104,6 @@ async function handleBulkDelete() {
 
 function openCreate() {
 	form.value = createEmptyCertificate()
-	isEditing.value = false
-	dialogVisible.value = true
-}
-
-function openEdit(row: V1Certificate) {
-	form.value = structuredClone(toRaw(row))
-	if (!form.value.config) form.value.config = {}
-	isEditing.value = true
 	dialogVisible.value = true
 }
 
@@ -136,13 +126,8 @@ async function handleDelete() {
 async function handleSave() {
 	saving.value = true
 	try {
-		if (isEditing.value) {
-			await certificateStore.updateCertificate(form.value)
-			ElMessage.success('Certificate updated')
-		} else {
-			await certificateStore.createCertificate(form.value)
-			ElMessage.success('Certificate created')
-		}
+		await certificateStore.createCertificate(form.value)
+		ElMessage.success('Certificate created')
 		dialogVisible.value = false
 	} catch (err) {
 		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
@@ -215,27 +200,19 @@ onMounted(() => {
 						{{ formatDate(row.meta?.created) }}
 					</template>
 				</el-table-column>
-				<el-table-column label="Actions" width="120" fixed="right">
-					<template #default="{ row }">
-						<el-button :icon="EditPen" type="primary" size="small" plain @click.stop="openEdit(row)" />
-						<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
-					</template>
-				</el-table-column>
+			<el-table-column label="Actions" width="80" fixed="right">
+				<template #default="{ row }">
+					<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
+				</template>
+			</el-table-column>
 			</el-table>
 		</template>
 
-		<!-- Create / Edit Dialog -->
-		<el-dialog v-model="dialogVisible" :title="isEditing ? 'Edit Certificate' : 'Create Certificate'" width="700"
-			destroy-on-close>
+		<!-- Create Dialog -->
+		<el-dialog v-model="dialogVisible" title="Create Certificate" width="700" destroy-on-close>
 			<el-form label-width="120px" label-position="right">
-				<el-collapse v-if="isEditing" style="margin-bottom: 20px">
-					<el-collapse-item title="Metadata" name="metadata">
-						<MetadataDisplay :meta="form.meta" />
-					</el-collapse-item>
-				</el-collapse>
-
 				<el-form-item label="Name" required>
-					<el-input v-model="form.meta!.name" :disabled="isEditing" placeholder="my-certificate" />
+					<el-input v-model="form.meta!.name" placeholder="my-certificate" />
 				</el-form-item>
 
 				<el-form-item label="Labels">
@@ -261,9 +238,9 @@ onMounted(() => {
 
 			<template #footer>
 				<el-button @click="dialogVisible = false">Cancel</el-button>
-				<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
-					{{ saving ? 'Saving...' : isEditing ? 'Update' : 'Create' }}
-				</el-button>
+			<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
+				{{ saving ? 'Saving...' : 'Create' }}
+			</el-button>
 			</template>
 		</el-dialog>
 

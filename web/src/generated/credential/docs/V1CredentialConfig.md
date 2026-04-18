@@ -9,6 +9,7 @@ Name | Type
 `clientCertificateRef` | string
 `token` | string
 `basic` | [V1CredentialBasic](V1CredentialBasic.md)
+`enabled` | boolean
 
 ## Example
 
@@ -20,6 +21,7 @@ const example = {
   "clientCertificateRef": null,
   "token": null,
   "basic": null,
+  "enabled": null,
 } satisfies V1CredentialConfig
 
 console.log(example)

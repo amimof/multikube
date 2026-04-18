@@ -33,6 +33,12 @@ export interface V1PolicyConfig {
      * @memberof V1PolicyConfig
      */
     rules?: Array<Policyv1Rule>;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof V1PolicyConfig
+     */
+    enabled?: boolean;
 }
 
 /**
@@ -53,6 +59,7 @@ export function V1PolicyConfigFromJSONTyped(json: any, ignoreDiscriminator: bool
     return {
         
         'rules': json['rules'] == null ? undefined : ((json['rules'] as Array<any>).map(Policyv1RuleFromJSON)),
+        'enabled': json['enabled'] == null ? undefined : json['enabled'],
     };
 }
 
@@ -68,6 +75,7 @@ export function V1PolicyConfigToJSONTyped(value?: V1PolicyConfig | null, ignoreD
     return {
         
         'rules': value['rules'] == null ? undefined : ((value['rules'] as Array<any>).map(Policyv1RuleToJSON)),
+        'enabled': value['enabled'],
     };
 }
 

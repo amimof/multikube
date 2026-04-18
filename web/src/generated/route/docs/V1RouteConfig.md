@@ -8,6 +8,7 @@ Name | Type
 ------------ | -------------
 `match` | [V1Match](V1Match.md)
 `backendRef` | string
+`enabled` | boolean
 
 ## Example
 
@@ -18,6 +19,7 @@ import type { V1RouteConfig } from ''
 const example = {
   "match": null,
   "backendRef": null,
+  "enabled": null,
 } satisfies V1RouteConfig
 
 console.log(example)

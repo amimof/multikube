@@ -470,11 +470,60 @@
       "properties": {
         "certificateData": {
           "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     },
     "v1CertificateAuthorityStatus": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "subjectCn": {
+          "type": "string"
+        },
+        "issuer": {
+          "type": "string"
+        },
+        "notBefore": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notAfter": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "serialNumber": {
+          "type": "string"
+        },
+        "sans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "signatureAlgorithm": {
+          "type": "string"
+        },
+        "publicKeyAlgorithm": {
+          "type": "string"
+        },
+        "isCa": {
+          "type": "boolean"
+        },
+        "ipAddresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "uris": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "v1CreateResponse": {
       "type": "object",

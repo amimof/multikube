@@ -9,7 +9,7 @@ Name | Type
 `version` | string
 `meta` | [V1Meta](V1Meta.md)
 `config` | [V1CertificateAuthorityConfig](V1CertificateAuthorityConfig.md)
-`status` | object
+`status` | [V1CertificateAuthorityStatus](V1CertificateAuthorityStatus.md)
 
 ## Example
 

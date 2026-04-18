@@ -13,6 +13,7 @@ Name | Type
 `cacheTtl` | string
 `type` | [V1LoadBalancingType](V1LoadBalancingType.md)
 `impersonationConfig` | [V1ImpersonationConfig](V1ImpersonationConfig.md)
+`enabled` | boolean
 
 ## Example
 
@@ -28,6 +29,7 @@ const example = {
   "cacheTtl": null,
   "type": null,
   "impersonationConfig": null,
+  "enabled": null,
 } satisfies V1BackendConfig
 
 console.log(example)

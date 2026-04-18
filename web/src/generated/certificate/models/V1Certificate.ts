@@ -27,6 +27,13 @@ import {
     V1MetaToJSON,
     V1MetaToJSONTyped,
 } from './V1Meta';
+import type { V1CertificateStatus } from './V1CertificateStatus';
+import {
+    V1CertificateStatusFromJSON,
+    V1CertificateStatusFromJSONTyped,
+    V1CertificateStatusToJSON,
+    V1CertificateStatusToJSONTyped,
+} from './V1CertificateStatus';
 
 /**
  * 
@@ -54,10 +61,10 @@ export interface V1Certificate {
     config?: V1CertificateConfig;
     /**
      * 
-     * @type {object}
+     * @type {V1CertificateStatus}
      * @memberof V1Certificate
      */
-    status?: object;
+    status?: V1CertificateStatus;
 }
 
 /**
@@ -80,7 +87,7 @@ export function V1CertificateFromJSONTyped(json: any, ignoreDiscriminator: boole
         'version': json['version'] == null ? undefined : json['version'],
         'meta': json['meta'] == null ? undefined : V1MetaFromJSON(json['meta']),
         'config': json['config'] == null ? undefined : V1CertificateConfigFromJSON(json['config']),
-        'status': json['status'] == null ? undefined : json['status'],
+        'status': json['status'] == null ? undefined : V1CertificateStatusFromJSON(json['status']),
     };
 }
 
@@ -98,7 +105,7 @@ export function V1CertificateToJSONTyped(value?: V1Certificate | null, ignoreDis
         'version': value['version'],
         'meta': V1MetaToJSON(value['meta']),
         'config': V1CertificateConfigToJSON(value['config']),
-        'status': value['status'],
+        'status': V1CertificateStatusToJSON(value['status']),
     };
 }
 

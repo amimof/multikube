@@ -39,6 +39,12 @@ export interface V1RouteConfig {
      * @memberof V1RouteConfig
      */
     backendRef?: string;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof V1RouteConfig
+     */
+    enabled?: boolean;
 }
 
 /**
@@ -60,6 +66,7 @@ export function V1RouteConfigFromJSONTyped(json: any, ignoreDiscriminator: boole
         
         'match': json['match'] == null ? undefined : V1MatchFromJSON(json['match']),
         'backendRef': json['backendRef'] == null ? undefined : json['backendRef'],
+        'enabled': json['enabled'] == null ? undefined : json['enabled'],
     };
 }
 
@@ -76,6 +83,7 @@ export function V1RouteConfigToJSONTyped(value?: V1RouteConfig | null, ignoreDis
         
         'match': V1MatchToJSON(value['match']),
         'backendRef': value['backendRef'],
+        'enabled': value['enabled'],
     };
 }
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, toRaw } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, Refresh, Document } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useCertificateStore } from '@/stores/certificate'
 import { stringify as yamlStringify } from 'yaml'
 import { Codemirror } from 'vue-codemirror'
@@ -9,6 +10,10 @@ import { yaml as yamlLang } from '@codemirror/lang-yaml'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorState } from '@codemirror/state'
 import { formatDate, formatDateFull } from '@/utils/format'
+import type { V1Certificate } from '@/generated/certificate'
+import LabelEditor from '@/components/LabelEditor.vue'
+import MetadataDisplay from '@/components/MetadataDisplay.vue'
+import EditYamlModal from '@/components/EditYamlModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,10 +22,31 @@ const certificateStore = useCertificateStore()
 const certName = computed(() => route.params.name as string)
 const certificate = computed(() => certificateStore.current)
 
+const saving = ref(false)
+const yamlModalVisible = ref(false)
+
+const form = ref<V1Certificate>({})
+
+watch(certificate, (val) => {
+	if (val) {
+		form.value = structuredClone(toRaw(val))
+		if (!form.value.config) form.value.config = {}
+	}
+}, { immediate: true })
+
+const formLabels = computed({
+	get: () => form.value.meta?.labels ?? {},
+	set: (val: Record<string, string>) => {
+		if (form.value.meta) {
+			form.value.meta.labels = val
+		}
+	},
+})
+
 const yamlContent = computed(() => {
-	if (!certificate.value) return ''
+	if (!form.value || !form.value.version) return ''
 	try {
-		const raw = structuredClone(toRaw(certificate.value))
+		const raw = structuredClone(toRaw(form.value))
 		return yamlStringify(raw, { lineWidth: 120 })
 	} catch {
 		return '# Failed to serialize resource'
@@ -29,25 +55,39 @@ const yamlContent = computed(() => {
 
 const cmExtensions = [yamlLang(), oneDark, EditorState.readOnly.of(true)]
 
-const labelEntries = computed(() => {
-	const labels = certificate.value?.meta?.labels
-	if (!labels) return []
-	return Object.entries(labels)
-})
+async function handleSave() {
+	saving.value = true
+	try {
+		await certificateStore.updateCertificate(form.value)
+		await certificateStore.fetchCertificate(certName.value)
+		ElMessage.success('Certificate updated')
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
+	} finally {
+		saving.value = false
+	}
+}
 
-const certValue = computed(() => {
-	const data = certificate.value?.config?.certificateData
-	if (!data) return '-'
-	if (data.length > 80) return data.substring(0, 80) + '...'
-	return data
-})
-
-const hasKeyData = computed(() => {
-	return !!(certificate.value?.config?.keyData)
-})
+async function handleYamlSave(parsed: unknown) {
+	saving.value = true
+	try {
+		const resource = parsed as V1Certificate
+		if (!resource.meta?.name) {
+			resource.meta = { ...resource.meta, name: certName.value }
+		}
+		await certificateStore.updateCertificate(resource)
+		await certificateStore.fetchCertificate(certName.value)
+		ElMessage.success('Certificate updated from YAML')
+		yamlModalVisible.value = false
+	} catch (err) {
+		ElMessage.error(err instanceof Error ? err.message : 'Save failed')
+	} finally {
+		saving.value = false
+	}
+}
 
 function handleRefresh() {
-	certificateStore.fetchCertificate(certName.value).catch(() => {})
+	certificateStore.fetchCertificate(certName.value).catch(() => { })
 }
 
 function goBack() {
@@ -55,7 +95,7 @@ function goBack() {
 }
 
 onMounted(() => {
-	certificateStore.fetchCertificate(certName.value).catch(() => {})
+	certificateStore.fetchCertificate(certName.value).catch(() => { })
 })
 
 onUnmounted(() => {
@@ -67,14 +107,18 @@ onUnmounted(() => {
 	<div>
 		<!-- Header -->
 		<el-row justify="space-between" align="middle" style="margin-bottom: 16px">
-			<el-col :span="16">
+			<el-col :span="12">
 				<div style="display: flex; align-items: center; gap: 12px">
 					<el-button :icon="ArrowLeft" @click="goBack" text>Certificates</el-button>
 					<h2 style="margin: 0">{{ certName }}</h2>
 				</div>
 			</el-col>
-			<el-col :span="8" style="text-align: right">
+			<el-col :span="12" style="text-align: right">
 				<el-button :icon="Refresh" @click="handleRefresh">Reload</el-button>
+				<el-button :icon="Document" @click="yamlModalVisible = true">Edit YAML</el-button>
+				<el-button type="primary" :loading="saving" @click="handleSave">
+					{{ saving ? 'Saving...' : 'Save' }}
+				</el-button>
 			</el-col>
 		</el-row>
 
@@ -98,62 +142,44 @@ onUnmounted(() => {
 					<span style="font-weight: 600">Configuration</span>
 				</template>
 
-				<!-- General section -->
-				<h4 class="section-title">General</h4>
-				<el-descriptions :column="2" border size="default">
-					<el-descriptions-item label="Name">
-						{{ certificate.meta?.name ?? '-' }}
-					</el-descriptions-item>
-					<el-descriptions-item label="Created">
-						<el-tooltip :content="formatDateFull(certificate.meta?.created)" placement="top">
-							<span>{{ formatDate(certificate.meta?.created) }}</span>
-						</el-tooltip>
-					</el-descriptions-item>
-					<el-descriptions-item label="Updated">
-						<el-tooltip :content="formatDateFull(certificate.meta?.updated)" placement="top">
-							<span>{{ formatDate(certificate.meta?.updated) }}</span>
-						</el-tooltip>
-					</el-descriptions-item>
-					<el-descriptions-item label="UID">
-						<span style="font-family: monospace; font-size: 12px">{{ certificate.meta?.uid ?? '-' }}</span>
-					</el-descriptions-item>
-					<el-descriptions-item label="Labels" :span="2">
-						<template v-if="labelEntries.length > 0">
-							<el-tag v-for="[key, value] in labelEntries" :key="key" size="small" style="margin: 0 6px 4px 0">
-								{{ key }}={{ value }}
-							</el-tag>
-						</template>
-						<span v-else style="color: #909399">-</span>
-					</el-descriptions-item>
-				</el-descriptions>
+				<!-- Metadata (read-only) -->
+				<el-collapse style="margin-bottom: 20px">
+					<el-collapse-item title="Metadata" name="metadata">
+						<MetadataDisplay :meta="certificate.meta" />
+					</el-collapse-item>
+				</el-collapse>
 
-				<!-- Certificate section -->
-				<h4 class="section-title">Certificate</h4>
-				<el-descriptions :column="1" border size="default">
-					<el-descriptions-item label="Certificate Data">
-						<span style="font-family: monospace; font-size: 12px">{{ certValue }}</span>
-					</el-descriptions-item>
-				</el-descriptions>
+				<el-form label-width="120px" label-position="right">
+					<el-form-item label="Name">
+						<el-input :model-value="form.meta?.name" disabled />
+					</el-form-item>
 
-				<!-- Private Key section -->
-				<h4 class="section-title">Private Key</h4>
-				<el-descriptions :column="1" border size="default">
-					<el-descriptions-item label="Key Data">
-						<span style="font-family: monospace; font-size: 12px">{{ hasKeyData ? '********' : '-' }}</span>
-					</el-descriptions-item>
-				</el-descriptions>
+					<el-form-item label="Labels">
+						<LabelEditor v-model="formLabels" />
+					</el-form-item>
+
+					<el-divider content-position="left">Certificate</el-divider>
+
+					<el-form-item label="Data">
+						<el-input v-model="form.config!.certificateData" type="textarea" :rows="8"
+							:input-style="{ fontFamily: 'monospace', fontSize: '13px' }"
+							placeholder="Paste PEM certificate data here" />
+					</el-form-item>
+
+					<el-divider content-position="left">Private Key</el-divider>
+
+					<el-form-item label="Data">
+						<el-input v-model="form.config!.keyData" type="textarea" :rows="8"
+							:input-style="{ fontFamily: 'monospace', fontSize: '13px' }"
+							placeholder="Paste PEM private key data here" />
+					</el-form-item>
+				</el-form>
 			</el-card>
 
-			<!-- YAML -->
-			<el-card shadow="never" style="margin-bottom: 16px">
-				<template #header>
-					<span style="font-weight: 600">YAML</span>
-				</template>
-				<div class="yaml-editor">
-					<Codemirror :model-value="yamlContent" :extensions="cmExtensions" :style="{ fontSize: '13px' }" />
-				</div>
-			</el-card>
 		</template>
+
+		<!-- Edit YAML Modal -->
+		<EditYamlModal v-model:visible="yamlModalVisible" :yaml-content="yamlContent" @save="handleYamlSave" />
 	</div>
 </template>
 

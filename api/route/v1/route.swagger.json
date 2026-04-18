@@ -708,6 +708,9 @@
         },
         "backendRef": {
           "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
         }
       }
     },
