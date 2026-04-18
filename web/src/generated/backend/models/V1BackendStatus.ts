@@ -33,6 +33,24 @@ export interface V1BackendStatus {
      * @memberof V1BackendStatus
      */
     targetStatuses?: { [key: string]: V1TargetStatus; };
+    /**
+     * 
+     * @type {string}
+     * @memberof V1BackendStatus
+     */
+    phase?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof V1BackendStatus
+     */
+    reason?: string;
+    /**
+     * 
+     * @type {Date}
+     * @memberof V1BackendStatus
+     */
+    lastTransitionTime?: Date;
 }
 
 /**
@@ -53,6 +71,9 @@ export function V1BackendStatusFromJSONTyped(json: any, ignoreDiscriminator: boo
     return {
         
         'targetStatuses': json['targetStatuses'] == null ? undefined : (mapValues(json['targetStatuses'], V1TargetStatusFromJSON)),
+        'phase': json['phase'] == null ? undefined : json['phase'],
+        'reason': json['reason'] == null ? undefined : json['reason'],
+        'lastTransitionTime': json['lastTransitionTime'] == null ? undefined : (new Date(json['lastTransitionTime'])),
     };
 }
 
@@ -68,6 +89,9 @@ export function V1BackendStatusToJSONTyped(value?: V1BackendStatus | null, ignor
     return {
         
         'targetStatuses': value['targetStatuses'] == null ? undefined : (mapValues(value['targetStatuses'], V1TargetStatusToJSON)),
+        'phase': value['phase'],
+        'reason': value['reason'],
+        'lastTransitionTime': value['lastTransitionTime'] == null ? value['lastTransitionTime'] : value['lastTransitionTime'].toISOString(),
     };
 }
 

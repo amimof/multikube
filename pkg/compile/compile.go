@@ -40,19 +40,20 @@ type Compiler struct {
 }
 
 const (
-	RoutePhaseReady    = "READY"
-	RoutePhaseInvalid  = "INVALID"
-	RoutePhaseConflict = "CONFLICT"
+	PhaseReady    = "READY"
+	PhaseInvalid  = "INVALID"
+	PhaseConflict = "CONFLICT"
 )
 
-type RouteCompileStatus struct {
+type CompileStatus struct {
 	Phase  string
 	Reason string
 }
 
 type CompileResult struct {
-	Runtime       *proxy.RuntimeConfig
-	RouteStatuses map[string]RouteCompileStatus
+	Runtime         *proxy.RuntimeConfig
+	RouteStatuses   map[string]CompileStatus
+	BackendStatuses map[string]CompileStatus
 }
 
 // NewCompiler returns a new Compiler2.
@@ -80,17 +81,26 @@ func (c *Compiler) Compile(st *State) (*CompileResult, error) {
 	}
 
 	// Compile backends into a BackendPool
-	backendPools, forwarders, err := compileBackendsPools(st.Backends, caPools, tlsCerts, compiledCreds)
-	if err != nil {
-		return nil, fmt.Errorf("compile backend pools: %w", err)
+	backendPools, forwarders, backendStatuses := compileBackendsPools(st.Backends, caPools, tlsCerts, compiledCreds)
+
+	for name := range st.Backends {
+		if !st.Backends[name].GetConfig().GetEnabled() {
+			continue
+		}
+		if _, ok := backendStatuses[name]; !ok {
+			backendStatuses[name] = CompileStatus{Phase: PhaseReady}
+		}
 	}
 
 	// compile routes into CompiledRoutes.
 	routes, statuses := compileRoutes2(st.Routes, backendPools, forwarders)
 
 	for name := range st.Routes {
+		if !st.Routes[name].GetConfig().GetEnabled() {
+			continue
+		}
 		if _, ok := statuses[name]; !ok {
-			statuses[name] = RouteCompileStatus{Phase: RoutePhaseReady}
+			statuses[name] = CompileStatus{Phase: PhaseReady}
 		}
 	}
 
@@ -102,8 +112,9 @@ func (c *Compiler) Compile(st *State) (*CompileResult, error) {
 	}
 
 	return &CompileResult{
-		Runtime:       rt,
-		RouteStatuses: statuses,
+		Runtime:         rt,
+		RouteStatuses:   statuses,
+		BackendStatuses: backendStatuses,
 	}, nil
 }
 
@@ -221,9 +232,10 @@ func compileBackendsPools(
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
 	credentials map[string]compiledCredential,
-) (map[string]*proxy.BackendPool, map[string]*proxy.Forwarder, error) {
+) (map[string]*proxy.BackendPool, map[string]*proxy.Forwarder, map[string]CompileStatus) {
 	out := make(map[string]*proxy.BackendPool, len(backends))
 	fwds := make(map[string]*proxy.Forwarder, len(backends))
+	statuses := make(map[string]CompileStatus, len(backends))
 
 	for name, be := range backends {
 
@@ -237,14 +249,15 @@ func compileBackendsPools(
 
 		br, fwd, err := compileBackendPool(be, caPools, tlsCerts, credentials)
 		if err != nil {
-			return nil, nil, fmt.Errorf("backend %q: %w", name, err)
+			statuses[name] = CompileStatus{Phase: PhaseInvalid, Reason: err.Error()}
+			continue
 		}
 
 		out[name] = br
 		fwds[name] = fwd
 	}
 
-	return out, fwds, nil
+	return out, fwds, statuses
 }
 
 // compileBackend2 converts a single Backend proto into a BackendRuntime and its
@@ -404,11 +417,11 @@ func compileRoutes2(
 	routes map[string]*routev1.Route,
 	backends map[string]*proxy.BackendPool,
 	forwarders map[string]*proxy.Forwarder,
-) (proxy.CompiledRoutes, map[string]RouteCompileStatus) {
+) (proxy.CompiledRoutes, map[string]CompileStatus) {
 	cr := proxy.CompiledRoutes{
 		SNIExact: make(map[string][]*proxy.RouteRuntime),
 	}
-	statuses := make(map[string]RouteCompileStatus, len(routes))
+	statuses := make(map[string]CompileStatus, len(routes))
 	matchOwners := map[routeMatchKey]string{}
 
 	for name, route := range routes {
@@ -424,8 +437,8 @@ func compileRoutes2(
 
 		if owner, exists := matchOwners[matchKey]; exists {
 			reason := fmt.Sprintf("route matcher conflicts with %q", owner)
-			statuses[name] = RouteCompileStatus{Phase: RoutePhaseConflict, Reason: reason}
-			statuses[owner] = RouteCompileStatus{Phase: RoutePhaseConflict, Reason: fmt.Sprintf("route matcher conflicts with %q", name)}
+			statuses[name] = CompileStatus{Phase: PhaseConflict, Reason: reason}
+			statuses[owner] = CompileStatus{Phase: PhaseConflict, Reason: fmt.Sprintf("route matcher conflicts with %q", name)}
 			removeCompiledRoute(&cr, matchKey, owner)
 			continue
 		}
@@ -446,27 +459,27 @@ func compileRoute(
 	route *routev1.Route,
 	backends map[string]*proxy.BackendPool,
 	forwarders map[string]*proxy.Forwarder,
-) (*proxy.RouteRuntime, routeMatchKey, RouteCompileStatus) {
+) (*proxy.RouteRuntime, routeMatchKey, CompileStatus) {
 	config := route.GetConfig()
 	if config == nil {
-		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: "missing route config"}
+		return nil, routeMatchKey{}, CompileStatus{Phase: PhaseInvalid, Reason: "missing route config"}
 	}
 
 	match := config.GetMatch()
 	if match == nil {
-		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: "route matcher is required"}
+		return nil, routeMatchKey{}, CompileStatus{Phase: PhaseInvalid, Reason: "route matcher is required"}
 	}
 
 	ref := config.GetBackendRef()
 
 	br, ok := backends[ref]
 	if !ok {
-		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: fmt.Sprintf("backend_ref %q not found", ref)}
+		return nil, routeMatchKey{}, CompileStatus{Phase: PhaseInvalid, Reason: fmt.Sprintf("backend_ref %q not found", ref)}
 	}
 
 	fwd, ok := forwarders[ref]
 	if !ok {
-		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: fmt.Sprintf("backend_ref %q has no forwarder", ref)}
+		return nil, routeMatchKey{}, CompileStatus{Phase: PhaseInvalid, Reason: fmt.Sprintf("backend_ref %q has no forwarder", ref)}
 	}
 
 	// Build a single-target BackendPool so the Forwarder can pick a target.
@@ -487,22 +500,22 @@ func compileRoute(
 			Canonical: textproto.CanonicalMIMEHeaderKey(hm.GetName()),
 			Value:     hm.GetValue(),
 		}
-		return rr, routeMatchKey{kind: rr.Kind, value: textproto.CanonicalMIMEHeaderKey(hm.GetName()) + "=" + hm.GetValue()}, RouteCompileStatus{}
+		return rr, routeMatchKey{kind: rr.Kind, value: textproto.CanonicalMIMEHeaderKey(hm.GetName()) + "=" + hm.GetValue()}, CompileStatus{}
 
 	case match.GetPath() != "":
 		rr.Kind = proxy.RouteMatchKindPath
 		rr.Path = match.GetPath()
-		return rr, routeMatchKey{kind: rr.Kind, value: rr.Path}, RouteCompileStatus{}
+		return rr, routeMatchKey{kind: rr.Kind, value: rr.Path}, CompileStatus{}
 
 	case match.GetPathPrefix() != "":
 		rr.Kind = proxy.RouteMatchKindPathPrefix
 		rr.PathPrefix = match.GetPathPrefix()
-		return rr, routeMatchKey{kind: rr.Kind, value: rr.PathPrefix}, RouteCompileStatus{}
+		return rr, routeMatchKey{kind: rr.Kind, value: rr.PathPrefix}, CompileStatus{}
 
 	case match.GetSni() != "":
 		rr.Kind = proxy.RouteMatchKindSNI
 		rr.SNI = match.GetSni()
-		return rr, routeMatchKey{kind: rr.Kind, value: strings.ToLower(rr.SNI)}, RouteCompileStatus{}
+		return rr, routeMatchKey{kind: rr.Kind, value: strings.ToLower(rr.SNI)}, CompileStatus{}
 
 	case match.GetJwt().GetClaim() != "":
 		jm := match.GetJwt()
@@ -511,9 +524,9 @@ func compileRoute(
 			Claim: jm.GetClaim(),
 			Value: jm.GetValue(),
 		}
-		return rr, routeMatchKey{kind: rr.Kind, value: jm.GetClaim() + "=" + jm.GetValue()}, RouteCompileStatus{}
+		return rr, routeMatchKey{kind: rr.Kind, value: jm.GetClaim() + "=" + jm.GetValue()}, CompileStatus{}
 	default:
-		return nil, routeMatchKey{}, RouteCompileStatus{Phase: RoutePhaseInvalid, Reason: "route matcher is required"}
+		return nil, routeMatchKey{}, CompileStatus{Phase: PhaseInvalid, Reason: "route matcher is required"}
 	}
 }
 
@@ -578,6 +591,9 @@ func buildTLSTransport(cfg *tls.Config) http.RoundTripper {
 func compilePolicies(policies map[string]*policyv1.Policy) []*policyv1.Policy {
 	out := make([]*policyv1.Policy, 0, len(policies))
 	for _, p := range policies {
+		if !p.GetConfig().GetEnabled() {
+			continue
+		}
 		out = append(out, p)
 	}
 	return out

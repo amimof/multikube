@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed, watch, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Refresh, Document } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Refresh, Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useBackendStore } from '@/stores/backend'
 import { useCaStore } from '@/stores/ca'
@@ -113,6 +113,18 @@ const yamlContent = computed(() => {
 
 const cmExtensions = [yamlLang(), oneDark, EditorState.readOnly.of(true)]
 
+const statusPhase = computed(() => backend.value?.status?.phase ?? 'Unknown')
+
+const statusTagType = computed(() => {
+	switch (statusPhase.value) {
+		case 'Active':
+			return 'success'
+		case 'Inactive':
+			return 'info'
+		default:
+			return 'warning'
+	}
+})
 async function handleSave() {
 	saving.value = true
 	try {
@@ -152,6 +164,11 @@ function goBack() {
 	router.push('/backends')
 }
 
+function visitRef(type: string, name: string) {
+	if (name) router.push(`/${type}/${name}`)
+}
+
+
 onMounted(() => {
 	backendStore.fetchBackend(backendName.value).catch(() => { })
 	caStore.fetchCas().catch(() => { })
@@ -173,6 +190,9 @@ onUnmounted(() => {
 					<h2 style="margin: 0">{{ backendName }}</h2>
 					<el-tag :type="healthTag" effect="dark" size="small">
 						{{ healthyCount }}/{{ totalCount }} Healthy
+					</el-tag>
+					<el-tag :type="statusTagType" effect="dark" size="small">
+						{{ statusPhase }}
 					</el-tag>
 				</div>
 			</el-col>
@@ -251,19 +271,40 @@ onUnmounted(() => {
 							</el-form-item>
 
 							<el-form-item label="CA Ref">
-								<el-select v-model="form.config!.caRef" placeholder="Select Certificate Authority" style="width: 100%"
-									clearable filterable :loading="caStore.loading">
-									<el-option v-for="item in caStore.items" :key="item.meta?.name" :label="item.meta?.name"
-										:value="item.meta?.name" />
-								</el-select>
+								<div class="input-group">
+									<el-select v-model="form.config!.caRef" placeholder="Select Certificate Authority" style="width: 100%"
+										clearable filterable :loading="caStore.loading">
+										<el-option v-for="item in caStore.items" :key="item.meta?.name" :label="item.meta?.name"
+											:value="item.meta?.name" />
+									</el-select>
+									<el-button link @click="visitRef('cas', form.config.caRef)" href="#" type="primary"
+										v-if="form.config?.caRef">
+										Visit
+										<el-icon class="el-icon--right">
+											<ArrowRight />
+										</el-icon>
+									</el-button>
+
+
+								</div>
 							</el-form-item>
 
 							<el-form-item label="Auth Ref">
-								<el-select v-model="form.config!.authRef" placeholder="Select Credential" style="width: 100%" clearable
-									filterable :loading="credentialStore.loading">
-									<el-option v-for="item in credentialStore.items" :key="item.meta?.name" :label="item.meta?.name"
-										:value="item.meta?.name" />
-								</el-select>
+								<div class="input-group">
+									<el-select v-model="form.config!.authRef" placeholder="Select Credential" style="width: 100%"
+										clearable filterable :loading="credentialStore.loading">
+										<el-option v-for="item in credentialStore.items" :key="item.meta?.name" :label="item.meta?.name"
+											:value="item.meta?.name" />
+									</el-select>
+									<el-button link @click="visitRef('credentials', form.config?.authRef)" href="#" type="primary"
+										v-if="form.config?.authRef">
+										Visit
+										<el-icon class="el-icon--right">
+											<ArrowRight />
+										</el-icon>
+									</el-button>
+
+								</div>
 							</el-form-item>
 
 							<el-form-item label="Cache TTL">
@@ -303,7 +344,42 @@ onUnmounted(() => {
 
 				<!-- Target Health (right) -->
 				<el-col :span="10">
-					<el-card shadow="never" style="height: 100%">
+
+					<el-card shadow="never">
+						<template #header>
+							<div style="display: flex; justify-content: space-between; align-items: center">
+								<span style="font-weight: 600">Status</span>
+								<el-tag :type="statusTagType" effect="dark" size="small">
+									{{ statusPhase }}
+								</el-tag>
+							</div>
+						</template>
+
+						<el-descriptions :column="1" border size="default">
+							<el-descriptions-item label="Phase">
+								<el-tag :type="statusTagType" effect="dark" size="small">
+									{{ statusPhase }}
+								</el-tag>
+							</el-descriptions-item>
+							<el-descriptions-item label="Reason">
+								<span v-if="backend.status?.reason" style="color: #f56c6c; font-size: 12px">
+									{{ backend.status.reason }}
+								</span>
+								<span v-else style="color: #909399">-</span>
+							</el-descriptions-item>
+							<el-descriptions-item label="Last Transition">
+								<el-tooltip v-if="backend.status?.lastTransitionTime"
+									:content="formatDateFull(backend.status.lastTransitionTime)" placement="top">
+									<span>{{ formatDate(backend.status.lastTransitionTime) }}</span>
+								</el-tooltip>
+								<span v-else style="color: #909399">-</span>
+							</el-descriptions-item>
+						</el-descriptions>
+					</el-card>
+
+					<el-divider content-position="left"></el-divider>
+
+					<el-card shadow="never">
 						<template #header>
 							<div style="display: flex; justify-content: space-between; align-items: center">
 								<span style="font-weight: 600">Target Health</span>
@@ -384,5 +460,12 @@ onUnmounted(() => {
 
 .yaml-editor :deep(.cm-gutters) {
 	border-radius: 4px 0 0 4px;
+}
+
+.input-group {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 1em;
 }
 </style>

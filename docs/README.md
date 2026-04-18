@@ -7,9 +7,8 @@ Home of the documentation. Here you will hopefully find everything you need to k
 - [Getting Started](/docs/getting-started.md)
 - [User Guide](/docs/user-guide.md)
 - Installation
-  - [Docker](/docs/installation/docker.md)
-  - [Kubernetes](/docs/installation/kubernetes.md)
-  - [Systemd](/docs/installation/systemd.md)
+  - [Control Plane](/docs/installation/control-plane.md)
+  - [CLI](/docs/installation/cli.md)
 - Configuration
   - [TLS](/docs/configuration/tls.md)
   - Metrics

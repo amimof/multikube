@@ -51,7 +51,16 @@ oci: ; $(info $(M) building container image) @ ## Build container image from Doc
 protos: ; $(info $(M) generating protos) @ ## Generate protos
 	buf generate
 
-OPENAPI_GENERATOR ?= openapi-generator
+MOCKGEN ?= mockgen
+.PHONY: mockgen
+mockgen: ; $(info $(M) generating mock clients) @ ## Generate Go mock clients for backend
+	$Q $(MOCKGEN) -package v1 api/backend/v1 BackendServiceClient > pkg/client/backend/v1/mock.go
+	$Q $(MOCKGEN) -package v1 api/ca/v1 CertificateAuthorityServiceClient > pkg/client/ca/v1/mock.go
+	$Q $(MOCKGEN) -package v1 api/certificate/v1 CertificateServiceClient > pkg/client/certificate/v1/mock.go
+	$Q $(MOCKGEN) -package v1 api/credential/v1 CredentialServiceClient > pkg/client/credential/v1/mock.go
+	$Q $(MOCKGEN) -package v1 api/polizy/v1 PolicyServiceClient > pkg/client/policy/v1/mock.go
+	$Q $(MOCKGEN) -package v1 api/route/v1 RouteServiceClient > pkg/client/route/v1/mock.go
+
 .PHONY: generate-ts-clients
 generate-ts-clients: ; $(info $(M) generating TypeScript OpenAPI clients) @ ## Generate TypeScript clients for frontend
 	$Q $(OPENAPI_GENERATOR) generate -i api/backend/v1/backend.swagger.json -g typescript-fetch -o web/src/generated/backend

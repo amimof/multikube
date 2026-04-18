@@ -18,6 +18,7 @@ import (
 	certificatev1 "github.com/amimof/multikube/api/certificate/v1"
 	credentialv1 "github.com/amimof/multikube/api/credential/v1"
 	metav1 "github.com/amimof/multikube/api/meta/v1"
+	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 	proxy "github.com/amimof/multikube/pkg/proxyv2"
 )
@@ -25,6 +26,8 @@ import (
 // ---------------------------------------------------------------------------
 // Helpers — self-signed cert + key generation
 // ---------------------------------------------------------------------------
+
+func boolPtr(v bool) *bool { return &v }
 
 // selfSignedPEM returns a self-signed certificate PEM and its private-key PEM.
 func selfSignedPEM(t *testing.T) (certPEM, keyPEM string) {
@@ -66,7 +69,7 @@ func selfSignedPEM(t *testing.T) (certPEM, keyPEM string) {
 func newBackend(name, server string) *backendv1.Backend {
 	return &backendv1.Backend{
 		Meta:   &metav1.Meta{Name: name},
-		Config: &backendv1.BackendConfig{Servers: []string{server}, InsecureSkipTlsVerify: true},
+		Config: &backendv1.BackendConfig{Servers: []string{server}, InsecureSkipTlsVerify: true, Enabled: boolPtr(true)},
 	}
 }
 
@@ -87,6 +90,7 @@ func newRoute(name, backendRef string, match *routev1.Match) *routev1.Route {
 		Config: &routev1.RouteConfig{
 			BackendRef: backendRef,
 			Match:      match,
+			Enabled:    boolPtr(true),
 		},
 	}
 }
@@ -97,6 +101,7 @@ func newCertificate(name, certPEM, keyPEM string) *certificatev1.Certificate {
 		Config: &certificatev1.CertificateConfig{
 			CertificateData: certPEM,
 			KeyData:         keyPEM,
+			Enabled:         boolPtr(true),
 		},
 	}
 }
@@ -106,6 +111,7 @@ func newCAInline(name, certPEM string) *cav1.CertificateAuthority {
 		Meta: &metav1.Meta{Name: name},
 		Config: &cav1.CertificateAuthorityConfig{
 			CertificateData: certPEM,
+			Enabled:         boolPtr(true),
 		},
 	}
 }
@@ -114,7 +120,8 @@ func newTokenCredential(name, token string) *credentialv1.Credential {
 	return &credentialv1.Credential{
 		Meta: &metav1.Meta{Name: name},
 		Config: &credentialv1.CredentialConfig{
-			Token: token,
+			Token:   token,
+			Enabled: boolPtr(true),
 		},
 	}
 }
@@ -127,6 +134,7 @@ func newBasicCredential(name, username, password string) *credentialv1.Credentia
 				Username: username,
 				Password: password,
 			},
+			Enabled: boolPtr(true),
 		},
 	}
 }
@@ -136,6 +144,7 @@ func newClientCertCredential(name, certRef string) *credentialv1.Credential {
 		Meta: &metav1.Meta{Name: name},
 		Config: &credentialv1.CredentialConfig{
 			ClientCertificateRef: certRef,
+			Enabled:              boolPtr(true),
 		},
 	}
 }
@@ -214,8 +223,8 @@ func TestCompile_RouteWithoutMatcher_Invalid(t *testing.T) {
 		t.Fatal("expected route without matcher to be excluded from runtime")
 	}
 	status := res.RouteStatuses["r"]
-	if status.Phase != RoutePhaseInvalid {
-		t.Fatalf("expected route phase %q, got %q", RoutePhaseInvalid, status.Phase)
+	if status.Phase != PhaseInvalid {
+		t.Fatalf("expected route phase %q, got %q", PhaseInvalid, status.Phase)
 	}
 	if status.Reason == "" {
 		t.Fatal("expected invalid route reason")
@@ -416,10 +425,10 @@ func TestCompile_ConflictingRoutes_MarkedConflict(t *testing.T) {
 		if len(res.Runtime.Routes.Paths) != 0 {
 			t.Fatal("expected conflicting routes to be excluded from runtime")
 		}
-		if res.RouteStatuses["r1"].Phase != RoutePhaseConflict {
+		if res.RouteStatuses["r1"].Phase != PhaseConflict {
 			t.Fatalf("expected r1 conflict status, got %+v", res.RouteStatuses["r1"])
 		}
-		if res.RouteStatuses["r2"].Phase != RoutePhaseConflict {
+		if res.RouteStatuses["r2"].Phase != PhaseConflict {
 			t.Fatalf("expected r2 conflict status, got %+v", res.RouteStatuses["r2"])
 		}
 	}
@@ -444,7 +453,7 @@ func TestCompile_MissingBackendRef_RouteInvalid(t *testing.T) {
 	if len(res.Runtime.Routes.Paths) != 0 {
 		t.Fatal("expected missing-backend route to be excluded from runtime")
 	}
-	if res.RouteStatuses["r"].Phase != RoutePhaseInvalid {
+	if res.RouteStatuses["r"].Phase != PhaseInvalid {
 		t.Fatalf("expected invalid phase, got %+v", res.RouteStatuses["r"])
 	}
 }
@@ -546,7 +555,7 @@ func TestCompile_Certificate_MissingCert_Error(t *testing.T) {
 		Certificates: map[string]*certificatev1.Certificate{
 			"bad": {
 				Meta:   &metav1.Meta{Name: "bad"},
-				Config: &certificatev1.CertificateConfig{CertificateData: "", KeyData: "somekey"},
+				Config: &certificatev1.CertificateConfig{CertificateData: "", KeyData: "somekey", Enabled: boolPtr(true)},
 			},
 		},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
@@ -569,7 +578,7 @@ func TestCompile_Certificate_MissingKey_Error(t *testing.T) {
 		Certificates: map[string]*certificatev1.Certificate{
 			"bad": {
 				Meta:   &metav1.Meta{Name: "bad"},
-				Config: &certificatev1.CertificateConfig{CertificateData: certPEM, KeyData: ""},
+				Config: &certificatev1.CertificateConfig{CertificateData: certPEM, KeyData: "", Enabled: boolPtr(true)},
 			},
 		},
 		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
@@ -595,6 +604,7 @@ func TestCompile_BackendTokenCredential_AttachesAuthInjector(t *testing.T) {
 					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
+					Enabled:               boolPtr(true),
 				},
 			},
 		},
@@ -638,6 +648,7 @@ func TestCompile_BackendBasicCredential_AttachesAuthInjector(t *testing.T) {
 					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
+					Enabled:               boolPtr(true),
 				},
 			},
 		},
@@ -682,6 +693,7 @@ func TestCompile_BackendClientCertificateCredential_AttachesTLSCert(t *testing.T
 					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
+					Enabled:               boolPtr(true),
 				},
 			},
 		},
@@ -709,7 +721,7 @@ func TestCompile_BackendClientCertificateCredential_AttachesTLSCert(t *testing.T
 	}
 }
 
-func TestCompile_BackendMissingCredentialRef_Error(t *testing.T) {
+func TestCompile_BackendMissingCredentialRef_Invalid(t *testing.T) {
 	srv := httptest.NewServer(nil)
 	defer srv.Close()
 
@@ -722,6 +734,7 @@ func TestCompile_BackendMissingCredentialRef_Error(t *testing.T) {
 					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "missing",
+					Enabled:               boolPtr(true),
 				},
 			},
 		},
@@ -731,13 +744,23 @@ func TestCompile_BackendMissingCredentialRef_Error(t *testing.T) {
 		Credentials:            map[string]*credentialv1.Credential{},
 	}
 
-	_, err := c.Compile(st)
-	if err == nil {
-		t.Fatal("expected error for missing credential ref, got nil")
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected hard error: %v", err)
+	}
+	status, ok := res.BackendStatuses["be"]
+	if !ok {
+		t.Fatal("expected backend status for 'be'")
+	}
+	if status.Phase != PhaseInvalid {
+		t.Fatalf("expected phase %q, got %q", PhaseInvalid, status.Phase)
+	}
+	if status.Reason == "" {
+		t.Fatal("expected reason for invalid backend")
 	}
 }
 
-func TestCompile_BackendClientCredentialMissingCertificate_Error(t *testing.T) {
+func TestCompile_BackendClientCredentialMissingCertificate_Invalid(t *testing.T) {
 	srv := httptest.NewServer(nil)
 	defer srv.Close()
 
@@ -750,6 +773,7 @@ func TestCompile_BackendClientCredentialMissingCertificate_Error(t *testing.T) {
 					Servers:               []string{srv.URL},
 					InsecureSkipTlsVerify: true,
 					AuthRef:               "cred",
+					Enabled:               boolPtr(true),
 				},
 			},
 		},
@@ -761,9 +785,16 @@ func TestCompile_BackendClientCredentialMissingCertificate_Error(t *testing.T) {
 		},
 	}
 
-	_, err := c.Compile(st)
-	if err == nil {
-		t.Fatal("expected error for missing certificate ref, got nil")
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected hard error: %v", err)
+	}
+	status, ok := res.BackendStatuses["be"]
+	if !ok {
+		t.Fatal("expected backend status for 'be'")
+	}
+	if status.Phase != PhaseInvalid {
+		t.Fatalf("expected phase %q, got %q", PhaseInvalid, status.Phase)
 	}
 }
 
@@ -835,6 +866,7 @@ func TestCompile_ImpersonationConfig_ExplicitEnabled(t *testing.T) {
 						GroupsClaim:   "roles",
 						ExtraClaims:   []string{"scopes", "tenant"},
 					},
+					Enabled: boolPtr(true),
 				},
 			},
 		},
@@ -886,6 +918,7 @@ func TestCompile_ImpersonationConfig_ExplicitDisabled(t *testing.T) {
 						Name:    "off",
 						Enabled: false,
 					},
+					Enabled: boolPtr(true),
 				},
 			},
 		},
@@ -913,5 +946,231 @@ func TestCompile_ImpersonationConfig_ExplicitDisabled(t *testing.T) {
 	}
 	if imp.GroupsClaim != "groups" {
 		t.Errorf("groups_claim = %q, want %q (defaulted)", imp.GroupsClaim, "groups")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests — enabled/disabled resource interactions
+// ---------------------------------------------------------------------------
+
+func TestCompile_DisabledBackend_Skipped(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers:               []string{srv.URL},
+					InsecureSkipTlsVerify: true,
+					Enabled:               boolPtr(false),
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := res.Runtime.Backends["be"]; ok {
+		t.Fatal("expected disabled backend to be excluded from runtime")
+	}
+	if _, ok := res.BackendStatuses["be"]; ok {
+		t.Fatal("expected no status for disabled backend")
+	}
+}
+
+func TestCompile_EnabledBackend_DisabledCARef_Invalid(t *testing.T) {
+	certPEM, _ := selfSignedPEM(t)
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers: []string{srv.URL},
+					CaRef:   "myca",
+					Enabled: boolPtr(true),
+				},
+			},
+		},
+		Routes:       map[string]*routev1.Route{},
+		Certificates: map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{
+			"myca": {
+				Meta: &metav1.Meta{Name: "myca"},
+				Config: &cav1.CertificateAuthorityConfig{
+					CertificateData: certPEM,
+					Enabled:         boolPtr(false),
+				},
+			},
+		},
+		Credentials: map[string]*credentialv1.Credential{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected hard error: %v", err)
+	}
+	status, ok := res.BackendStatuses["be"]
+	if !ok {
+		t.Fatal("expected backend status for 'be'")
+	}
+	if status.Phase != PhaseInvalid {
+		t.Fatalf("expected phase %q, got %q", PhaseInvalid, status.Phase)
+	}
+}
+
+func TestCompile_EnabledBackend_DisabledCredentialRef_Invalid(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers:               []string{srv.URL},
+					InsecureSkipTlsVerify: true,
+					AuthRef:               "cred",
+					Enabled:               boolPtr(true),
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials: map[string]*credentialv1.Credential{
+			"cred": {
+				Meta: &metav1.Meta{Name: "cred"},
+				Config: &credentialv1.CredentialConfig{
+					Token:   "secret",
+					Enabled: boolPtr(false),
+				},
+			},
+		},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected hard error: %v", err)
+	}
+	status, ok := res.BackendStatuses["be"]
+	if !ok {
+		t.Fatal("expected backend status for 'be'")
+	}
+	if status.Phase != PhaseInvalid {
+		t.Fatalf("expected phase %q, got %q", PhaseInvalid, status.Phase)
+	}
+}
+
+func TestCompile_EnabledRoute_InvalidBackend_RouteInvalid(t *testing.T) {
+	srv := httptest.NewServer(nil)
+	defer srv.Close()
+
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers:               []string{srv.URL},
+					InsecureSkipTlsVerify: true,
+					AuthRef:               "missing-cred",
+					Enabled:               boolPtr(true),
+				},
+			},
+		},
+		Routes: map[string]*routev1.Route{
+			"r": newRoute("r", "be", &routev1.Match{Path: "/test"}),
+		},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected hard error: %v", err)
+	}
+	// Backend should be INVALID
+	if res.BackendStatuses["be"].Phase != PhaseInvalid {
+		t.Fatalf("expected backend phase %q, got %q", PhaseInvalid, res.BackendStatuses["be"].Phase)
+	}
+	// Route referencing that backend should also be INVALID
+	if res.RouteStatuses["r"].Phase != PhaseInvalid {
+		t.Fatalf("expected route phase %q, got %q", PhaseInvalid, res.RouteStatuses["r"].Phase)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests — Policy enabled/disabled
+// ---------------------------------------------------------------------------
+
+func TestCompile_DisabledPolicy_Excluded(t *testing.T) {
+	c := NewCompiler()
+	st := &State{
+		Backends:               map[string]*backendv1.Backend{},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+		Policies: map[string]*policyv1.Policy{
+			"p1": {
+				Meta:   &metav1.Meta{Name: "p1"},
+				Config: &policyv1.PolicyConfig{Enabled: boolPtr(false)},
+			},
+		},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(res.Runtime.Policies) != 0 {
+		t.Fatalf("expected 0 policies, got %d", len(res.Runtime.Policies))
+	}
+}
+
+func TestCompile_EnabledPolicy_Included(t *testing.T) {
+	c := NewCompiler()
+	st := &State{
+		Backends:               map[string]*backendv1.Backend{},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+		Policies: map[string]*policyv1.Policy{
+			"p1": {
+				Meta:   &metav1.Meta{Name: "p1"},
+				Config: &policyv1.PolicyConfig{Enabled: boolPtr(true)},
+			},
+			"p2": {
+				Meta:   &metav1.Meta{Name: "p2"},
+				Config: &policyv1.PolicyConfig{Enabled: boolPtr(false)},
+			},
+		},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(res.Runtime.Policies) != 1 {
+		t.Fatalf("expected 1 policy, got %d", len(res.Runtime.Policies))
+	}
+	if res.Runtime.Policies[0].GetMeta().GetName() != "p1" {
+		t.Fatalf("expected policy p1, got %s", res.Runtime.Policies[0].GetMeta().GetName())
 	}
 }

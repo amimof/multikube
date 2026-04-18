@@ -607,6 +607,16 @@
           "additionalProperties": {
             "$ref": "#/definitions/v1TargetStatus"
           }
+        },
+        "phase": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "lastTransitionTime": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     },

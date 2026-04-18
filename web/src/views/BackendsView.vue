@@ -115,6 +115,12 @@ function sortByReady(a: any, b: any): number {
 	return ra - rb
 }
 
+function sortByStatus(a: any, b: any): number {
+	const sa = a.status?.phase ?? ''
+	const sb = b.status?.phase ?? ''
+	return sa.localeCompare(sb)
+}
+
 function sortByType(a: any, b: any): number {
 	const la = lbTypeLabels[a.config?.type ?? ''] ?? a.config?.type ?? ''
 	const lb = lbTypeLabels[b.config?.type ?? ''] ?? b.config?.type ?? ''
@@ -258,13 +264,24 @@ onMounted(() => {
 				style="width: 100%" row-key="meta.name" @row-click="handleRowClick" @selection-change="handleSelectionChange"
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
-				<el-table-column prop="meta.name" label="Name" min-width="150" sortable />
 				<el-table-column label="Enabled" width="90">
 					<template #default="{ row }">
-						<el-switch :model-value="row.config?.enabled ?? true"
-							@update:model-value="handleToggleEnabled(row, $event)" @click.stop />
+						<el-switch :model-value="row.config?.enabled ?? true" @update:model-value="handleToggleEnabled(row, $event)"
+							@click.stop />
 					</template>
 				</el-table-column>
+				<el-table-column prop="meta.name" label="Name" min-width="150" sortable />
+				<el-table-column label="Status" width="100" sortable :sort-method="sortByStatus">
+					<template #default="{ row }">
+						<el-tag v-if="row.status?.phase"
+							:type="row.status.phase === 'READY' ? 'success' : row.status.phase === 'Inactive' ? 'info' : 'warning'"
+							effect="dark" size="small">
+							{{ row.status.phase }}
+						</el-tag>
+						<span v-else>-</span>
+					</template>
+				</el-table-column>
+
 				<el-table-column label="Ready" width="100" sortable :sort-method="sortByReady">
 					<template #default="{ row }">
 						<el-tag
@@ -290,11 +307,11 @@ onMounted(() => {
 						{{ formatDate(row.meta?.created) }}
 					</template>
 				</el-table-column>
-			<el-table-column label="Actions" width="80" fixed="right">
-				<template #default="{ row }">
-					<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
-				</template>
-			</el-table-column>
+				<el-table-column label="Actions" width="80" fixed="right">
+					<template #default="{ row }">
+						<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
+					</template>
+				</el-table-column>
 			</el-table>
 		</template>
 
@@ -377,9 +394,9 @@ onMounted(() => {
 
 			<template #footer>
 				<el-button @click="dialogVisible = false">Cancel</el-button>
-			<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
-				{{ saving ? 'Saving...' : 'Create' }}
-			</el-button>
+				<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
+					{{ saving ? 'Saving...' : 'Create' }}
+				</el-button>
 			</template>
 		</el-dialog>
 

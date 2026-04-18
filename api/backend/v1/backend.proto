@@ -102,6 +102,9 @@ message ImpersonationConfig {
 
 message BackendStatus {
   map<string, TargetStatus> target_statuses = 1;
+  google.protobuf.StringValue phase = 2;
+  google.protobuf.StringValue reason = 3;
+  google.protobuf.Timestamp last_transition_time = 4;
 }
 
 message TargetStatus {

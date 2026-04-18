@@ -254,13 +254,13 @@ onMounted(() => {
 				style="width: 100%" row-key="meta.name" @row-click="handleRowClick" @selection-change="handleSelectionChange"
 				:row-class-name="() => 'clickable-row'">
 				<el-table-column type="selection" width="48" />
-				<el-table-column prop="meta.name" label="Name" min-width="200" sortable />
 				<el-table-column label="Enabled" width="90">
 					<template #default="{ row }">
-						<el-switch :model-value="row.config?.enabled ?? true"
-							@update:model-value="handleToggleEnabled(row, $event)" @click.stop />
+						<el-switch :model-value="row.config?.enabled ?? true" @update:model-value="handleToggleEnabled(row, $event)"
+							@click.stop />
 					</template>
 				</el-table-column>
+				<el-table-column prop="meta.name" label="Name" min-width="200" sortable />
 				<el-table-column label="Type" min-width="150" sortable :sort-method="sortByCredentialType">
 					<template #default="{ row }">
 						<el-tag size="small">{{ credentialTypeLabel(row) }}</el-tag>
@@ -278,11 +278,11 @@ onMounted(() => {
 						{{ formatDate(row.meta?.created) }}
 					</template>
 				</el-table-column>
-			<el-table-column label="Actions" width="80" fixed="right">
-				<template #default="{ row }">
-					<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
-				</template>
-			</el-table-column>
+				<el-table-column label="Actions" width="80" fixed="right">
+					<template #default="{ row }">
+						<el-button :icon="Delete" type="danger" size="small" plain @click.stop="confirmDelete(row)" />
+					</template>
+				</el-table-column>
 			</el-table>
 		</template>
 
@@ -338,9 +338,9 @@ onMounted(() => {
 
 			<template #footer>
 				<el-button @click="dialogVisible = false">Cancel</el-button>
-			<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
-				{{ saving ? 'Saving...' : 'Create' }}
-			</el-button>
+				<el-button type="primary" :loading="saving" :disabled="!isFormValid" @click="handleSave">
+					{{ saving ? 'Saving...' : 'Create' }}
+				</el-button>
 			</template>
 		</el-dialog>
 

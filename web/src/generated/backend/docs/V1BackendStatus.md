@@ -7,6 +7,9 @@
 Name | Type
 ------------ | -------------
 `targetStatuses` | [{ [key: string]: V1TargetStatus; }](V1TargetStatus.md)
+`phase` | string
+`reason` | string
+`lastTransitionTime` | Date
 
 ## Example
 
@@ -16,6 +19,9 @@ import type { V1BackendStatus } from ''
 // TODO: Update the object below with actual values
 const example = {
   "targetStatuses": null,
+  "phase": null,
+  "reason": null,
+  "lastTransitionTime": null,
 } satisfies V1BackendStatus
 
 console.log(example)

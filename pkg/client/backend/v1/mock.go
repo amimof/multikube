@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	v1 "github.com/amimof/multikube/api/backend/v1"
+	backend "github.com/amimof/multikube/api/backend/v1"
 	gomock "go.uber.org/mock/gomock"
 	grpc "google.golang.org/grpc"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -44,14 +44,14 @@ func (m *MockBackendServiceClient) EXPECT() *MockBackendServiceClientMockRecorde
 }
 
 // Create mocks base method.
-func (m *MockBackendServiceClient) Create(ctx context.Context, in *v1.CreateRequest, opts ...grpc.CallOption) (*v1.CreateResponse, error) {
+func (m *MockBackendServiceClient) Create(ctx context.Context, in *backend.CreateRequest, opts ...grpc.CallOption) (*backend.CreateResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Create", varargs...)
-	ret0, _ := ret[0].(*v1.CreateResponse)
+	ret0, _ := ret[0].(*backend.CreateResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -64,7 +64,7 @@ func (mr *MockBackendServiceClientMockRecorder) Create(ctx, in any, opts ...any)
 }
 
 // Delete mocks base method.
-func (m *MockBackendServiceClient) Delete(ctx context.Context, in *v1.DeleteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (m *MockBackendServiceClient) Delete(ctx context.Context, in *backend.DeleteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
@@ -84,14 +84,14 @@ func (mr *MockBackendServiceClientMockRecorder) Delete(ctx, in any, opts ...any)
 }
 
 // Get mocks base method.
-func (m *MockBackendServiceClient) Get(ctx context.Context, in *v1.GetRequest, opts ...grpc.CallOption) (*v1.GetResponse, error) {
+func (m *MockBackendServiceClient) Get(ctx context.Context, in *backend.GetRequest, opts ...grpc.CallOption) (*backend.GetResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Get", varargs...)
-	ret0, _ := ret[0].(*v1.GetResponse)
+	ret0, _ := ret[0].(*backend.GetResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -104,14 +104,14 @@ func (mr *MockBackendServiceClientMockRecorder) Get(ctx, in any, opts ...any) *g
 }
 
 // List mocks base method.
-func (m *MockBackendServiceClient) List(ctx context.Context, in *v1.ListRequest, opts ...grpc.CallOption) (*v1.ListResponse, error) {
+func (m *MockBackendServiceClient) List(ctx context.Context, in *backend.ListRequest, opts ...grpc.CallOption) (*backend.ListResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "List", varargs...)
-	ret0, _ := ret[0].(*v1.ListResponse)
+	ret0, _ := ret[0].(*backend.ListResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -124,14 +124,14 @@ func (mr *MockBackendServiceClientMockRecorder) List(ctx, in any, opts ...any) *
 }
 
 // Patch mocks base method.
-func (m *MockBackendServiceClient) Patch(ctx context.Context, in *v1.PatchRequest, opts ...grpc.CallOption) (*v1.PatchResponse, error) {
+func (m *MockBackendServiceClient) Patch(ctx context.Context, in *backend.PatchRequest, opts ...grpc.CallOption) (*backend.PatchResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Patch", varargs...)
-	ret0, _ := ret[0].(*v1.PatchResponse)
+	ret0, _ := ret[0].(*backend.PatchResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -144,14 +144,14 @@ func (mr *MockBackendServiceClientMockRecorder) Patch(ctx, in any, opts ...any) 
 }
 
 // Update mocks base method.
-func (m *MockBackendServiceClient) Update(ctx context.Context, in *v1.UpdateRequest, opts ...grpc.CallOption) (*v1.UpdateResponse, error) {
+func (m *MockBackendServiceClient) Update(ctx context.Context, in *backend.UpdateRequest, opts ...grpc.CallOption) (*backend.UpdateResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, in}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Update", varargs...)
-	ret0, _ := ret[0].(*v1.UpdateResponse)
+	ret0, _ := ret[0].(*backend.UpdateResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -161,4 +161,24 @@ func (mr *MockBackendServiceClientMockRecorder) Update(ctx, in any, opts ...any)
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{ctx, in}, opts...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockBackendServiceClient)(nil).Update), varargs...)
+}
+
+// UpdateStatus mocks base method.
+func (m *MockBackendServiceClient) UpdateStatus(ctx context.Context, in *backend.UpdateStatusRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "UpdateStatus", varargs...)
+	ret0, _ := ret[0].(*emptypb.Empty)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateStatus indicates an expected call of UpdateStatus.
+func (mr *MockBackendServiceClientMockRecorder) UpdateStatus(ctx, in any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStatus", reflect.TypeOf((*MockBackendServiceClient)(nil).UpdateStatus), varargs...)
 }

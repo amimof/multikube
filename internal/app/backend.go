@@ -35,6 +35,21 @@ func applyMaskedUpdateBackend(dst, src *backendv1.BackendStatus, mask *fieldmask
 	}
 	for _, p := range mask.Paths {
 		switch p {
+		case "phase":
+			if src.Phase == nil {
+				continue
+			}
+			dst.Phase = src.Phase
+		case "reason":
+			if src.Reason == nil {
+				continue
+			}
+			dst.Reason = src.Reason
+		case "last_transition_time":
+			if src.LastTransitionTime == nil {
+				continue
+			}
+			dst.LastTransitionTime = src.LastTransitionTime
 		case "target_statuses":
 			if src.TargetStatuses == nil {
 				continue

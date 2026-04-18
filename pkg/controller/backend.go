@@ -8,7 +8,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -274,23 +273,30 @@ func (c *Controller) compileRuntime(ctx context.Context) error {
 	if err := c.reconcileRouteStatuses(ctx, result.RouteStatuses); err != nil {
 		c.logger.Error("error reconciling route statuses", "error", err)
 	}
+	if err := c.reconcileBackendStatuses(ctx, result.BackendStatuses); err != nil {
+		c.logger.Error("error reconciling route statuses", "error", err)
+	}
 	return nil
 }
 
-func (c *Controller) reconcileRouteStatuses(ctx context.Context, statuses map[string]compile.RouteCompileStatus) error {
+func (c *Controller) reconcileRouteStatuses(ctx context.Context, statuses map[string]compile.CompileStatus) error {
 	for name, next := range statuses {
 		route, ok := c.cache.Routes[name]
 		if !ok || route == nil {
 			continue
 		}
 
-		updated, changed := mergeRouteStatus(route, next)
-		if !changed {
-			c.cache.Routes[name] = route
-			continue
+		st := &routev1.RouteStatus{
+			Phase:              wrapperspb.String(next.Phase),
+			Reason:             wrapperspb.String(next.Reason),
+			LastTransitionTime: timestamppb.Now(),
 		}
 
-		if err := c.clientset.RouteV1().UpdateStatus(ctx, name, updated.GetStatus(), "phase", "reason", "last_transition_time"); err != nil {
+		if err := c.clientset.RouteV1().UpdateStatus(ctx, name, st, "phase", "reason", "last_transition_time"); err != nil {
+			return err
+		}
+		updated, err := c.clientset.RouteV1().Get(ctx, name)
+		if err != nil {
 			return err
 		}
 		c.cache.Routes[name] = updated
@@ -299,36 +305,30 @@ func (c *Controller) reconcileRouteStatuses(ctx context.Context, statuses map[st
 	return nil
 }
 
-func mergeRouteStatus(route *routev1.Route, next compile.RouteCompileStatus) (*routev1.Route, bool) {
-	current := route.GetStatus()
-	phase := ""
-	reason := ""
-	var lastTransition *timestamppb.Timestamp
-	if current != nil {
-		phase = current.GetPhase().GetValue()
-		reason = current.GetReason().GetValue()
-		lastTransition = current.GetLastTransitionTime()
+func (c *Controller) reconcileBackendStatuses(ctx context.Context, statuses map[string]compile.CompileStatus) error {
+	for name, next := range statuses {
+		backend, ok := c.cache.Backends[name]
+		if !ok || backend == nil {
+			continue
+		}
+
+		st := &backendv1.BackendStatus{
+			Phase:              wrapperspb.String(next.Phase),
+			Reason:             wrapperspb.String(next.Reason),
+			LastTransitionTime: timestamppb.Now(),
+		}
+
+		if err := c.clientset.BackendV1().UpdateStatus(ctx, name, st, "phase", "reason", "last_transition_time"); err != nil {
+			return err
+		}
+		updated, err := c.clientset.BackendV1().Get(ctx, name)
+		if err != nil {
+			return err
+		}
+		c.cache.Backends[name] = updated
 	}
 
-	if phase == next.Phase && reason == next.Reason {
-		return route, false
-	}
-
-	updated := proto.Clone(route).(*routev1.Route)
-	status := &routev1.RouteStatus{
-		LastTransitionTime: lastTransition,
-	}
-	if next.Phase != "" {
-		status.Phase = wrapperspb.String(next.Phase)
-	}
-	if next.Reason != "" {
-		status.Reason = wrapperspb.String(next.Reason)
-	}
-	if phase != next.Phase || lastTransition == nil {
-		status.LastTransitionTime = timestamppb.Now()
-	}
-	updated.Status = status
-	return updated, true
+	return nil
 }
 
 func (c *Controller) onInit(ctx context.Context) error {

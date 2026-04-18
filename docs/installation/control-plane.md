@@ -1,6 +1,28 @@
-# Running with Systemd
+# Installing Multikube
 
-You can run Multikube with `systemd` using below unit file. Before doing so however you must download the binary and install it in your systems `PATH`.
+# Docker
+
+You can run Multikube with container engines such as Docker, Podman, Nerdctl and more. Images are published to [ghcr.io/amimof/multikube](https://github.com/amimof/multikube/pkgs/container/multikube) on new releases.
+
+```bash
+docker run -d \
+  --name multikube \
+  -p 5743:5743 \
+  -p 8443:8443 \
+  -v multikube-data:/.local/state/multikube  \
+  multikube:latest
+```
+
+## Kubernetes
+
+Kubernetes deployment manifests are in `deploy/` and uses `emptyDir` ephemeral storage. Make sure to use persistent volumes in production or control plane state will be lost when multikube pods restart.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/amimof/multikube/refs/heads/master/deploy/k8s.yaml
+```
+
+
+## Systemd
 
 1. Download from [GitHub Releases](https://github.com/amimof/multikube/releases)
 
@@ -55,4 +77,3 @@ You can run Multikube with `systemd` using below unit file. Before doing so howe
    systemctl enable --now multikube.service
    ```
 
-That command will run Multikube control plane with default configuration and self-signed generated certificates.

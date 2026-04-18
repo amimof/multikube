@@ -42,6 +42,41 @@ func WithRouteClient(routev1Client routev1.ClientV1) NewClientOption {
 	}
 }
 
+func WithBackendClient(backendv1Client backendv1.ClientV1) NewClientOption {
+	return func(c *ClientSet) error {
+		c.backendV1Client = backendv1Client
+		return nil
+	}
+}
+
+func WithCAClient(cav1Client cav1.ClientV1) NewClientOption {
+	return func(c *ClientSet) error {
+		c.caV1Client = cav1Client
+		return nil
+	}
+}
+
+func WithCredentialClient(credentialv1Client credentialv1.ClientV1) NewClientOption {
+	return func(c *ClientSet) error {
+		c.credentialV1Client = credentialv1Client
+		return nil
+	}
+}
+
+func WithCertificateClient(certificatev1Client certificatev1.ClientV1) NewClientOption {
+	return func(c *ClientSet) error {
+		c.certificateV1Client = certificatev1Client
+		return nil
+	}
+}
+
+func WithPolicyClient(policyv1Client policyv1.ClientV1) NewClientOption {
+	return func(c *ClientSet) error {
+		c.policyV1Client = policyv1Client
+		return nil
+	}
+}
+
 func WithIdentity(id *identity.AtomicIdentity) NewClientOption {
 	return func(c *ClientSet) error {
 		c.id = id
