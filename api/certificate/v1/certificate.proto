@@ -90,7 +90,7 @@ message CertificateStatus {
 message CertificateConfig {
   string certificate_data = 1 [(buf.validate.field).string.min_len = 1];
   string key_data = 2 [(buf.validate.field).string.min_len = 1];
-  bool enabled = 3;
+  optional bool enabled = 3;
 }
 
 message GetRequest {

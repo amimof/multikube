@@ -88,7 +88,7 @@ message CertificateAuthorityStatus {
 
 message CertificateAuthorityConfig {
   string certificate_data = 1 [(buf.validate.field).string.min_len = 1];
-  bool enabled = 2;
+  optional bool enabled = 2;
 }
 
 message GetRequest {

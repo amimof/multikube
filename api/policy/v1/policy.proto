@@ -76,7 +76,7 @@ message PolicyStatus {}
 
 message PolicyConfig {
   repeated Rule rules = 1;
-  bool enabled = 2;
+  optional bool enabled = 2;
 }
 
 message Rule {

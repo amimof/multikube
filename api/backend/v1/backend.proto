@@ -89,7 +89,7 @@ message BackendConfig {
   google.protobuf.Duration cache_ttl = 5;
   LoadBalancingType type = 6;
   ImpersonationConfig impersonation_config = 7;
-  bool enabled = 8;
+  optional bool enabled = 8;
 }
 
 message ImpersonationConfig {

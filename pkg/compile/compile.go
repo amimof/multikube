@@ -110,6 +110,9 @@ func (c *Compiler) Compile(st *State) (*CompileResult, error) {
 func compileCAs(cas map[string]*cav1.CertificateAuthority, certs map[string]*certificatev1.Certificate) (map[string]*x509.CertPool, error) {
 	out := make(map[string]*x509.CertPool, len(cas))
 	for name, ca := range cas {
+		if !ca.GetConfig().GetEnabled() {
+			continue
+		}
 		pool, err := compileCA(ca, certs)
 		if err != nil {
 			return nil, fmt.Errorf("CA %q: %w", name, err)
@@ -140,6 +143,9 @@ func compileCA(ca *cav1.CertificateAuthority, certs map[string]*certificatev1.Ce
 func compileCerts(certs map[string]*certificatev1.Certificate) (map[string]tls.Certificate, error) {
 	out := make(map[string]tls.Certificate, len(certs))
 	for name, cert := range certs {
+		if !cert.GetConfig().GetEnabled() {
+			continue
+		}
 		tlsCert, err := compileCert(cert)
 		if err != nil {
 			return nil, fmt.Errorf("certificate %q: %w", name, err)
@@ -179,6 +185,9 @@ func compileCredentials(credentials map[string]*credentialv1.Credential) (map[st
 	}
 	out := make(map[string]compiledCredential, len(credentials))
 	for name, credential := range credentials {
+		if !credential.GetConfig().GetEnabled() {
+			continue
+		}
 		compiled, err := compileCredential(credential)
 		if err != nil {
 			return nil, fmt.Errorf("credential %q: %w", name, err)
@@ -222,6 +231,9 @@ func compileBackendsPools(
 		// if !be.GetStatus().GetHealthy() {
 		// 	continue
 		// }
+		if !be.GetConfig().GetEnabled() {
+			continue
+		}
 
 		br, fwd, err := compileBackendPool(be, caPools, tlsCerts, credentials)
 		if err != nil {
@@ -400,6 +412,10 @@ func compileRoutes2(
 	matchOwners := map[routeMatchKey]string{}
 
 	for name, route := range routes {
+		if !route.GetConfig().GetEnabled() {
+			continue
+		}
+
 		rr, matchKey, status := compileRoute(name, route, backends, forwarders)
 		if status.Phase != "" {
 			statuses[name] = status

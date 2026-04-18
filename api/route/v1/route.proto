@@ -83,7 +83,7 @@ message RouteStatus {
 message RouteConfig {
   Match match = 1 [(buf.validate.field).required = true];
   string backend_ref = 2 [(buf.validate.field).string.min_len = 1];
-  bool enabled = 3;
+  optional bool enabled = 3;
 }
 
 message Match {
