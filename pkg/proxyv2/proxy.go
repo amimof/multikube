@@ -32,11 +32,15 @@ func NewProxy(runtime *RuntimeStore, opts ...ProxyOption) *Proxy {
 	for _, opt := range opts {
 		opt(p)
 	}
-	m, err := initMetrics(p.meter)
-	if err != nil {
-		log.Printf("failed to initialize proxy metrics: %v", err)
+
+	if p.metrics == nil {
+		m, err := InitMetrics(p.meter)
+		if err != nil {
+			log.Printf("failed to initialize proxy metrics: %v", err)
+		}
+		p.metrics = m
 	}
-	p.metrics = m
+
 	return p
 }
 
@@ -59,6 +63,12 @@ func WithPublisher(pub audit.Publisher) ProxyOption {
 func WithMeter(m metric.Meter) ProxyOption {
 	return func(p *Proxy) {
 		p.meter = m
+	}
+}
+
+func WithMetrics(m *ProxyMetrics) ProxyOption {
+	return func(p *Proxy) {
+		p.metrics = m
 	}
 }
 
@@ -93,7 +103,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if bearerToken(r) == "" {
 					result = "missing"
 				}
-				p.metrics.AuthRequestsTotal.Add(ctx, 1,
+				p.metrics.AuthRequestsTotal.Inc(ctx, 1,
 					metric.WithAttributes(attribute.String("result", result)))
 			}
 			w.Header().Set("WWW-Authenticate", "Bearer")
@@ -102,7 +112,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if p.metrics != nil {
-			p.metrics.AuthRequestsTotal.Add(ctx, 1,
+			p.metrics.AuthRequestsTotal.Inc(ctx, 1,
 				metric.WithAttributes(attribute.String("result", "success")))
 		}
 		ctx = WithPrincipal(ctx, principal)
@@ -114,7 +124,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, ok := rt.Match(r)
 	if !ok {
 		if p.metrics != nil {
-			p.metrics.RouteNoMatchTotal.Add(ctx, 1)
+			p.metrics.RouteNoMatchTotal.Inc(ctx, 1)
 		}
 		http.NotFound(w, r)
 		p.recordRequestMetrics(ctx, start, r.Method, "", http.StatusNotFound, mw)
@@ -123,7 +133,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Record route match
 	if p.metrics != nil {
-		p.metrics.RouteMatchesTotal.Add(ctx, 1,
+		p.metrics.RouteMatchesTotal.Inc(ctx, 1,
 			metric.WithAttributes(attribute.String("match_kind", matchKindString(route.Kind))))
 	}
 
@@ -141,7 +151,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if result == EvalDeny {
 				evalResult = "deny"
 			}
-			p.metrics.PolicyEvaluationsTotal.Add(ctx, 1,
+			p.metrics.PolicyEvaluationsTotal.Inc(ctx, 1,
 				metric.WithAttributes(
 					attribute.String("result", evalResult),
 					attribute.String("route", route.Name),
@@ -180,7 +190,7 @@ func (p *Proxy) recordRequestMetrics(ctx context.Context, start time.Time, metho
 		attribute.String("route", route),
 		attribute.Int("status_code", code),
 	)
-	p.metrics.RequestsTotal.Add(ctx, 1, attrs)
+	p.metrics.RequestsTotal.Inc(ctx, 1, attrs)
 	p.metrics.RequestDuration.Record(ctx, duration, attrs)
 	if mw.bytesWritten > 0 {
 		p.metrics.ResponseSizeBytes.Record(ctx, mw.bytesWritten,

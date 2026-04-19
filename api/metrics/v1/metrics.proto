@@ -16,24 +16,68 @@ service MetricsService {
 message GetRequest {}
 
 message GetResponse {
-  int64 requests_total_counter = 1;
-  float request_duration = 2;
+  // Request metrics
+  CounterMetric requests_total = 1;
+  HistogramMetric request_duration = 2;
+  GaugeMetric active_requests = 3;
+  Int64HistogramMetric request_size_bytes = 4;
+  Int64HistogramMetric response_size_bytes = 5;
 
-  //  	// Request metrics
-  // ActiveRequests    metric.Int64UpDownCounter
-  // RequestSizeBytes  metric.Int64Histogram
-  // ResponseSizeBytes metric.Int64Histogram
-  //
-  // // Backend metrics
-  // BackendRequestsTotal   metric.Int64Counter
-  // BackendRequestDuration metric.Float64Histogram
-  // BackendActiveRequests  metric.Int64UpDownCounter
-  //
-  // // Auth metrics
-  // AuthRequestsTotal      metric.Int64Counter
-  // PolicyEvaluationsTotal metric.Int64Counter
-  //
-  // // Route matching metrics
-  // RouteMatchesTotal metric.Int64Counter
-  // RouteNoMatchTotal metric.Int64Counter
+  // Backend metrics
+  CounterMetric backend_requests_total = 6;
+  HistogramMetric backend_request_duration = 7;
+  GaugeMetric backend_active_requests = 8;
+
+  // Auth metrics
+  CounterMetric auth_requests_total = 9;
+  CounterMetric policy_evaluations_total = 10;
+
+  // Route metrics
+  CounterMetric route_matches_total = 11;
+  CounterMetric route_no_match_total = 12;
+}
+
+// Int64Series represents a single counter bucket (sum per interval).
+message Int64Series {
+  google.protobuf.Timestamp start = 1;
+  int64 value = 2;
+}
+
+// Float64Series represents a single float64 histogram bucket
+// (observation count + sum per interval).
+message Float64Series {
+  google.protobuf.Timestamp start = 1;
+  int64 count = 2;
+  double sum = 3;
+}
+
+// Int64HistogramSeries represents a single int64 histogram bucket
+// (observation count + sum per interval).
+message Int64HistogramSeries {
+  google.protobuf.Timestamp start = 1;
+  int64 count = 2;
+  int64 sum = 3;
+}
+
+// GaugeSeries represents a single gauge bucket (max value per interval).
+message GaugeSeries {
+  google.protobuf.Timestamp start = 1;
+  int64 max = 2;
+}
+
+message CounterMetric {
+  int64 total = 1;
+  repeated Int64Series buckets = 2;
+}
+
+message HistogramMetric {
+  repeated Float64Series buckets = 1;
+}
+
+message Int64HistogramMetric {
+  repeated Int64HistogramSeries buckets = 1;
+}
+
+message GaugeMetric {
+  repeated GaugeSeries buckets = 1;
 }

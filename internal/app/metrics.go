@@ -11,10 +11,10 @@ import (
 type MetricsService struct {
 	Logger   logger.Logger
 	Exchange *events.Exchange
-	Metrics  proxy.ProxyMetrics
+	Metrics  *proxy.ProxyMetrics
 }
 
 // MetricsLog streams metrics entries
 func (n *MetricsService) MetricsLog(ctx context.Context) (*proxy.ProxyMetrics, error) {
-	return &n.Metrics, nil
+	return n.Metrics, nil
 }

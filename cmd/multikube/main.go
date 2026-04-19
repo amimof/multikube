@@ -293,6 +293,24 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Instrumentation
+	metricsOpts, meterProvider, err := instrumentation.InitServerMetrics(ctx)
+	if err != nil {
+		log.Error("Failed to start prometheus exporter", "error", err)
+		os.Exit(1)
+	}
+	meter := meterProvider.Meter("multikube")
+	proxyMetrics, err := proxyv2.InitMetrics(meter)
+	if err != nil {
+		log.Error("error setting up metrics", "error", err)
+		os.Exit(1)
+	}
+	metricsService := transport.NewMetricsService(&app.MetricsService{
+		Logger:   log,
+		Exchange: exchange,
+		Metrics:  proxyMetrics,
+	})
+
 	auditLogFilePath := filepath.Join(dataPath, "audit.json")
 	store := audit.NewFileStore(auditLogFilePath, audit.WithFileStoreLogger(log))
 	if err := store.Start(ctx); err != nil {
@@ -309,13 +327,6 @@ func main() {
 	validator, err := protovalidate.New()
 	if err != nil {
 		log.Error("Failed to create protovalidate validator", "error", err)
-		os.Exit(1)
-	}
-
-	// Instrumentation
-	metricsOpts, meterProvider, err := instrumentation.InitServerMetrics(ctx)
-	if err != nil {
-		log.Error("Failed to start prometheus exporter", "error", err)
 		os.Exit(1)
 	}
 
@@ -412,6 +423,7 @@ func main() {
 		credentialService,
 		tokenService,
 		auditService,
+		metricsService,
 	)
 
 	// Used by clientset and the gateway to connect internally
@@ -437,6 +449,7 @@ func main() {
 		credentialService,
 		tokenService,
 		auditService,
+		metricsService,
 	)
 	if err != nil {
 		log.Error("error registering service handler", "error", err)
@@ -493,7 +506,8 @@ func main() {
 		runtimeStore,
 		proxyv2.WithPublicKey(&rs256PrivKey.PublicKey),
 		proxyv2.WithPublisher(publisher),
-		proxyv2.WithMeter(meterProvider.Meter("multikube")),
+		proxyv2.WithMeter(meter),
+		proxyv2.WithMetrics(proxyMetrics),
 	)
 
 	handler := proxyv2.AuditMiddleware(publisher)(prox)

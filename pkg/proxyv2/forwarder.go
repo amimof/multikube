@@ -75,7 +75,7 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 		resp, err := f.transport.RoundTrip(outReq)
 		if err != nil {
 			if f.metrics != nil {
-				f.metrics.BackendRequestsTotal.Add(ctx, 1,
+				f.metrics.BackendRequestsTotal.Inc(ctx, 1,
 					metric.WithAttributes(
 						attribute.String("backend", backendName),
 						attribute.Int("status_code", 502),
@@ -91,7 +91,7 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 		}()
 
 		if f.metrics != nil {
-			f.metrics.BackendRequestsTotal.Add(ctx, 1,
+			f.metrics.BackendRequestsTotal.Inc(ctx, 1,
 				metric.WithAttributes(
 					attribute.String("backend", backendName),
 					attribute.Int("status_code", resp.StatusCode),
