@@ -70,15 +70,20 @@ const isFormValid = computed(() => {
 	return name.length > 0 && servers.length > 0 && cacheTtl.length > 0
 })
 
-// Servers as a newline-separated string for textarea editing
-const serversText = computed({
-	get: () => (form.value.config?.servers ?? []).join('\n'),
-	set: (val: string) => {
-		if (form.value.config) {
-			form.value.config.servers = val.split('\n').filter((s) => s.trim() !== '')
-		}
-	},
-})
+// Server URL validation
+const serverUrlPattern = /^https?:\/\/[a-zA-Z0-9._\-\[\]:]+?(:\d{1,5})?(\/.*)?$/
+function isValidServerUrl(url: string): boolean {
+	return serverUrlPattern.test(url)
+}
+function addServer() {
+	if (form.value.config) {
+		if (!form.value.config.servers) form.value.config.servers = []
+		form.value.config.servers.push('')
+	}
+}
+function removeServer(index: number) {
+	form.value.config?.servers?.splice(index, 1)
+}
 
 // Labels computed for LabelEditor
 const formLabels = computed({
@@ -333,8 +338,22 @@ onMounted(() => {
 				</el-form-item>
 
 				<el-form-item label="Servers">
-					<el-input v-model="serversText" type="textarea" :rows="3"
-						placeholder="One server per line (e.g. https://10.0.0.1:6443)" />
+					<div style="width: 100%">
+						<div v-for="(server, idx) in form.config!.servers" :key="idx"
+							style="display: flex; gap: 8px; margin-bottom: 8px; align-items: start;">
+							<div style="flex: 1">
+								<el-input v-model="form.config!.servers![idx]" placeholder="https://10.0.0.1:6443" />
+								<div v-if="server && !isValidServerUrl(server)"
+									style="color: var(--el-color-danger); font-size: 12px; margin-top: 2px;">
+									Invalid URL format (e.g. https://host:port/path)
+								</div>
+							</div>
+							<el-button type="danger" :icon="Delete" plain @click="removeServer(idx)" />
+						</div>
+						<el-button type="primary" size="small" :icon="Plus" @click="addServer()">
+							Add Server
+						</el-button>
+					</div>
 				</el-form-item>
 
 				<el-form-item label="Load Balancing Type">

@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package metrics.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/amimof/multikube/api/metrics/v1;metrics";
+
+service MetricsService {
+  rpc Get(GetRequest) returns (GetResponse) {
+    option (google.api.http) = {get: "/api/v1/metrics"};
+  }
+}
+
+message GetRequest {}
+
+message GetResponse {
+  int64 requests_total_counter = 1;
+  float request_duration = 2;
+
+  //  	// Request metrics
+  // ActiveRequests    metric.Int64UpDownCounter
+  // RequestSizeBytes  metric.Int64Histogram
+  // ResponseSizeBytes metric.Int64Histogram
+  //
+  // // Backend metrics
+  // BackendRequestsTotal   metric.Int64Counter
+  // BackendRequestDuration metric.Float64Histogram
+  // BackendActiveRequests  metric.Int64UpDownCounter
+  //
+  // // Auth metrics
+  // AuthRequestsTotal      metric.Int64Counter
+  // PolicyEvaluationsTotal metric.Int64Counter
+  //
+  // // Route matching metrics
+  // RouteMatchesTotal metric.Int64Counter
+  // RouteNoMatchTotal metric.Int64Counter
+}

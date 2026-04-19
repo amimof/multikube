@@ -8,14 +8,23 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Forwarder struct {
 	transport http.RoundTripper
+	metrics   *ProxyMetrics
 }
 
 func NewForwarder(transport http.RoundTripper) *Forwarder {
 	return &Forwarder{transport: transport}
+}
+
+func NewForwarderWithMetrics(transport http.RoundTripper, metrics *ProxyMetrics) *Forwarder {
+	return &Forwarder{transport: transport, metrics: metrics}
 }
 
 func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
@@ -24,6 +33,16 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 		if !ok {
 			http.Error(w, "no healthy upstream", http.StatusBadGateway)
 			return
+		}
+
+		backendName := target.Name
+		ctx := r.Context()
+
+		// Track backend active requests
+		if f.metrics != nil {
+			backendAttr := metric.WithAttributes(attribute.String("backend", backendName))
+			f.metrics.BackendActiveRequests.Add(ctx, 1, backendAttr)
+			defer f.metrics.BackendActiveRequests.Add(ctx, -1, backendAttr)
 		}
 
 		outReq := cloneRequestForTarget(r, target)
@@ -51,14 +70,35 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 				return
 			}
 		}
+
+		start := time.Now()
 		resp, err := f.transport.RoundTrip(outReq)
 		if err != nil {
+			if f.metrics != nil {
+				f.metrics.BackendRequestsTotal.Add(ctx, 1,
+					metric.WithAttributes(
+						attribute.String("backend", backendName),
+						attribute.Int("status_code", 502),
+					))
+				f.metrics.BackendRequestDuration.Record(ctx, time.Since(start).Seconds(),
+					metric.WithAttributes(attribute.String("backend", backendName)))
+			}
 			writeProxyError(w, err)
 			return
 		}
 		defer func() {
 			_ = resp.Body.Close()
 		}()
+
+		if f.metrics != nil {
+			f.metrics.BackendRequestsTotal.Add(ctx, 1,
+				metric.WithAttributes(
+					attribute.String("backend", backendName),
+					attribute.Int("status_code", resp.StatusCode),
+				))
+			f.metrics.BackendRequestDuration.Record(ctx, time.Since(start).Seconds(),
+				metric.WithAttributes(attribute.String("backend", backendName)))
+		}
 
 		copyHeader(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)

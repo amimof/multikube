@@ -31,6 +31,7 @@ import (
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/controller"
 	"github.com/amimof/multikube/pkg/events"
+	"github.com/amimof/multikube/pkg/instrumentation"
 	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
 	"github.com/amimof/multikube/pkg/repository"
 	"github.com/amimof/multikube/pkg/server"
@@ -311,6 +312,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Instrumentation
+	metricsOpts, meterProvider, err := instrumentation.InitServerMetrics(ctx)
+	if err != nil {
+		log.Error("Failed to start prometheus exporter", "error", err)
+		os.Exit(1)
+	}
+
 	var serverOpts []transport.NewServerOption
 	var gatewayOpts []transport.NewGatewayOption
 
@@ -379,7 +387,7 @@ func main() {
 	)
 
 	serverOpts = append(serverOpts,
-		// transport.WithGrpcOption(metricsOpts),
+		transport.WithGrpcOption(metricsOpts),
 		transport.WithGrpcOption(grpc.UnaryInterceptor(protovalidate_middleware.UnaryServerInterceptor(validator))),
 		transport.WithExchange(exchange),
 		transport.WithLogger(log),
@@ -485,6 +493,7 @@ func main() {
 		runtimeStore,
 		proxyv2.WithPublicKey(&rs256PrivKey.PublicKey),
 		proxyv2.WithPublisher(publisher),
+		proxyv2.WithMeter(meterProvider.Meter("multikube")),
 	)
 
 	handler := proxyv2.AuditMiddleware(publisher)(prox)
