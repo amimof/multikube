@@ -4,6 +4,7 @@ import { CertificateServiceApi, Configuration as CertificateConfiguration } from
 import { CredentialServiceApi, Configuration as CredentialConfiguration } from '@/generated/credential'
 import { PolicyServiceApi, Configuration as PolicyConfiguration } from '@/generated/policy'
 import { RouteServiceApi, Configuration as RouteConfiguration } from '@/generated/route'
+import { MetricsServiceApi, Configuration as MetricsConfiguration } from '@/generated/metrics'
 
 const clientOptions = {
   basePath: '',
@@ -17,6 +18,7 @@ export const api = {
   credentialService: new CredentialServiceApi(new CredentialConfiguration(clientOptions)),
   policyService: new PolicyServiceApi(new PolicyConfiguration(clientOptions)),
   routeService: new RouteServiceApi(new RouteConfiguration(clientOptions)),
+  metricsService: new MetricsServiceApi(new MetricsConfiguration(clientOptions)),
 }
 
 /**

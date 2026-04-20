@@ -9,7 +9,10 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-var interval = time.Second * 60
+var (
+	interval = time.Second * 60
+	points   = 120
+)
 
 // bucketPtr is the generic constraint: T is a struct type whose pointer *T
 // implements start() and zero(). This lets advanceBuckets and makeBuckets
@@ -242,7 +245,6 @@ type ProxyMetrics struct {
 // scraping) and a rolling in-memory time series (for the web UI).
 func InitMetrics(meter metric.Meter) (*ProxyMetrics, error) {
 	now := time.Now().Truncate(interval)
-	const points = 10
 
 	m := &ProxyMetrics{
 		RequestsTotal:          Int64Counter{Buckets: makeBuckets[Int64Bucket, *Int64Bucket](points, now)},
