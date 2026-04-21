@@ -24,6 +24,7 @@ import (
 	cav1 "github.com/amimof/multikube/pkg/client/ca/v1"
 	certificatev1 "github.com/amimof/multikube/pkg/client/certificate/v1"
 	credentialv1 "github.com/amimof/multikube/pkg/client/credential/v1"
+	healthv1 "github.com/amimof/multikube/pkg/client/health/v1"
 	policyv1 "github.com/amimof/multikube/pkg/client/policy/v1"
 	routev1 "github.com/amimof/multikube/pkg/client/route/v1"
 	tokenv1 "github.com/amimof/multikube/pkg/client/token/v1"
@@ -177,6 +178,7 @@ func getTLSConfig(cert, key, ca string, insecure bool) (*tls.Config, error) {
 
 type ClientSet struct {
 	conn                *grpc.ClientConn
+	healthV1Client      *healthv1.ClientV1
 	backendV1Client     backendv1.ClientV1
 	caV1Client          cav1.ClientV1
 	certificateV1Client certificatev1.ClientV1
@@ -221,6 +223,10 @@ func (c *ClientSet) TokenV1() tokenv1.ClientV1 {
 
 func (c *ClientSet) State() connectivity.State {
 	return c.conn.GetState()
+}
+
+func (c *ClientSet) HealthV1() *healthv1.ClientV1 {
+	return c.healthV1Client
 }
 
 func (c *ClientSet) Connect() {
@@ -318,6 +324,9 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	}
 	if c.tokenV1Client == nil {
 		c.tokenV1Client = tokenv1.NewClientV1WithConn(conn)
+	}
+	if c.healthV1Client == nil {
+		c.healthV1Client = healthv1.NewClientV1WithConn(conn)
 	}
 
 	return c, nil

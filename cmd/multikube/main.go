@@ -469,9 +469,10 @@ func main() {
 	go serveUnix(srv, errChan)
 
 	// Setup a clientset for the controllers
-	cs, err := client.New(socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}), client.WithGrpcDialOption(grpc.WithAuthority("localhost")))
+	cs, err := connectToServer(ctx, socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}), client.WithGrpcDialOption(grpc.WithAuthority("localhost")))
 	if err != nil {
-		log.Error("error creating clientset", "error", err.Error())
+		log.Error("error connecting to server", "error", err)
+		os.Exit(1)
 	}
 
 	defer func() {
@@ -835,4 +836,38 @@ func encodePubPem(key *ecdsa.PublicKey) (*ecdsa.PublicKey, error) {
 	}
 	pkcs8Pem := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pkcs8Der})
 	return jwt.ParseECPublicKeyFromPEM(pkcs8Pem)
+}
+
+func reconnectWithBackoff(addr string, opts ...client.NewClientOption) (*client.ClientSet, error) {
+	clientSet, err := client.New(
+		addr,
+		opts...,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := clientSet.HealthV1().Check(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("health check failed: %w (response: %v)", err, resp)
+	}
+
+	return clientSet, nil
+}
+
+func connectToServer(ctx context.Context, addr string, opts ...client.NewClientOption) (*client.ClientSet, error) {
+	interval := time.Second * 2
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		cs, err := reconnectWithBackoff(addr, opts...)
+		if err == nil {
+			return cs, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
