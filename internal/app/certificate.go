@@ -55,6 +55,10 @@ func (l *CertificateService) Create(ctx context.Context, certificate *certv1.Cer
 		l.Logger.Error("error ensuring certificate status fields", "error", err, "name", certificate.GetMeta().GetName())
 	}
 
+	if certificate.GetConfig().Enabled == nil {
+		certificate.GetConfig().Enabled = new(true)
+	}
+
 	// Create certificate in repo
 	newCertificate, err := l.Repo.Create(ctx, certificate)
 	if err != nil {
@@ -172,6 +176,10 @@ func (l *CertificateService) Update(ctx context.Context, id keys.ID, certificate
 	// Ensure status field
 	if err := EnsureCertInStatus(certificate.GetConfig().GetCertificateData(), certificate); err != nil {
 		l.Logger.Error("error ensuring certificate status fields", "error", err, "name", certificate.GetMeta().GetName())
+	}
+
+	if certificate.GetConfig().Enabled == nil {
+		certificate.GetConfig().Enabled = new(true)
 	}
 
 	// Update the certificate

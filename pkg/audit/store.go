@@ -87,8 +87,19 @@ func (s *FileStore) Start(ctx context.Context) error {
 	var startErr error
 
 	s.startOnce.Do(func() {
+		var err error
 		f, err := os.Open(s.path)
 		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				f, err = os.Create(s.path)
+				if err != nil {
+					startErr = fmt.Errorf("create audit file: %w", err)
+					return
+				}
+				s.fileMu.Lock()
+				s.file = f
+				s.fileMu.Unlock()
+			}
 			startErr = fmt.Errorf("open audit file: %w", err)
 			return
 		}

@@ -1,0 +1,97 @@
+/* src/styles/element/index.scss */
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: (
+    'primary': (
+      'base': #2563eb,
+    ),
+    'success': (
+      'base': #16a34a,
+    ),
+    'warning': (
+      'base': #d97706,
+    ),
+    'danger': (
+      'base': #dc2626,
+    ),
+    'info': (
+      'base': #64748b,
+    ),
+  ),
+
+  $text-color: (
+    'primary': #0f172a,
+    'regular': #334155,
+    'secondary': #64748b,
+    'placeholder': #94a3b8,
+    'disabled': #cbd5e1,
+  ),
+
+  $border-color: (
+    '': #cbd5e1,
+    'light': #dbe2ea,
+    'lighter': #e2e8f0,
+    'extra-light': #f1f5f9,
+    'dark': #94a3b8,
+    'darker': #64748b,
+  ),
+
+  $fill-color: (
+    '': #f8fafc,
+    'light': #f1f5f9,
+    'lighter': #f8fafc,
+    'extra-light': #ffffff,
+    'dark': #e2e8f0,
+    'darker': #cbd5e1,
+    'blank': #ffffff,
+  )
+);
+
+
+:root {
+  --sidebar-bg: #001529;
+  --sidebar-text: #ffffffa6;
+  --sidebar-text-active: #ffffff;
+  --sidebar-active-bg: #1890ff;
+  // --main-bg: #f5f7fa;
+  // --header-bg: #fff;
+  // --header-border: #e4e7ed;
+}
+
+/* html.dark .el-button:hover { */
+/* 	--el-button-hover-border-color: red; */
+/* } */
+/**/
+/* html.dark .el-button { */
+/* 	--el-button-border-color: #a48cf2; */
+/* } */
+
+/* html.dark { */
+/*   --main-bg: #141414; */
+/*   --header-bg: #1d1d1d; */
+/*   --header-border: #363637; */
+/*   --sidebar-bg: #000c17; */
+/**/
+/**/
+/* 	--el-color-black: #0b0d11; */
+/* 	--el-color-primary: #2d1e5d; */
+/* 	--el-color-success: #153f01; */
+/* 	--el-color-warning: #f7c67f; */
+/* 	--el-color-danger: #f16c75; */
+/* 	--el-color-error: #f16c75; */
+/* 	--el-color-info: #f16c75; */
+/**/
+/* } */
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  line-height: 1.6;
+  font-family: Helvetica Neue,Helvetica,PingFang SC,Hiragino Sans GB,Microsoft YaHei,Arial,sans-serif;
+  font-size: 15px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: color 0.3s, background-color 0.3s;
+}
+

@@ -197,14 +197,15 @@ onUnmounted(() => {
 					<el-tag :type="healthTag" effect="dark" size="small">
 						{{ healthyCount }}/{{ totalCount }} Healthy
 					</el-tag>
-					<el-tag :type="statusTagType" effect="dark" size="small">
+					<el-tag :type="statusPhase === 'READY' ? 'success' : statusPhase === 'Inactive' ? 'info' : 'warning'"
+						effect="dark" size="small">
 						{{ statusPhase }}
 					</el-tag>
 				</div>
 			</el-col>
 			<el-col :span="12" style="text-align: right">
-				<el-button :icon="Refresh" @click="handleRefresh">Reload</el-button>
-				<el-button :icon="Document" @click="yamlModalVisible = true">Edit YAML</el-button>
+				<el-button plain :icon="Refresh" @click="handleRefresh">Reload</el-button>
+				<el-button plain :icon="Document" @click="yamlModalVisible = true">Edit YAML</el-button>
 				<el-button type="primary" :loading="saving" @click="handleSave">
 					{{ saving ? 'Saving...' : 'Save' }}
 				</el-button>
@@ -369,7 +370,8 @@ onUnmounted(() => {
 						<template #header>
 							<div style="display: flex; justify-content: space-between; align-items: center">
 								<span style="font-weight: 600">Status</span>
-								<el-tag :type="statusTagType" effect="dark" size="small">
+								<el-tag :type="statusPhase === 'READY' ? 'success' : statusPhase === 'Inactive' ? 'info' : 'warning'"
+									effect="dark" size="small">
 									{{ statusPhase }}
 								</el-tag>
 							</div>
@@ -377,7 +379,8 @@ onUnmounted(() => {
 
 						<el-descriptions :column="1" border size="default">
 							<el-descriptions-item label="Phase">
-								<el-tag :type="statusTagType" effect="dark" size="small">
+								<el-tag :type="statusPhase === 'READY' ? 'success' : statusPhase === 'Inactive' ? 'info' : 'warning'"
+									effect="dark" size="small">
 									{{ statusPhase }}
 								</el-tag>
 							</el-descriptions-item>

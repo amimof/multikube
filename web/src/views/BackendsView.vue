@@ -241,8 +241,8 @@ onMounted(() => {
 				<h2 style="margin: 0">Backends</h2>
 			</el-col>
 			<el-col :span="12" style="text-align: right">
-				<el-button :icon="Refresh" @click="handleRefresh">Reload</el-button>
-				<el-button type="primary" :icon="Plus" @click="openCreate">New</el-button>
+				<el-button :icon="Refresh" plain @click="handleRefresh">Reload</el-button>
+				<el-button :icon="Plus" plain @click="openCreate">New</el-button>
 			</el-col>
 		</el-row>
 

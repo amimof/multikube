@@ -77,6 +77,10 @@ func (l *RouteService) Create(ctx context.Context, route *routev1.Route) (*route
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if route.GetConfig().Enabled == nil {
+		route.GetConfig().Enabled = new(true)
+	}
+
 	// Create route in repo
 	newRoute, err := l.Repo.Create(ctx, route)
 	if err != nil {
@@ -188,6 +192,10 @@ func (l *RouteService) Update(ctx context.Context, id keys.ID, route *routev1.Ro
 	existingRoute, err := l.Repo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if route.GetConfig().Enabled == nil {
+		route.GetConfig().Enabled = new(true)
 	}
 
 	// Update the route

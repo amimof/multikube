@@ -43,6 +43,10 @@ func (l *PolicyService) Create(ctx context.Context, policy *policyv1.Policy) (*p
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if policy.GetConfig().Enabled == nil {
+		policy.GetConfig().Enabled = new(true)
+	}
+
 	newPolicy, err := l.Repo.Create(ctx, policy)
 	if err != nil {
 		l.Logger.Error("error creating policy", "error", err, "name", policy.GetMeta().GetName())
@@ -142,6 +146,10 @@ func (l *PolicyService) Update(ctx context.Context, id keys.ID, policy *policyv1
 	existingPolicy, err := l.Repo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if policy.GetConfig().Enabled == nil {
+		policy.GetConfig().Enabled = new(true)
 	}
 
 	updated, err := l.Repo.Update(ctx, id, policy)

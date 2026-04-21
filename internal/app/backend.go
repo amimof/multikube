@@ -117,6 +117,10 @@ func (l *BackendService) Create(ctx context.Context, be *backendv1.Backend) (*ba
 		be.GetConfig().Type = backendv1.LoadBalancingType_LOAD_BALANCING_TYPE_ROUND_ROBIN
 	}
 
+	if be.GetConfig().Enabled == nil {
+		be.GetConfig().Enabled = new(true)
+	}
+
 	// Create volume in repo
 	newVolume, err := l.Repo.Create(ctx, be)
 	if err != nil {
@@ -244,6 +248,10 @@ func (l *BackendService) Update(ctx context.Context, id keys.ID, be *backendv1.B
 			UsernameClaim: "sub",
 			GroupsClaim:   "groups",
 		}
+	}
+
+	if be.GetConfig().Enabled == nil {
+		be.GetConfig().Enabled = new(true)
 	}
 
 	// Update the volume

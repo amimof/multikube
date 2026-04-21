@@ -1,0 +1,18 @@
+/* src/styles/element/dark-overrides.css */
+html.dark {
+  --el-color-primary: #60a5fa;
+  --el-color-primary-light-3: #93c5fd;
+  --el-color-primary-dark-2: #3b82f6;
+
+  --el-bg-color: #0f172a;
+  --el-bg-color-page: #020617;
+
+  --el-text-color-primary: #f8fafc;
+  --el-text-color-regular: #cbd5e1;
+  --el-text-color-secondary: #94a3b8;
+
+  --el-border-color: #334155;
+  --el-border-color-light: #475569;
+  --el-fill-color: #1e293b;
+  --el-fill-color-light: #334155;
+}

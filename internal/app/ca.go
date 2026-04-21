@@ -49,6 +49,10 @@ func (l *CertificateAuthorityService) Create(ctx context.Context, ca *cav1.Certi
 		l.Logger.Error("error ensuring certificate status fields", "error", err, "name", ca.GetMeta().GetName())
 	}
 
+	if ca.GetConfig().Enabled == nil {
+		ca.GetConfig().Enabled = new(true)
+	}
+
 	// Create ca in repo
 	newCert, err := l.Repo.Create(ctx, ca)
 	if err != nil {
@@ -166,6 +170,10 @@ func (l *CertificateAuthorityService) Update(ctx context.Context, id keys.ID, ca
 	// Ensure status field
 	if err := EnsureCertInStatus(ca.GetConfig().GetCertificateData(), ca); err != nil {
 		l.Logger.Error("error ensuring certificate status fields", "error", err, "name", ca.GetMeta().GetName())
+	}
+
+	if ca.GetConfig().Enabled == nil {
+		ca.GetConfig().Enabled = new(true)
 	}
 
 	// Update the ca

@@ -11,22 +11,26 @@ import {
 	List,
 	Plus,
 	Upload,
+	Sunny,
+	Moon,
 } from '@element-plus/icons-vue'
 import ApplyResourcesModal from '@/components/ApplyResourcesModal.vue'
 import ImportKubeconfigModal from '@/components/ImportKubeconfigModal.vue'
+import { useTheme } from '@/composables/useTheme'
 
 const route = useRoute()
 const showApplyModal = ref(false)
 const showImportModal = ref(false)
+const { isDark, toggleTheme } = useTheme()
 </script>
 
 <template>
 	<el-container style="height: 100vh">
-		<el-aside width="220px" style="background-color: #001529">
+		<el-aside width="220px" :style="{ backgroundColor: 'var(--sidebar-bg)' }">
 			<div style="padding: 20px; text-align: center">
 				<h2 style="color: #fff; margin: 0; font-size: 18px">Multikube</h2>
 			</div>
-			<el-menu :default-active="route.path" router background-color="#001529" text-color="#ffffffa6"
+			<el-menu :default-active="route.path" router :background-color="'var(--sidebar-bg)'" text-color="#ffffffa6"
 				active-text-color="#ffffff" style="border-right: none">
 				<el-menu-item index="/">
 					<el-icon>
@@ -75,8 +79,10 @@ const showImportModal = ref(false)
 		<el-container direction="vertical">
 			<el-header class="app-header">
 				<div />
-				<div style="display: flex; gap: 8px">
-					<el-button :icon="Upload" @click="showImportModal = true">
+				<div style="display: flex; gap: 8px; align-items: center">
+					<el-switch v-model="isDark" :active-action-icon="Moon" :inactive-action-icon="Sunny" />
+					<!-- <el-button :icon="isDark ? Sunny : Moon" circle @click="toggleTheme" /> -->
+					<el-button :icon="Upload" plain @click="showImportModal = true">
 						Import
 					</el-button>
 					<el-button type="success" :icon="Plus" @click="showApplyModal = true">
@@ -84,7 +90,7 @@ const showImportModal = ref(false)
 					</el-button>
 				</div>
 			</el-header>
-			<el-main style="background-color: #f5f7fa; padding: 20px">
+			<el-main style="padding: 20px" class="app-main">
 				<RouterView />
 			</el-main>
 		</el-container>
@@ -98,13 +104,8 @@ const showImportModal = ref(false)
 </template>
 
 <style>
-body {
-	margin: 0;
-	padding: 0;
-}
-
 .el-menu-item.is-active {
-	background-color: #1890ff !important;
+	background-color: var(--el-color-primary) !important;
 }
 
 .clickable-row {
@@ -117,7 +118,13 @@ body {
 	justify-content: space-between;
 	height: 50px;
 	padding: 0 20px;
-	background-color: #fff;
-	border-bottom: 1px solid #e4e7ed;
+	background-color: var(--header-bg);
+	border-bottom: 1px solid var(--header-border);
+	transition: background-color 0.3s, border-color 0.3s;
+}
+
+.app-main {
+	background-color: var(--main-bg);
+	transition: background-color 0.3s;
 }
 </style>

@@ -44,6 +44,10 @@ func (l *CredentialService) Create(ctx context.Context, credential *credentialv1
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if credential.GetConfig().Enabled == nil {
+		credential.GetConfig().Enabled = new(true)
+	}
+
 	// Create credential in repo
 	newCredential, err := l.Repo.Create(ctx, credential)
 	if err != nil {
@@ -153,6 +157,10 @@ func (l *CredentialService) Update(ctx context.Context, id keys.ID, credential *
 	existingCredential, err := l.Repo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	if credential.GetConfig().Enabled == nil {
+		credential.GetConfig().Enabled = new(true)
 	}
 
 	// Update the credential
