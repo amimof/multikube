@@ -18,6 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Build Web UI
+        run: |
+          cd web/
+          npm install
+          npm run build
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

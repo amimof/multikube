@@ -87,7 +87,6 @@ func (s *FileStore) Start(ctx context.Context) error {
 	var startErr error
 
 	s.startOnce.Do(func() {
-		var err error
 		f, err := os.Open(s.path)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -99,9 +98,10 @@ func (s *FileStore) Start(ctx context.Context) error {
 				s.fileMu.Lock()
 				s.file = f
 				s.fileMu.Unlock()
+			} else {
+				startErr = fmt.Errorf("open audit file: %w", err)
+				return
 			}
-			startErr = fmt.Errorf("open audit file: %w", err)
-			return
 		}
 
 		s.fileMu.Lock()

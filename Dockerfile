@@ -1,7 +1,14 @@
+FROM node:24-alpine AS build-env-ui
+LABEL maintaner="@amimof (https://github.com/amimof)"
+COPY . /go/src/github.com/amimof/multikube
+WORKDIR /go/src/github.com/amimof/multikube/web
+RUN npm install && npm run build
+
 FROM golang:1.26-alpine AS build-env
 RUN  apk add --no-cache git make ca-certificates
 LABEL maintaner="@amimof (https://github.com/amimof)"
 COPY . /go/src/github.com/amimof/multikube
+COPY --from=build-env-ui /go/src/github.com/amimof/multikube/web /go/src/github.com/amimof/multikube
 WORKDIR /go/src/github.com/amimof/multikube
 RUN make
 
