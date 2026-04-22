@@ -72,9 +72,6 @@ func (c *Controller) runHeartbeat(ctx context.Context) {
 	<-ctx.Done()
 }
 
-func (c *Controller) runReadyProbe(ctx context.Context, be *backendv1.Backend) {
-}
-
 func (c *Controller) NewHeartbeat(name, kind string, be *backendv1.Probe, target *proxy.BackendRuntime, cb *Callbacks) *Heartbeat {
 	initialDelaySeconds := be.GetInitialDelaySeconds()
 	periodSeconds := int(be.GetPeriodSeconds())
