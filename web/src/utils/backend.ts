@@ -14,15 +14,22 @@ export function lbLabel(type?: string): string {
 }
 
 /**
- * Count healthy servers from the configured server list.
  * Total is always based on configured servers, not observed statuses.
  */
+export function countReadyServers(
+  servers: string[],
+  targetStatuses?: Record<string, V1TargetStatus> | undefined,
+): number {
+  if (!targetStatuses) return 0
+  return servers.filter((url) => targetStatuses[url]?.readiness?.isReady === true).length
+}
+
 export function countHealthyServers(
   servers: string[],
   targetStatuses?: Record<string, V1TargetStatus> | undefined,
 ): number {
   if (!targetStatuses) return 0
-  return servers.filter((url) => targetStatuses[url]?.phase === 'Healthy').length
+  return servers.filter((url) => targetStatuses[url]?.healthiness?.isHealthy === true).length
 }
 
 export function countTotalServers(servers: string[]): number {
@@ -36,4 +43,31 @@ export function healthTagType(healthy: number, total: number): HealthTagType {
   if (healthy === total) return 'success'
   if (healthy === 0) return 'danger'
   return 'warning'
+}
+
+export function readinessLabel(isReady?: boolean): string {
+  if (isReady === true) return 'Ready'
+  if (isReady === false) return 'Not Ready'
+  return 'Unknown'
+}
+
+export function healthinessLabel(isHealthy?: boolean): string {
+  if (isHealthy === true) return 'Healthy'
+  if (isHealthy === false) return 'Unhealthy'
+  return 'Unknown'
+}
+
+export function booleanStatusTagType(value?: boolean): HealthTagType {
+  if (value === true) return 'success'
+  if (value === false) return 'danger'
+  return 'info'
+}
+
+export type TargetVisualState = 'healthy' | 'degraded' | 'unknown'
+
+export function targetVisualState(status?: V1TargetStatus): TargetVisualState {
+  if (!status) return 'unknown'
+  if (status.readiness?.isReady === false || status.healthiness?.isHealthy === false) return 'degraded'
+  if (status.readiness?.isReady === true && status.healthiness?.isHealthy === true) return 'healthy'
+  return 'unknown'
 }

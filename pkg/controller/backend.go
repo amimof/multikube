@@ -36,6 +36,8 @@ type Controller struct {
 	cache             *compile.State
 	heartBeatInterval time.Duration
 	heartBeatTimeout  time.Duration
+	probes            map[string]map[string]*Heartbeat
+	ctx               context.Context
 }
 
 type ControllerCache = compile.State
@@ -79,33 +81,90 @@ func WithHeartBeatTimeout(timeout time.Duration) NewOption {
 }
 
 func (c *Controller) onBackendCreate(ctx context.Context, b *backendv1.Backend) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.logger.Info("on create handler", "backend", b.GetMeta().GetName())
 
 	// Update cache
+	c.mu.Lock()
 	c.cache.Backends[b.GetMeta().GetName()] = b
+	c.mu.Unlock()
 
 	// Compile
-	return c.compileRuntime(ctx)
+	err := c.compileRuntime(ctx)
+	if err != nil {
+		return err
+	}
+
+	c.runHealthProbe(
+		c.ctx,
+		b.GetMeta().GetName(),
+		b.GetConfig().GetProbes().GetHealthiness(),
+		&Callbacks{
+			OnSuccess: c.setTargetHealthy,
+			OnFailure: c.setTargetUnhealthy,
+		},
+		"health",
+	)
+	c.runHealthProbe(
+		c.ctx,
+		b.GetMeta().GetName(),
+		b.GetConfig().GetProbes().GetReadiness(),
+		&Callbacks{
+			OnSuccess: c.setTargetReady,
+			OnFailure: c.setTargetNotReady,
+		},
+		"ready",
+	)
+
+	return nil
 }
 
-func (c *Controller) onBackendUpdate(ctx context.Context, p *backendv1.Backend) error {
+func (c *Controller) onBackendUpdate(ctx context.Context, b *backendv1.Backend) error {
+	c.logger.Info("on update handler", "backend", b.GetMeta().GetName())
+
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.logger.Info("on update handler", "backend", p.GetMeta().GetName())
+	c.cache.Backends[b.GetMeta().GetName()] = b
+	c.mu.Unlock()
 
-	c.cache.Backends[p.GetMeta().GetName()] = p
+	// Compile
+	err := c.compileRuntime(ctx)
+	if err != nil {
+		return err
+	}
 
-	return c.compileRuntime(ctx)
+	// Update probes
+	c.removeHealthProbe(ctx, b)
+	c.runHealthProbe(
+		c.ctx,
+		b.GetMeta().GetName(),
+		b.GetConfig().GetProbes().GetHealthiness(),
+		&Callbacks{
+			OnSuccess: c.setTargetHealthy,
+			OnFailure: c.setTargetUnhealthy,
+		},
+		"health",
+	)
+	c.runHealthProbe(
+		c.ctx,
+		b.GetMeta().GetName(),
+		b.GetConfig().GetProbes().GetReadiness(),
+		&Callbacks{
+			OnSuccess: c.setTargetReady,
+			OnFailure: c.setTargetNotReady,
+		},
+		"ready",
+	)
+
+	return nil
 }
 
 func (c *Controller) onBackendDelete(ctx context.Context, p *backendv1.Backend) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	c.logger.Info("on delete handler", "backend", p.GetMeta().GetName())
 
+	c.mu.Lock()
 	delete(c.cache.Backends, p.GetMeta().GetName())
+	c.mu.Unlock()
+
+	c.removeHealthProbe(ctx, p)
 
 	return c.compileRuntime(ctx)
 }
@@ -387,10 +446,15 @@ func (c *Controller) onInit(ctx context.Context) error {
 }
 
 func (c *Controller) Run(ctx context.Context) {
+	c.ctx = ctx
+
 	if err := c.onInit(ctx); err != nil {
 		c.logger.Error("error initializing controller", "error", err)
 		return
 	}
+
+	// Long lived ctx used only for cancellation
+	c.ctx = ctx
 
 	// Start heartbeats
 	go c.runHeartbeat(ctx)
@@ -452,6 +516,7 @@ func New(cs *client.ClientSet, opts ...NewOption) *Controller {
 			Credentials:            map[string]*credentialv1.Credential{},
 			Policies:               map[string]*policyv1.Policy{},
 		},
+		probes: make(map[string]map[string]*Heartbeat),
 	}
 	for _, opt := range opts {
 		opt(m)

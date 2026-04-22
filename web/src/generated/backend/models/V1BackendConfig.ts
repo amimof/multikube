@@ -20,6 +20,13 @@ import {
     V1LoadBalancingTypeToJSON,
     V1LoadBalancingTypeToJSONTyped,
 } from './V1LoadBalancingType';
+import type { V1ProbeConfig } from './V1ProbeConfig';
+import {
+    V1ProbeConfigFromJSON,
+    V1ProbeConfigFromJSONTyped,
+    V1ProbeConfigToJSON,
+    V1ProbeConfigToJSONTyped,
+} from './V1ProbeConfig';
 import type { V1ImpersonationConfig } from './V1ImpersonationConfig';
 import {
     V1ImpersonationConfigFromJSON,
@@ -82,6 +89,12 @@ export interface V1BackendConfig {
      * @memberof V1BackendConfig
      */
     enabled?: boolean;
+    /**
+     * 
+     * @type {V1ProbeConfig}
+     * @memberof V1BackendConfig
+     */
+    probes?: V1ProbeConfig;
 }
 
 
@@ -111,6 +124,7 @@ export function V1BackendConfigFromJSONTyped(json: any, ignoreDiscriminator: boo
         'type': json['type'] == null ? undefined : V1LoadBalancingTypeFromJSON(json['type']),
         'impersonationConfig': json['impersonationConfig'] == null ? undefined : V1ImpersonationConfigFromJSON(json['impersonationConfig']),
         'enabled': json['enabled'] == null ? undefined : json['enabled'],
+        'probes': json['probes'] == null ? undefined : V1ProbeConfigFromJSON(json['probes']),
     };
 }
 
@@ -133,6 +147,7 @@ export function V1BackendConfigToJSONTyped(value?: V1BackendConfig | null, ignor
         'type': V1LoadBalancingTypeToJSON(value['type']),
         'impersonationConfig': V1ImpersonationConfigToJSON(value['impersonationConfig']),
         'enabled': value['enabled'],
+        'probes': V1ProbeConfigToJSON(value['probes']),
     };
 }
 

@@ -1,24 +1,32 @@
 
-# V1TargetStatus
+# V1Probe
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`readiness` | [V1TargetReadyStatus](V1TargetReadyStatus.md)
-`healthiness` | [V1TargetHealthStatus](V1TargetHealthStatus.md)
+`path` | string
+`timeoutSeconds` | string
+`periodSeconds` | string
+`failureThreshold` | string
+`successThreshold` | string
+`initialDelaySeconds` | string
 
 ## Example
 
 ```typescript
-import type { V1TargetStatus } from ''
+import type { V1Probe } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "readiness": null,
-  "healthiness": null,
-} satisfies V1TargetStatus
+  "path": null,
+  "timeoutSeconds": null,
+  "periodSeconds": null,
+  "failureThreshold": null,
+  "successThreshold": null,
+  "initialDelaySeconds": null,
+} satisfies V1Probe
 
 console.log(example)
 
@@ -27,7 +35,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as V1TargetStatus
+const exampleParsed = JSON.parse(exampleJSON) as V1Probe
 console.log(exampleParsed)
 ```
 

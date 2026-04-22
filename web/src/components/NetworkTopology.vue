@@ -3,9 +3,13 @@ import { computed } from 'vue'
 
 export interface NormalizedServer {
 	url: string
-	phase: string
-	reason: string
-	lastTransitionTime?: Date
+	readiness: string
+	healthiness: string
+	readinessReason: string
+	healthinessReason: string
+	readinessLastTransitionTime?: Date
+	healthinessLastTransitionTime?: Date
+	visualState: 'healthy' | 'degraded' | 'unknown'
 }
 
 const props = defineProps<{
@@ -61,21 +65,21 @@ function bezierPath(index: number): string {
 	return `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`
 }
 
-function pathClass(phase: string): string {
-	if (phase === 'Healthy') return 'path-healthy'
-	if (phase === 'Unhealthy') return 'path-unhealthy'
+function pathClass(state: NormalizedServer['visualState']): string {
+	if (state === 'healthy') return 'path-healthy'
+	if (state === 'degraded') return 'path-unhealthy'
 	return 'path-unknown'
 }
 
-function dotClass(phase: string): string {
-	if (phase === 'Healthy') return 'dot-healthy'
-	if (phase === 'Unhealthy') return 'dot-unhealthy'
+function dotClass(state: NormalizedServer['visualState']): string {
+	if (state === 'healthy') return 'dot-healthy'
+	if (state === 'degraded') return 'dot-unhealthy'
 	return 'dot-unknown'
 }
 
-function nodeClass(phase: string): string {
-	if (phase === 'Healthy') return 'target-rect-healthy'
-	if (phase === 'Unhealthy') return 'target-rect-unhealthy'
+function nodeClass(state: NormalizedServer['visualState']): string {
+	if (state === 'healthy') return 'target-rect-healthy'
+	if (state === 'degraded') return 'target-rect-unhealthy'
 	return 'target-rect-unknown'
 }
 
@@ -89,7 +93,7 @@ function truncateUrl(url: string, max = 32): string {
 <template>
 	<svg :viewBox="`0 0 ${svgW} ${svgH}`" :width="svgW" :height="svgH" class="topology-svg">
 		<!-- Connection paths -->
-		<path v-for="(server, i) in servers" :key="'path-' + server.url" :d="bezierPath(i)" :class="pathClass(server.phase)"
+		<path v-for="(server, i) in servers" :key="'path-' + server.url" :d="bezierPath(i)" :class="pathClass(server.visualState)"
 			fill="none" stroke-width="2" />
 
 		<!-- Root node -->
@@ -106,16 +110,19 @@ function truncateUrl(url: string, max = 32): string {
 		<!-- Target server nodes -->
 		<g v-for="(server, i) in servers" :key="'node-' + server.url" class="target-node">
 			<rect :x="targetX" :y="targetY(i)" :width="TARGET_W" :height="TARGET_H" rx="8" ry="8"
-				:class="nodeClass(server.phase)" />
+				:class="nodeClass(server.visualState)" />
 			<!-- Health dot -->
-			<circle :cx="targetX + 18" :cy="targetY(i) + TARGET_H / 2" r="6" :class="dotClass(server.phase)" />
+			<circle :cx="targetX + 18" :cy="targetY(i) + TARGET_H / 2" r="6" :class="dotClass(server.visualState)" />
 			<!-- Server URL -->
 			<text :x="targetX + 32" :y="targetY(i) + 21" class="target-url">
 				{{ truncateUrl(server.url) }}
 			</text>
-			<!-- Phase label -->
-			<text :x="targetX + 32" :y="targetY(i) + 38" class="target-phase" :class="'phase-' + server.phase.toLowerCase()">
-				{{ server.phase }}
+			<!-- Status labels -->
+			<text :x="targetX + 32" :y="targetY(i) + 35" class="target-phase">
+				R: {{ server.readiness }}
+			</text>
+			<text :x="targetX + 152" :y="targetY(i) + 35" class="target-phase">
+				H: {{ server.healthiness }}
 			</text>
 		</g>
 	</svg>

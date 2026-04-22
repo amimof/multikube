@@ -14,6 +14,7 @@ Name | Type
 `type` | [V1LoadBalancingType](V1LoadBalancingType.md)
 `impersonationConfig` | [V1ImpersonationConfig](V1ImpersonationConfig.md)
 `enabled` | boolean
+`probes` | [V1ProbeConfig](V1ProbeConfig.md)
 
 ## Example
 
@@ -30,6 +31,7 @@ const example = {
   "type": null,
   "impersonationConfig": null,
   "enabled": null,
+  "probes": null,
 } satisfies V1BackendConfig
 
 console.log(example)

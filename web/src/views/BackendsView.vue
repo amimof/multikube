@@ -7,12 +7,13 @@ import { useBackendStore } from '@/stores/backend'
 import { useCaStore } from '@/stores/ca'
 import { useCredentialStore } from '@/stores/credential'
 import { useResourceTable } from '@/composables/useResourceTable'
-import { lbTypeLabels, countHealthyServers, countTotalServers, healthTagType } from '@/utils/backend'
+import { lbTypeLabels, countHealthyServers, countReadyServers, countTotalServers, healthTagType } from '@/utils/backend'
 import { formatDate } from '@/utils/format'
 import { V1LoadBalancingType } from '@/generated/backend'
 import type { V1Backend } from '@/generated/backend'
 import LabelEditor from '@/components/LabelEditor.vue'
 import ConfirmDelete from '@/components/ConfirmDelete.vue'
+import { normalizeBackendForm } from '@/utils/backendForm'
 
 const backendStore = useBackendStore()
 const caStore = useCaStore()
@@ -32,7 +33,7 @@ const bulkDeleting = ref(false)
 const form = ref<V1Backend>(createEmptyBackend())
 
 function createEmptyBackend(): V1Backend {
-	return {
+	return normalizeBackendForm({
 		version: 'backend/v1',
 		meta: { name: '', labels: {} },
 		config: {
@@ -51,7 +52,7 @@ function createEmptyBackend(): V1Backend {
 				extraClaims: [],
 			},
 		},
-	}
+	})
 }
 
 const lbTypeOptions = [
@@ -115,9 +116,17 @@ function sortByCreated(a: any, b: any): number {
 function sortByReady(a: any, b: any): number {
 	const ta = countTotalServers(a.config?.servers ?? [])
 	const tb = countTotalServers(b.config?.servers ?? [])
-	const ra = ta === 0 ? -1 : countHealthyServers(a.config?.servers ?? [], a.status?.targetStatuses) / ta
-	const rb = tb === 0 ? -1 : countHealthyServers(b.config?.servers ?? [], b.status?.targetStatuses) / tb
+	const ra = ta === 0 ? -1 : countReadyServers(a.config?.servers ?? [], a.status?.targetStatuses) / ta
+	const rb = tb === 0 ? -1 : countReadyServers(b.config?.servers ?? [], b.status?.targetStatuses) / tb
 	return ra - rb
+}
+
+function sortByHealthy(a: any, b: any): number {
+	const ta = countTotalServers(a.config?.servers ?? [])
+	const tb = countTotalServers(b.config?.servers ?? [])
+	const ha = ta === 0 ? -1 : countHealthyServers(a.config?.servers ?? [], a.status?.targetStatuses) / ta
+	const hb = tb === 0 ? -1 : countHealthyServers(b.config?.servers ?? [], b.status?.targetStatuses) / tb
+	return ha - hb
 }
 
 function sortByStatus(a: any, b: any): number {
@@ -290,6 +299,16 @@ onMounted(() => {
 				<el-table-column label="Ready" width="100" sortable :sort-method="sortByReady">
 					<template #default="{ row }">
 						<el-tag
+							:type="healthTagType(countReadyServers(row.config?.servers ?? [], row.status?.targetStatuses), countTotalServers(row.config?.servers ?? []))"
+							effect="dark" size="small">
+							{{ countReadyServers(row.config?.servers ?? [], row.status?.targetStatuses) }}/{{
+								countTotalServers(row.config?.servers ?? []) }}
+						</el-tag>
+					</template>
+				</el-table-column>
+				<el-table-column label="Healthy" width="100" sortable :sort-method="sortByHealthy">
+					<template #default="{ row }">
+						<el-tag
 							:type="healthTagType(countHealthyServers(row.config?.servers ?? [], row.status?.targetStatuses), countTotalServers(row.config?.servers ?? []))"
 							effect="dark" size="small">
 							{{ countHealthyServers(row.config?.servers ?? [], row.status?.targetStatuses) }}/{{
@@ -387,10 +406,10 @@ onMounted(() => {
 				</el-form-item>
 
 				<!-- Advanced section -->
-				<el-collapse style="margin-top: 12px">
-					<el-collapse-item title="Advanced" name="advanced">
-						<el-form-item label="Enable Impersonation" style="margin-top: 12px">
-							<el-switch v-model="form.config!.impersonationConfig!.enabled" />
+					<el-collapse style="margin-top: 12px">
+						<el-collapse-item title="Advanced" name="advanced">
+							<el-form-item label="Enable Impersonation" style="margin-top: 12px">
+								<el-switch v-model="form.config!.impersonationConfig!.enabled" />
 						</el-form-item>
 
 						<el-form-item label="Username Claim">
@@ -403,12 +422,64 @@ onMounted(() => {
 								:disabled="!form.config!.impersonationConfig!.enabled" />
 						</el-form-item>
 
-						<el-form-item label="Extra Claims">
-							<el-input v-model="extraClaimsText" type="textarea" :rows="3" placeholder="One claim per line"
-								:disabled="!form.config!.impersonationConfig!.enabled" />
-						</el-form-item>
-					</el-collapse-item>
-				</el-collapse>
+							<el-form-item label="Extra Claims">
+								<el-input v-model="extraClaimsText" type="textarea" :rows="3" placeholder="One claim per line"
+									:disabled="!form.config!.impersonationConfig!.enabled" />
+							</el-form-item>
+
+							<el-divider content-position="left">Health Probe</el-divider>
+
+							<el-form-item label="Path">
+								<el-input v-model="form.config!.probes!.healthiness!.path" placeholder="/healthz" />
+							</el-form-item>
+
+							<el-form-item label="Timeout Seconds">
+								<el-input v-model="form.config!.probes!.healthiness!.timeoutSeconds" placeholder="1" />
+							</el-form-item>
+
+							<el-form-item label="Period Seconds">
+								<el-input v-model="form.config!.probes!.healthiness!.periodSeconds" placeholder="5" />
+							</el-form-item>
+
+							<el-form-item label="Failure Threshold">
+								<el-input v-model="form.config!.probes!.healthiness!.failureThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Success Threshold">
+								<el-input v-model="form.config!.probes!.healthiness!.successThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Initial Delay Seconds">
+								<el-input v-model="form.config!.probes!.healthiness!.initialDelaySeconds" placeholder="1" />
+							</el-form-item>
+
+							<el-divider content-position="left">Readiness Probe</el-divider>
+
+							<el-form-item label="Path">
+								<el-input v-model="form.config!.probes!.readiness!.path" placeholder="/readyz" />
+							</el-form-item>
+
+							<el-form-item label="Timeout Seconds">
+								<el-input v-model="form.config!.probes!.readiness!.timeoutSeconds" placeholder="1" />
+							</el-form-item>
+
+							<el-form-item label="Period Seconds">
+								<el-input v-model="form.config!.probes!.readiness!.periodSeconds" placeholder="5" />
+							</el-form-item>
+
+							<el-form-item label="Failure Threshold">
+								<el-input v-model="form.config!.probes!.readiness!.failureThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Success Threshold">
+								<el-input v-model="form.config!.probes!.readiness!.successThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Initial Delay Seconds">
+								<el-input v-model="form.config!.probes!.readiness!.initialDelaySeconds" placeholder="1" />
+							</el-form-item>
+						</el-collapse-item>
+					</el-collapse>
 			</el-form>
 
 			<template #footer>

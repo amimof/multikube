@@ -17,10 +17,21 @@ import type { NormalizedServer } from '@/components/NetworkTopology.vue'
 import LabelEditor from '@/components/LabelEditor.vue'
 import MetadataDisplay from '@/components/MetadataDisplay.vue'
 import EditYamlModal from '@/components/EditYamlModal.vue'
-import { lbLabel, countHealthyServers, countTotalServers, healthTagType } from '@/utils/backend'
+import {
+	lbLabel,
+	countHealthyServers,
+	countReadyServers,
+	countTotalServers,
+	healthTagType,
+	readinessLabel,
+	healthinessLabel,
+	booleanStatusTagType,
+	targetVisualState,
+} from '@/utils/backend'
 import { V1LoadBalancingType } from '@/generated/backend'
 import type { V1Backend } from '@/generated/backend'
 import { formatDate, formatDateFull } from '@/utils/format'
+import { normalizeBackendForm } from '@/utils/backendForm'
 
 const route = useRoute()
 const router = useRouter()
@@ -39,7 +50,7 @@ const form = ref<V1Backend>({})
 
 watch(backend, (val) => {
 	if (val) {
-		form.value = structuredClone(toRaw(val))
+		form.value = normalizeBackendForm(structuredClone(toRaw(val)))
 	}
 }, { immediate: true })
 
@@ -94,17 +105,25 @@ const normalizedServers = computed<NormalizedServer[]>(() => {
 		const status = statuses[url]
 		return {
 			url,
-			phase: status?.phase ?? 'Unknown',
-			reason: status?.reason ?? '',
-			lastTransitionTime: status?.lastTransitionTime,
+			readiness: readinessLabel(status?.readiness?.isReady),
+			healthiness: healthinessLabel(status?.healthiness?.isHealthy),
+			readinessReason: status?.readiness?.reason ?? '',
+			healthinessReason: status?.healthiness?.reason ?? '',
+			readinessLastTransitionTime: status?.readiness?.lastTransitionTime,
+			healthinessLastTransitionTime: status?.healthiness?.lastTransitionTime,
+			visualState: targetVisualState(status),
 		}
 	})
 })
 
+const readyCount = computed(() =>
+	countReadyServers(backend.value?.config?.servers ?? [], backend.value?.status?.targetStatuses),
+)
 const healthyCount = computed(() =>
 	countHealthyServers(backend.value?.config?.servers ?? [], backend.value?.status?.targetStatuses),
 )
 const totalCount = computed(() => countTotalServers(backend.value?.config?.servers ?? []))
+const readinessTag = computed(() => healthTagType(readyCount.value, totalCount.value))
 const healthTag = computed(() => healthTagType(healthyCount.value, totalCount.value))
 
 const yamlContent = computed(() => {
@@ -194,6 +213,9 @@ onUnmounted(() => {
 				<div style="display: flex; align-items: center; gap: 12px">
 					<el-button :icon="ArrowLeft" @click="goBack" text>Backends</el-button>
 					<h2 style="margin: 0">{{ backendName }}</h2>
+					<el-tag :type="readinessTag" effect="dark" size="small">
+						{{ readyCount }}/{{ totalCount }} Ready
+					</el-tag>
 					<el-tag :type="healthTag" effect="dark" size="small">
 						{{ healthyCount }}/{{ totalCount }} Healthy
 					</el-tag>
@@ -353,12 +375,64 @@ onUnmounted(() => {
 											:disabled="!form.config!.impersonationConfig!.enabled" />
 									</el-form-item>
 
-									<el-form-item label="Extra Claims">
-										<el-input v-model="extraClaimsText" type="textarea" :rows="3" placeholder="One claim per line"
-											:disabled="!form.config!.impersonationConfig!.enabled" />
-									</el-form-item>
-								</el-collapse-item>
-							</el-collapse>
+							<el-form-item label="Extra Claims">
+								<el-input v-model="extraClaimsText" type="textarea" :rows="3" placeholder="One claim per line"
+									:disabled="!form.config!.impersonationConfig!.enabled" />
+							</el-form-item>
+
+							<el-divider content-position="left">Health Probe</el-divider>
+
+							<el-form-item label="Path">
+								<el-input v-model="form.config!.probes!.healthiness!.path" placeholder="/healthz" />
+							</el-form-item>
+
+							<el-form-item label="Timeout Seconds">
+								<el-input v-model="form.config!.probes!.healthiness!.timeoutSeconds" placeholder="1" />
+							</el-form-item>
+
+							<el-form-item label="Period Seconds">
+								<el-input v-model="form.config!.probes!.healthiness!.periodSeconds" placeholder="5" />
+							</el-form-item>
+
+							<el-form-item label="Failure Threshold">
+								<el-input v-model="form.config!.probes!.healthiness!.failureThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Success Threshold">
+								<el-input v-model="form.config!.probes!.healthiness!.successThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Initial Delay Seconds">
+								<el-input v-model="form.config!.probes!.healthiness!.initialDelaySeconds" placeholder="1" />
+							</el-form-item>
+
+							<el-divider content-position="left">Readiness Probe</el-divider>
+
+							<el-form-item label="Path">
+								<el-input v-model="form.config!.probes!.readiness!.path" placeholder="/readyz" />
+							</el-form-item>
+
+							<el-form-item label="Timeout Seconds">
+								<el-input v-model="form.config!.probes!.readiness!.timeoutSeconds" placeholder="1" />
+							</el-form-item>
+
+							<el-form-item label="Period Seconds">
+								<el-input v-model="form.config!.probes!.readiness!.periodSeconds" placeholder="5" />
+							</el-form-item>
+
+							<el-form-item label="Failure Threshold">
+								<el-input v-model="form.config!.probes!.readiness!.failureThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Success Threshold">
+								<el-input v-model="form.config!.probes!.readiness!.successThreshold" placeholder="3" />
+							</el-form-item>
+
+							<el-form-item label="Initial Delay Seconds">
+								<el-input v-model="form.config!.probes!.readiness!.initialDelaySeconds" placeholder="1" />
+							</el-form-item>
+						</el-collapse-item>
+					</el-collapse>
 						</el-form>
 					</el-card>
 				</el-col>
@@ -405,10 +479,15 @@ onUnmounted(() => {
 					<el-card shadow="never">
 						<template #header>
 							<div style="display: flex; justify-content: space-between; align-items: center">
-								<span style="font-weight: 600">Target Health</span>
-								<el-tag :type="healthTag" effect="dark" size="small">
-									{{ healthyCount }}/{{ totalCount }}
-								</el-tag>
+								<span style="font-weight: 600">Target Status</span>
+								<div style="display: flex; gap: 8px">
+									<el-tag :type="readinessTag" effect="dark" size="small">
+										{{ readyCount }}/{{ totalCount }} Ready
+									</el-tag>
+									<el-tag :type="healthTag" effect="dark" size="small">
+										{{ healthyCount }}/{{ totalCount }} Healthy
+									</el-tag>
+								</div>
 							</div>
 						</template>
 
@@ -420,31 +499,55 @@ onUnmounted(() => {
 									<span style="font-family: monospace; font-size: 12px">{{ row.url }}</span>
 								</template>
 							</el-table-column>
-							<el-table-column prop="phase" label="Phase" width="110">
-								<template #default="{ row }">
-									<el-tag :type="row.phase === 'Healthy' ? 'success' : row.phase === 'Unhealthy' ? 'danger' : 'warning'"
-										effect="dark" size="small">
-										{{ row.phase }}
-									</el-tag>
-								</template>
-							</el-table-column>
-							<el-table-column label="Error" min-width="140">
-								<template #default="{ row }">
-									<span v-if="row.reason" style="color: #f56c6c; font-size: 12px">{{ row.reason }}</span>
-									<span v-else style="color: #909399">-</span>
-								</template>
-							</el-table-column>
-							<el-table-column label="Last Transition" width="130">
-								<template #default="{ row }">
-									<el-tooltip v-if="row.lastTransitionTime" :content="formatDateFull(row.lastTransitionTime)"
-										placement="top">
-										<span style="font-size: 12px">{{ formatDate(row.lastTransitionTime) }}</span>
-									</el-tooltip>
-									<span v-else style="color: #909399">-</span>
-								</template>
-							</el-table-column>
-						</el-table>
-					</el-card>
+						<el-table-column label="Readiness" width="120">
+							<template #default="{ row }">
+								<el-tag :type="booleanStatusTagType(row.readiness === 'Ready' ? true : row.readiness === 'Not Ready' ? false : undefined)"
+									effect="dark" size="small">
+									{{ row.readiness }}
+								</el-tag>
+							</template>
+						</el-table-column>
+						<el-table-column label="Health" width="120">
+							<template #default="{ row }">
+								<el-tag
+									:type="booleanStatusTagType(row.healthiness === 'Healthy' ? true : row.healthiness === 'Unhealthy' ? false : undefined)"
+									effect="dark" size="small">
+									{{ row.healthiness }}
+								</el-tag>
+							</template>
+						</el-table-column>
+						<el-table-column label="Readiness Reason" min-width="140">
+							<template #default="{ row }">
+								<span v-if="row.readinessReason" style="color: #f56c6c; font-size: 12px">{{ row.readinessReason }}</span>
+								<span v-else style="color: #909399">-</span>
+							</template>
+						</el-table-column>
+						<el-table-column label="Health Reason" min-width="140">
+							<template #default="{ row }">
+								<span v-if="row.healthinessReason" style="color: #f56c6c; font-size: 12px">{{ row.healthinessReason }}</span>
+								<span v-else style="color: #909399">-</span>
+							</template>
+						</el-table-column>
+						<el-table-column label="Ready Since" width="130">
+							<template #default="{ row }">
+								<el-tooltip v-if="row.readinessLastTransitionTime"
+									:content="formatDateFull(row.readinessLastTransitionTime)" placement="top">
+									<span style="font-size: 12px">{{ formatDate(row.readinessLastTransitionTime) }}</span>
+								</el-tooltip>
+								<span v-else style="color: #909399">-</span>
+							</template>
+						</el-table-column>
+						<el-table-column label="Healthy Since" width="130">
+							<template #default="{ row }">
+								<el-tooltip v-if="row.healthinessLastTransitionTime"
+									:content="formatDateFull(row.healthinessLastTransitionTime)" placement="top">
+									<span style="font-size: 12px">{{ formatDate(row.healthinessLastTransitionTime) }}</span>
+								</el-tooltip>
+								<span v-else style="color: #909399">-</span>
+							</template>
+						</el-table-column>
+					</el-table>
+				</el-card>
 				</el-col>
 			</el-row>
 		</template>

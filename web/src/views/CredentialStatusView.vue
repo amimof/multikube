@@ -166,8 +166,8 @@ onUnmounted(() => {
 				</div>
 			</el-col>
 			<el-col :span="12" style="text-align: right">
-				<el-button :icon="Refresh" @click="handleRefresh">Reload</el-button>
-				<el-button :icon="Document" @click="yamlModalVisible = true">Edit YAML</el-button>
+				<el-button plain :icon="Refresh" @click="handleRefresh">Reload</el-button>
+				<el-button plain :icon="Document" @click="yamlModalVisible = true">Edit YAML</el-button>
 				<el-button type="primary" :loading="saving" @click="handleSave">
 					{{ saving ? 'Saving...' : 'Save' }}
 				</el-button>

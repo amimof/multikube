@@ -90,6 +90,7 @@ message BackendConfig {
   LoadBalancingType type = 6;
   ImpersonationConfig impersonation_config = 7;
   optional bool enabled = 8;
+  ProbeConfig probes = 9;
 }
 
 message ImpersonationConfig {
@@ -100,6 +101,31 @@ message ImpersonationConfig {
   repeated string extra_claims = 5;
 }
 
+message ProbeConfig {
+  Probe healthiness = 1;
+  Probe readiness = 2;
+}
+
+message Probe {
+  // url path to check
+  string path = 1;
+
+  // how long each request is allowed to take
+  uint64 timeout_seconds = 2;
+
+  // how quickly Kubernetes notices ready/not-ready changes. Lower means faster reaction, but more probe traffic.
+  uint64 period_seconds = 3;
+
+  // how many consecutive failures before the Pod is marked unready. Raising this reduces flapping from brief hiccups.
+  uint64 failure_threshold = 4;
+
+  // how many consecutive successes are required before the Pod is marked ready again. This is especially useful for readiness to avoid a Pod bouncing in and out after one lucky success.
+  uint64 success_threshold = 5;
+
+  // useful if the app needs a little time before the first readiness check, though for real slow starts, startupProbe is usually better.
+  uint64 initial_delay_seconds = 6;
+}
+
 message BackendStatus {
   map<string, TargetStatus> target_statuses = 1;
   google.protobuf.StringValue phase = 2;
@@ -108,7 +134,18 @@ message BackendStatus {
 }
 
 message TargetStatus {
-  google.protobuf.StringValue phase = 1;
+  TargetReadyStatus readiness = 1;
+  TargetHealthStatus healthiness = 2;
+}
+
+message TargetReadyStatus {
+  optional bool is_ready = 1;
+  google.protobuf.StringValue reason = 2;
+  google.protobuf.Timestamp last_transition_time = 3;
+}
+
+message TargetHealthStatus {
+  optional bool is_healthy = 1;
   google.protobuf.StringValue reason = 2;
   google.protobuf.Timestamp last_transition_time = 3;
 }

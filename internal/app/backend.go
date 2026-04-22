@@ -22,6 +22,29 @@ import (
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 )
 
+var defaultProbes = &backendv1.ProbeConfig{
+	Healthiness: defaultHealthProbe,
+	Readiness:   defaultReadyProbe,
+}
+
+var defaultHealthProbe = &backendv1.Probe{
+	Path:                "/healthz",
+	TimeoutSeconds:      *proto.Uint64(1),
+	PeriodSeconds:       *proto.Uint64(5),
+	FailureThreshold:    3,
+	SuccessThreshold:    3,
+	InitialDelaySeconds: 1,
+}
+
+var defaultReadyProbe = &backendv1.Probe{
+	Path:                "/readyz",
+	TimeoutSeconds:      *proto.Uint64(1),
+	PeriodSeconds:       *proto.Uint64(5),
+	FailureThreshold:    3,
+	SuccessThreshold:    3,
+	InitialDelaySeconds: 1,
+}
+
 type BackendService struct {
 	Repo     *repository.Repo[*backendv1.Backend]
 	mu       sync.Mutex
@@ -61,12 +84,16 @@ func applyMaskedUpdateBackend(dst, src *backendv1.BackendStatus, mask *fieldmask
 				if srcStatus == nil {
 					continue
 				}
-				if existing, ok := dst.TargetStatuses[k]; ok && existing != nil {
-					// Merge into the existing entry instead of replacing it.
-					proto.Merge(existing, srcStatus)
-				} else {
-					// Clone so dst does not alias src memory.
-					dst.TargetStatuses[k] = proto.Clone(srcStatus).(*backendv1.TargetStatus)
+				existing, ok := dst.TargetStatuses[k]
+				if !ok || existing == nil {
+					existing = &backendv1.TargetStatus{}
+					dst.TargetStatuses[k] = existing
+				}
+				if srcStatus.Healthiness != nil {
+					existing.Healthiness = proto.Clone(srcStatus.Healthiness).(*backendv1.TargetHealthStatus)
+				}
+				if srcStatus.Readiness != nil {
+					existing.Readiness = proto.Clone(srcStatus.Readiness).(*backendv1.TargetReadyStatus)
 				}
 			}
 
@@ -119,6 +146,10 @@ func (l *BackendService) Create(ctx context.Context, be *backendv1.Backend) (*ba
 
 	if be.GetConfig().Enabled == nil {
 		be.GetConfig().Enabled = new(true)
+	}
+
+	if be.GetConfig().GetProbes() == nil {
+		be.GetConfig().Probes = defaultProbes
 	}
 
 	// Create volume in repo
@@ -252,6 +283,10 @@ func (l *BackendService) Update(ctx context.Context, id keys.ID, be *backendv1.B
 
 	if be.GetConfig().Enabled == nil {
 		be.GetConfig().Enabled = new(true)
+	}
+
+	if be.GetConfig().GetProbes() == nil {
+		be.GetConfig().Probes = defaultProbes
 	}
 
 	// Update the volume

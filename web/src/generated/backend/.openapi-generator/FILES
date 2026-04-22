@@ -13,6 +13,10 @@ docs/V1ListResponse.md
 docs/V1LoadBalancingType.md
 docs/V1Meta.md
 docs/V1PatchResponse.md
+docs/V1Probe.md
+docs/V1ProbeConfig.md
+docs/V1TargetHealthStatus.md
+docs/V1TargetReadyStatus.md
 docs/V1TargetStatus.md
 docs/V1UpdateResponse.md
 index.ts
@@ -28,6 +32,10 @@ models/V1ListResponse.ts
 models/V1LoadBalancingType.ts
 models/V1Meta.ts
 models/V1PatchResponse.ts
+models/V1Probe.ts
+models/V1ProbeConfig.ts
+models/V1TargetHealthStatus.ts
+models/V1TargetReadyStatus.ts
 models/V1TargetStatus.ts
 models/V1UpdateResponse.ts
 models/index.ts

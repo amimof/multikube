@@ -1,4 +1,3 @@
-.openapi-generator-ignore
 apis/MetricsServiceApi.ts
 apis/index.ts
 docs/MetricsServiceApi.md

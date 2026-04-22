@@ -596,6 +596,9 @@
         },
         "enabled": {
           "type": "boolean"
+        },
+        "probes": {
+          "$ref": "#/definitions/v1ProbeConfig"
         }
       }
     },
@@ -723,11 +726,56 @@
         }
       }
     },
-    "v1TargetStatus": {
+    "v1Probe": {
       "type": "object",
       "properties": {
-        "phase": {
-          "type": "string"
+        "path": {
+          "type": "string",
+          "title": "url path to check"
+        },
+        "timeoutSeconds": {
+          "type": "string",
+          "format": "uint64",
+          "title": "how long each request is allowed to take"
+        },
+        "periodSeconds": {
+          "type": "string",
+          "format": "uint64",
+          "description": "how quickly Kubernetes notices ready/not-ready changes. Lower means faster reaction, but more probe traffic."
+        },
+        "failureThreshold": {
+          "type": "string",
+          "format": "uint64",
+          "description": "how many consecutive failures before the Pod is marked unready. Raising this reduces flapping from brief hiccups."
+        },
+        "successThreshold": {
+          "type": "string",
+          "format": "uint64",
+          "description": "how many consecutive successes are required before the Pod is marked ready again. This is especially useful for readiness to avoid a Pod bouncing in and out after one lucky success."
+        },
+        "initialDelaySeconds": {
+          "type": "string",
+          "format": "uint64",
+          "description": "useful if the app needs a little time before the first readiness check, though for real slow starts, startupProbe is usually better."
+        }
+      }
+    },
+    "v1ProbeConfig": {
+      "type": "object",
+      "properties": {
+        "healthiness": {
+          "$ref": "#/definitions/v1Probe"
+        },
+        "readiness": {
+          "$ref": "#/definitions/v1Probe"
+        }
+      }
+    },
+    "v1TargetHealthStatus": {
+      "type": "object",
+      "properties": {
+        "isHealthy": {
+          "type": "boolean"
         },
         "reason": {
           "type": "string"
@@ -735,6 +783,32 @@
         "lastTransitionTime": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "v1TargetReadyStatus": {
+      "type": "object",
+      "properties": {
+        "isReady": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "lastTransitionTime": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "v1TargetStatus": {
+      "type": "object",
+      "properties": {
+        "readiness": {
+          "$ref": "#/definitions/v1TargetReadyStatus"
+        },
+        "healthiness": {
+          "$ref": "#/definitions/v1TargetHealthStatus"
         }
       }
     },

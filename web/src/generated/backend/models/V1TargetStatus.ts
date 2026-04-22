@@ -13,6 +13,21 @@
  */
 
 import { mapValues } from '../runtime';
+import type { V1TargetHealthStatus } from './V1TargetHealthStatus';
+import {
+    V1TargetHealthStatusFromJSON,
+    V1TargetHealthStatusFromJSONTyped,
+    V1TargetHealthStatusToJSON,
+    V1TargetHealthStatusToJSONTyped,
+} from './V1TargetHealthStatus';
+import type { V1TargetReadyStatus } from './V1TargetReadyStatus';
+import {
+    V1TargetReadyStatusFromJSON,
+    V1TargetReadyStatusFromJSONTyped,
+    V1TargetReadyStatusToJSON,
+    V1TargetReadyStatusToJSONTyped,
+} from './V1TargetReadyStatus';
+
 /**
  * 
  * @export
@@ -21,22 +36,16 @@ import { mapValues } from '../runtime';
 export interface V1TargetStatus {
     /**
      * 
-     * @type {string}
+     * @type {V1TargetReadyStatus}
      * @memberof V1TargetStatus
      */
-    phase?: string;
+    readiness?: V1TargetReadyStatus;
     /**
      * 
-     * @type {string}
+     * @type {V1TargetHealthStatus}
      * @memberof V1TargetStatus
      */
-    reason?: string;
-    /**
-     * 
-     * @type {Date}
-     * @memberof V1TargetStatus
-     */
-    lastTransitionTime?: Date;
+    healthiness?: V1TargetHealthStatus;
 }
 
 /**
@@ -56,9 +65,8 @@ export function V1TargetStatusFromJSONTyped(json: any, ignoreDiscriminator: bool
     }
     return {
         
-        'phase': json['phase'] == null ? undefined : json['phase'],
-        'reason': json['reason'] == null ? undefined : json['reason'],
-        'lastTransitionTime': json['lastTransitionTime'] == null ? undefined : (new Date(json['lastTransitionTime'])),
+        'readiness': json['readiness'] == null ? undefined : V1TargetReadyStatusFromJSON(json['readiness']),
+        'healthiness': json['healthiness'] == null ? undefined : V1TargetHealthStatusFromJSON(json['healthiness']),
     };
 }
 
@@ -73,9 +81,8 @@ export function V1TargetStatusToJSONTyped(value?: V1TargetStatus | null, ignoreD
 
     return {
         
-        'phase': value['phase'],
-        'reason': value['reason'],
-        'lastTransitionTime': value['lastTransitionTime'] == null ? value['lastTransitionTime'] : value['lastTransitionTime'].toISOString(),
+        'readiness': V1TargetReadyStatusToJSON(value['readiness']),
+        'healthiness': V1TargetHealthStatusToJSON(value['healthiness']),
     };
 }
 
