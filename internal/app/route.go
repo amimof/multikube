@@ -167,8 +167,6 @@ func (l *RouteService) Patch(ctx context.Context, id keys.ID, patch *routev1.Rou
 		return err
 	}
 
-	l.mu.Unlock()
-
 	// Only publish if spec is updated
 	if !equal {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.RoutePatch, route))

@@ -74,7 +74,11 @@ func (p *BackendPool) Next(r *http.Request) (*BackendRuntime, bool) {
 
 func (p *BackendPool) healthyTargets() []*BackendRuntime {
 	out := make([]*BackendRuntime, 0, len(p.Targets))
-	out = append(out, p.Targets...)
+	for _, target := range p.Targets {
+		if target.IsAvailable() {
+			out = append(out, target)
+		}
+	}
 	return out
 }
 
@@ -91,6 +95,13 @@ type BackendRuntime struct {
 
 	URL *url.URL
 
+	HasHealthProbe    bool
+	HealthKnown       atomic.Bool
+	Healthy           atomic.Bool
+	HasReadinessProbe bool
+	ReadinessKnown    atomic.Bool
+	Ready             atomic.Bool
+
 	CacheTTL time.Duration
 
 	TLSConfig *tls.Config
@@ -99,6 +110,29 @@ type BackendRuntime struct {
 	AuthInjector RequestAuthInjector
 
 	Active atomic.Int64
+}
+
+func (b *BackendRuntime) IsAvailable() bool {
+	if b == nil {
+		return false
+	}
+	if b.HasHealthProbe && b.HealthKnown.Load() && !b.Healthy.Load() {
+		return false
+	}
+	if b.HasReadinessProbe && b.ReadinessKnown.Load() && !b.Ready.Load() {
+		return false
+	}
+	return true
+}
+
+func (b *BackendRuntime) SetHealthState(known, healthy bool) {
+	b.HealthKnown.Store(known)
+	b.Healthy.Store(healthy)
+}
+
+func (b *BackendRuntime) SetReadinessState(known, ready bool) {
+	b.ReadinessKnown.Store(known)
+	b.Ready.Store(ready)
 }
 
 type RouteMatchKind uint8
@@ -206,8 +240,8 @@ func (cr *CompiledRoutes) matchSNI(r *http.Request) (*RouteRuntime, bool) {
 	}
 
 	routes := cr.SNIExact[sni]
-	for _, route := range routes {
-		return route, true
+	if len(routes) > 0 {
+		return routes[0], true
 	}
 	return nil, false
 }

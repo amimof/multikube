@@ -91,7 +91,7 @@ jobs:
       - name: Build Web UI
         run: |
           cd web/
-          npm install
+          npm ci
           npm run build
 
       - name: Compile Server

@@ -126,7 +126,7 @@ func (l *BackendService) Create(ctx context.Context, be *backendv1.Backend) (*ba
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	// Default impersionation config
+	// Default impersonation config
 	if be.GetConfig().GetImpersonationConfig() == nil {
 		be.GetConfig().ImpersonationConfig = &backendv1.ImpersonationConfig{
 			Name:          "default",
@@ -137,7 +137,7 @@ func (l *BackendService) Create(ctx context.Context, be *backendv1.Backend) (*ba
 	}
 
 	if be.GetConfig().CacheTtl == nil {
-		be.GetConfig().CacheTtl = durationpb.New(time.Second + 30)
+		be.GetConfig().CacheTtl = durationpb.New(30 * time.Second)
 	}
 
 	if be.GetConfig().Type == 0 {
@@ -264,14 +264,14 @@ func (l *BackendService) Update(ctx context.Context, id keys.ID, be *backendv1.B
 	}
 
 	if be.GetConfig().CacheTtl == nil {
-		be.GetConfig().CacheTtl = durationpb.New(time.Second + 30)
+		be.GetConfig().CacheTtl = durationpb.New(30 * time.Second)
 	}
 
 	if be.GetConfig().Type == 0 {
 		be.GetConfig().Type = backendv1.LoadBalancingType_LOAD_BALANCING_TYPE_ROUND_ROBIN
 	}
 
-	// Default impersionation config
+	// Default impersonation config
 	if be.GetConfig().GetImpersonationConfig() == nil {
 		be.GetConfig().ImpersonationConfig = &backendv1.ImpersonationConfig{
 			Name:          "default",
@@ -288,6 +288,8 @@ func (l *BackendService) Update(ctx context.Context, id keys.ID, be *backendv1.B
 	if be.GetConfig().GetProbes() == nil {
 		be.GetConfig().Probes = defaultProbes
 	}
+
+	be.Status = existingBackend.Status
 
 	// Update the volume
 	updated, err := l.Repo.Update(ctx, id, be)

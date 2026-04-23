@@ -108,18 +108,3 @@ func toStringSlice(v any) []string {
 		return nil
 	}
 }
-
-// jwtMiddleware wraps an http.Handler with JWT extraction + context injection.
-// It does NOT enforce policy — policy enforcement happens in ServeHTTP.
-// func jwtMiddleware(pubKey *ecdsa.PublicKey, next http.Handler) http.Handler {
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		principal, flat, err := ExtractJWT(r, pubKey)
-// 		if err != nil {
-// 			http.Error(w, "Forbidden", http.StatusForbidden)
-// 			return
-// 		}
-// 		ctx := WithPrincipal(r.Context(), principal)
-// 		ctx = WithJWTClaims(ctx, flat)
-// 		next.ServeHTTP(w, r.WithContext(ctx))
-// 	})
-// }

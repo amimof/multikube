@@ -26,6 +26,79 @@ func newRequest(t *testing.T, method, rawURL string) *http.Request {
 	return req
 }
 
+func TestBackendPoolNext_UnknownProbeStateRemainsEligible(t *testing.T) {
+	target := &BackendRuntime{
+		URL:               mustParseURL(t, "https://upstream:6443"),
+		HasHealthProbe:    true,
+		HasReadinessProbe: true,
+	}
+	pool := &BackendPool{
+		Targets:  []*BackendRuntime{target},
+		Iterator: &RoundRobinLB{},
+	}
+
+	got, ok := pool.Next(newRequest(t, http.MethodGet, "https://proxy:8443/api/v1/pods"))
+	if !ok {
+		t.Fatal("expected unknown probe state target to be eligible")
+	}
+	if got != target {
+		t.Fatalf("expected selected target %p, got %p", target, got)
+	}
+}
+
+func TestBackendPoolNext_SkipsUnavailableTargets(t *testing.T) {
+	ready := &BackendRuntime{URL: mustParseURL(t, "https://ready:6443")}
+	unhealthy := &BackendRuntime{URL: mustParseURL(t, "https://unhealthy:6443"), HasHealthProbe: true}
+	unhealthy.SetHealthState(true, false)
+	notReady := &BackendRuntime{URL: mustParseURL(t, "https://not-ready:6443"), HasReadinessProbe: true}
+	notReady.SetReadinessState(true, false)
+	pool := &BackendPool{
+		Targets:  []*BackendRuntime{unhealthy, notReady, ready},
+		Iterator: &RoundRobinLB{},
+	}
+
+	got, ok := pool.Next(newRequest(t, http.MethodGet, "https://proxy:8443/api/v1/pods"))
+	if !ok {
+		t.Fatal("expected an eligible target")
+	}
+	if got != ready {
+		t.Fatalf("expected ready target %p, got %p", ready, got)
+	}
+}
+
+func TestBackendPoolNext_ReturnsFalseWhenAllTargetsUnavailable(t *testing.T) {
+	unhealthy := &BackendRuntime{URL: mustParseURL(t, "https://unhealthy:6443"), HasHealthProbe: true}
+	unhealthy.SetHealthState(true, false)
+	notReady := &BackendRuntime{URL: mustParseURL(t, "https://not-ready:6443"), HasReadinessProbe: true}
+	notReady.SetReadinessState(true, false)
+	pool := &BackendPool{
+		Targets:  []*BackendRuntime{unhealthy, notReady},
+		Iterator: &RoundRobinLB{},
+	}
+
+	if got, ok := pool.Next(newRequest(t, http.MethodGet, "https://proxy:8443/api/v1/pods")); ok || got != nil {
+		t.Fatalf("expected no eligible target, got %p ok=%v", got, ok)
+	}
+}
+
+func TestForwarderHandler_AllTargetsUnavailable_ReturnsBadGateway(t *testing.T) {
+	target := &BackendRuntime{URL: mustParseURL(t, "https://upstream:6443"), HasHealthProbe: true}
+	target.SetHealthState(true, false)
+	pool := &BackendPool{
+		Targets:  []*BackendRuntime{target},
+		Iterator: &RoundRobinLB{},
+	}
+
+	fwd := NewForwarder(http.DefaultTransport)
+	handler := fwd.Handler(pool)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, newRequest(t, http.MethodGet, "https://proxy:8443/api/v1/pods"))
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+	}
+}
+
 func TestStripMatchedPath_PathPrefix(t *testing.T) {
 	tests := []struct {
 		name       string

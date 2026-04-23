@@ -198,6 +198,91 @@ func TestCompile_VersionIncrement(t *testing.T) {
 	}
 }
 
+func TestCompile_BackendTargetProbeStateFromStatus(t *testing.T) {
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers:               []string{"http://example.com"},
+					InsecureSkipTlsVerify: true,
+					Enabled:               boolPtr(true),
+					Probes: &backendv1.ProbeConfig{
+						Healthiness: &backendv1.Probe{Path: "/healthz"},
+						Readiness:   &backendv1.Probe{Path: "/readyz"},
+					},
+				},
+				Status: &backendv1.BackendStatus{
+					TargetStatuses: map[string]*backendv1.TargetStatus{
+						"http://example.com": {
+							Healthiness: &backendv1.TargetHealthStatus{IsHealthy: boolPtr(false)},
+							Readiness:   &backendv1.TargetReadyStatus{IsReady: boolPtr(true)},
+						},
+					},
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+		Policies:               map[string]*policyv1.Policy{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	target := requireSingleBackendTarget(t, res.Runtime.Backends["be"])
+	if !target.HasHealthProbe || !target.HasReadinessProbe {
+		t.Fatalf("expected compiled target probe configuration, got %+v", target)
+	}
+	if !target.HealthKnown.Load() || target.Healthy.Load() {
+		t.Fatalf("expected known unhealthy target, got healthKnown=%v healthy=%v", target.HealthKnown.Load(), target.Healthy.Load())
+	}
+	if !target.ReadinessKnown.Load() || !target.Ready.Load() {
+		t.Fatalf("expected known ready target, got readinessKnown=%v ready=%v", target.ReadinessKnown.Load(), target.Ready.Load())
+	}
+}
+
+func TestCompile_BackendTargetProbeStateUnknownWithoutStatus(t *testing.T) {
+	c := NewCompiler()
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": {
+				Meta: &metav1.Meta{Name: "be"},
+				Config: &backendv1.BackendConfig{
+					Servers:               []string{"http://example.com"},
+					InsecureSkipTlsVerify: true,
+					Enabled:               boolPtr(true),
+					Probes: &backendv1.ProbeConfig{
+						Healthiness: &backendv1.Probe{Path: "/healthz"},
+						Readiness:   &backendv1.Probe{Path: "/readyz"},
+					},
+				},
+			},
+		},
+		Routes:                 map[string]*routev1.Route{},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+		Policies:               map[string]*policyv1.Policy{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	target := requireSingleBackendTarget(t, res.Runtime.Backends["be"])
+	if target.HealthKnown.Load() || target.ReadinessKnown.Load() {
+		t.Fatalf("expected unknown probe state, got healthKnown=%v readinessKnown=%v", target.HealthKnown.Load(), target.ReadinessKnown.Load())
+	}
+	if !target.IsAvailable() {
+		t.Fatal("expected unknown probe state target to remain available")
+	}
+}
+
 func TestCompile_RouteWithoutMatcher_Invalid(t *testing.T) {
 	srv := httptest.NewServer(nil)
 	defer srv.Close()

@@ -11,8 +11,12 @@ import (
 
 	backendv1 "github.com/amimof/multikube/api/backend/v1"
 	metav1 "github.com/amimof/multikube/api/meta/v1"
+	mclient "github.com/amimof/multikube/pkg/client"
+	backendclientv1 "github.com/amimof/multikube/pkg/client/backend/v1"
 	"github.com/amimof/multikube/pkg/logger"
 	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
+	gomock "go.uber.org/mock/gomock"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -216,6 +220,65 @@ func TestWaitForHeartbeat_RespectsDelay(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed < 20*time.Millisecond {
 		t.Fatalf("expected wait to honor delay, got %v", elapsed)
+	}
+}
+
+func TestSetTargetUnhealthy_UpdatesLiveRuntimeTargetState(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBackendService := backendclientv1.NewMockBackendServiceClient(mockCtrl)
+	mockBackendService.EXPECT().
+		UpdateStatus(gomock.Any(), gomock.Any()).
+		Return(&emptypb.Empty{}, nil)
+	client, err := mclient.New("dummy", mclient.WithBackendClient(backendclientv1.NewClientV1(backendclientv1.WithClient(mockBackendService))))
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	target := &proxyv2.BackendRuntime{
+		Name:           "be",
+		URL:            mustParseURL(t, "http://example.com"),
+		HasHealthProbe: true,
+	}
+	runtimeStore := proxyv2.NewRuntimeStore()
+	runtimeStore.Store(&proxyv2.RuntimeConfig{Backends: map[string]*proxyv2.BackendPool{"be": {Name: "be", Targets: []*proxyv2.BackendRuntime{target}}}})
+	ctrl := &Controller{logger: logger.NilLogger{}, clientset: client, runtime: runtimeStore, heartBeatTimeout: time.Second}
+
+	if err := ctrl.setTargetUnhealthy(target, io.EOF); err != nil {
+		t.Fatalf("set target unhealthy: %v", err)
+	}
+	if !target.HealthKnown.Load() || target.Healthy.Load() {
+		t.Fatalf("expected runtime target to be marked unhealthy, got known=%v healthy=%v", target.HealthKnown.Load(), target.Healthy.Load())
+	}
+}
+
+func TestSetTargetReady_UpdatesLatestRuntimeSnapshot(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBackendService := backendclientv1.NewMockBackendServiceClient(mockCtrl)
+	mockBackendService.EXPECT().
+		UpdateStatus(gomock.Any(), gomock.Any()).
+		Return(&emptypb.Empty{}, nil)
+	client, err := mclient.New("dummy", mclient.WithBackendClient(backendclientv1.NewClientV1(backendclientv1.WithClient(mockBackendService))))
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	stale := &proxyv2.BackendRuntime{Name: "be", URL: mustParseURL(t, "http://example.com"), HasReadinessProbe: true}
+	latest := &proxyv2.BackendRuntime{Name: "be", URL: mustParseURL(t, "http://example.com"), HasReadinessProbe: true}
+	runtimeStore := proxyv2.NewRuntimeStore()
+	runtimeStore.Store(&proxyv2.RuntimeConfig{Version: 1, Backends: map[string]*proxyv2.BackendPool{"be": {Name: "be", Targets: []*proxyv2.BackendRuntime{stale}}}})
+	runtimeStore.Store(&proxyv2.RuntimeConfig{Version: 2, Backends: map[string]*proxyv2.BackendPool{"be": {Name: "be", Targets: []*proxyv2.BackendRuntime{latest}}}})
+	ctrl := &Controller{logger: logger.NilLogger{}, clientset: client, runtime: runtimeStore, heartBeatTimeout: time.Second}
+
+	if err := ctrl.setTargetReady(stale); err != nil {
+		t.Fatalf("set target ready: %v", err)
+	}
+	if !latest.ReadinessKnown.Load() || !latest.Ready.Load() {
+		t.Fatalf("expected latest runtime target to be marked ready, got known=%v ready=%v", latest.ReadinessKnown.Load(), latest.Ready.Load())
+	}
+	if stale.ReadinessKnown.Load() || stale.Ready.Load() {
+		t.Fatalf("expected stale heartbeat pointer to remain untouched, got known=%v ready=%v", stale.ReadinessKnown.Load(), stale.Ready.Load())
 	}
 }
 

@@ -29,7 +29,7 @@ html.dark {
   --el-color-primary-light-5: #905ce1;  /* even lighter */
   --el-color-primary-light-7: #905ce1;
   --el-color-primary-light-8: #905ce1;
-  --el-color-primary-light-9: #905ce1;  /* very light backgrounds */
+  --el-color-primary-light-9: var(--main-bg);  /* very light backgrounds */
   --el-color-primary-dark-2: #905ce1;   /* pressed/active */
 
 	--header-bg: #16161e;

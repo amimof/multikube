@@ -12,10 +12,18 @@ export interface NormalizedServer {
 	visualState: 'healthy' | 'degraded' | 'unknown'
 }
 
+export type TopologySelection =
+	| { type: 'backend' }
+	| { type: 'target'; server: NormalizedServer }
+
 const props = defineProps<{
 	backendName: string
 	lbType: string
 	servers: NormalizedServer[]
+}>()
+
+const emit = defineEmits<{
+	select: [selection: TopologySelection]
 }>()
 
 // Layout constants
@@ -26,7 +34,7 @@ const ROOT_H = 60
 const CHAR_WIDTH = 8.5 // approximate average char width at 14px
 const ROOT_PAD = 32 // horizontal padding inside root node
 const TARGET_W = 280
-const TARGET_H = 50
+const TARGET_H = 42
 const SPACING_Y = 70
 const MIN_SVG_W = 700
 
@@ -88,6 +96,14 @@ function truncateUrl(url: string, max = 32): string {
 	if (url.length <= max) return url
 	return url.slice(0, max - 1) + '\u2026'
 }
+
+function selectServer(server: NormalizedServer): void {
+	emit('select', { type: 'target', server })
+}
+
+function selectBackend(): void {
+	emit('select', { type: 'backend' })
+}
 </script>
 
 <template>
@@ -97,7 +113,8 @@ function truncateUrl(url: string, max = 32): string {
 			fill="none" stroke-width="2" />
 
 		<!-- Root node -->
-		<g class="root-node">
+		<g class="root-node" role="button" tabindex="0" @click="selectBackend" @keydown.enter="selectBackend"
+			@keydown.space.prevent="selectBackend">
 			<rect :x="rootX" :y="rootY" :width="rootW" :height="ROOT_H" rx="12" ry="12" class="root-rect" />
 			<text :x="rootX + rootW / 2" :y="rootY + 24" text-anchor="middle" class="root-label">
 				{{ backendName }}
@@ -108,21 +125,15 @@ function truncateUrl(url: string, max = 32): string {
 		</g>
 
 		<!-- Target server nodes -->
-		<g v-for="(server, i) in servers" :key="'node-' + server.url" class="target-node">
+		<g v-for="(server, i) in servers" :key="'node-' + server.url" class="target-node" role="button" tabindex="0"
+			@click="selectServer(server)" @keydown.enter="selectServer(server)" @keydown.space.prevent="selectServer(server)">
 			<rect :x="targetX" :y="targetY(i)" :width="TARGET_W" :height="TARGET_H" rx="8" ry="8"
 				:class="nodeClass(server.visualState)" />
 			<!-- Health dot -->
 			<circle :cx="targetX + 18" :cy="targetY(i) + TARGET_H / 2" r="6" :class="dotClass(server.visualState)" />
 			<!-- Server URL -->
-			<text :x="targetX + 32" :y="targetY(i) + 21" class="target-url">
+			<text :x="targetX + 32" :y="targetY(i) + TARGET_H / 2 + 4" class="target-url">
 				{{ truncateUrl(server.url) }}
-			</text>
-			<!-- Status labels -->
-			<text :x="targetX + 32" :y="targetY(i) + 35" class="target-phase">
-				R: {{ server.readiness }}
-			</text>
-			<text :x="targetX + 152" :y="targetY(i) + 35" class="target-phase">
-				H: {{ server.healthiness }}
 			</text>
 		</g>
 	</svg>
@@ -153,6 +164,19 @@ function truncateUrl(url: string, max = 32): string {
 	font-weight: 400;
 }
 
+.root-node {
+	transition: opacity 0.15s ease;
+}
+
+.root-node:hover {
+	opacity: 0.9;
+	cursor: pointer;
+}
+
+.root-node:focus-visible {
+	outline: none;
+}
+
 /* Target nodes */
 .target-rect-healthy {
 	fill: #1a2e1a;
@@ -176,23 +200,6 @@ function truncateUrl(url: string, max = 32): string {
 	fill: #e0e0e0;
 	font-size: 12px;
 	font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-}
-
-.target-phase {
-	font-size: 10px;
-	font-weight: 600;
-}
-
-.phase-healthy {
-	fill: #67c23a;
-}
-
-.phase-unhealthy {
-	fill: #f56c6c;
-}
-
-.phase-unknown {
-	fill: #909399;
 }
 
 /* Health dots */
@@ -248,6 +255,10 @@ function truncateUrl(url: string, max = 32): string {
 
 .target-node:hover {
 	opacity: 0.85;
-	cursor: default;
+	cursor: pointer;
+}
+
+.target-node:focus-visible {
+	outline: none;
 }
 </style>

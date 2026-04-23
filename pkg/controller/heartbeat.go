@@ -252,6 +252,9 @@ func (c *Controller) runSingleHeartbeat(ctx context.Context, backend string, tar
 }
 
 func (c *Controller) setTargetUnhealthy(be *proxy.BackendRuntime, err error) error {
+	c.updateRuntimeTargetProbeState(be, func(target *proxy.BackendRuntime) {
+		target.SetHealthState(true, false)
+	})
 	key := be.URL.String()
 	st := &backendv1.BackendStatus{
 		TargetStatuses: map[string]*backendv1.TargetStatus{
@@ -268,6 +271,9 @@ func (c *Controller) setTargetUnhealthy(be *proxy.BackendRuntime, err error) err
 }
 
 func (c *Controller) setTargetHealthy(be *proxy.BackendRuntime) error {
+	c.updateRuntimeTargetProbeState(be, func(target *proxy.BackendRuntime) {
+		target.SetHealthState(true, true)
+	})
 	key := be.URL.String()
 	st := &backendv1.BackendStatus{
 		TargetStatuses: map[string]*backendv1.TargetStatus{
@@ -283,6 +289,9 @@ func (c *Controller) setTargetHealthy(be *proxy.BackendRuntime) error {
 }
 
 func (c *Controller) setTargetNotReady(be *proxy.BackendRuntime, err error) error {
+	c.updateRuntimeTargetProbeState(be, func(target *proxy.BackendRuntime) {
+		target.SetReadinessState(true, false)
+	})
 	key := be.URL.String()
 	st := &backendv1.BackendStatus{
 		TargetStatuses: map[string]*backendv1.TargetStatus{
@@ -299,6 +308,9 @@ func (c *Controller) setTargetNotReady(be *proxy.BackendRuntime, err error) erro
 }
 
 func (c *Controller) setTargetReady(be *proxy.BackendRuntime) error {
+	c.updateRuntimeTargetProbeState(be, func(target *proxy.BackendRuntime) {
+		target.SetReadinessState(true, true)
+	})
 	key := be.URL.String()
 	st := &backendv1.BackendStatus{
 		TargetStatuses: map[string]*backendv1.TargetStatus{
@@ -317,4 +329,28 @@ func (c *Controller) setBackendStatus(be *proxy.BackendRuntime, st *backendv1.Ba
 	ctx, cancel := context.WithTimeout(context.Background(), c.heartBeatTimeout)
 	defer cancel()
 	return c.clientset.BackendV1().UpdateStatus(ctx, be.Name, st, "target_statuses")
+}
+
+func (c *Controller) updateRuntimeTargetProbeState(be *proxy.BackendRuntime, apply func(*proxy.BackendRuntime)) {
+	if be == nil || be.URL == nil || apply == nil || c.runtime == nil {
+		return
+	}
+	runtime := c.runtime.Load()
+	if runtime == nil {
+		return
+	}
+	pool, ok := runtime.Backends[be.Name]
+	if !ok || pool == nil {
+		return
+	}
+	for _, target := range pool.Targets {
+		if target == nil || target.URL == nil {
+			continue
+		}
+		if target.URL.String() != be.URL.String() {
+			continue
+		}
+		apply(target)
+		return
+	}
 }

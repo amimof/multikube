@@ -141,7 +141,7 @@ func compileCA(ca *cav1.CertificateAuthority, certs map[string]*certificatev1.Ce
 	case ca.GetConfig().GetCertificateData() != "":
 		pemBytes = []byte(ca.GetConfig().GetCertificateData())
 	default:
-		return nil, fmt.Errorf("neither certificate ref nor certificate_data provided")
+		return nil, fmt.Errorf("certificate_data is required")
 	}
 
 	pool := x509.NewCertPool()
@@ -313,13 +313,16 @@ func compileBackendPool(
 			return nil, nil, fmt.Errorf("server URL is empty")
 		}
 		br := &proxy.BackendRuntime{
-			Name:      be.GetMeta().GetName(),
-			Labels:    be.GetMeta().GetLabels(),
-			URL:       serverURL,
-			CacheTTL:  cacheTTL,
-			TLSConfig: tlsCfg,
-			Transport: transport,
+			Name:              be.GetMeta().GetName(),
+			Labels:            be.GetMeta().GetLabels(),
+			URL:               serverURL,
+			HasHealthProbe:    be.GetConfig().GetProbes().GetHealthiness() != nil,
+			HasReadinessProbe: be.GetConfig().GetProbes().GetReadiness() != nil,
+			CacheTTL:          cacheTTL,
+			TLSConfig:         tlsCfg,
+			Transport:         transport,
 		}
+		seedTargetProbeState(br, be.GetStatus().GetTargetStatuses()[serverURL.String()])
 		if ref := be.GetConfig().GetAuthRef(); ref != "" {
 			br.AuthInjector = credentials[ref].authInjector
 		}
@@ -339,6 +342,18 @@ func compileBackendPool(
 	}
 
 	return pool, fwd, nil
+}
+
+func seedTargetProbeState(target *proxy.BackendRuntime, status *backendv1.TargetStatus) {
+	if target == nil || status == nil {
+		return
+	}
+	if health := status.GetHealthiness(); health != nil && health.IsHealthy != nil {
+		target.SetHealthState(true, health.GetIsHealthy())
+	}
+	if readiness := status.GetReadiness(); readiness != nil && readiness.IsReady != nil {
+		target.SetReadinessState(true, readiness.GetIsReady())
+	}
 }
 
 // compileImpersonationConfig converts the proto ImpersonationConfig into an
