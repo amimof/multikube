@@ -14,7 +14,7 @@ type MetricsService struct {
 	Metrics  *proxy.ProxyMetrics
 }
 
-// MetricsLog streams metrics entries
-func (n *MetricsService) MetricsLog(ctx context.Context) (*proxy.ProxyMetrics, error) {
-	return n.Metrics, nil
+func (n *MetricsService) MetricsSeries(ctx context.Context) ([]proxy.MetricSeries, error) {
+	_ = ctx
+	return n.Metrics.Series()
 }

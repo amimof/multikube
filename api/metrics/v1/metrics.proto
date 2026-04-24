@@ -13,71 +13,27 @@ service MetricsService {
   }
 }
 
-message GetRequest {}
+message GetRequest { int32 window_minutes = 1; }
 
 message GetResponse {
-  // Request metrics
-  CounterMetric requests_total = 1;
-  HistogramMetric request_duration = 2;
-  GaugeMetric active_requests = 3;
-  Int64HistogramMetric request_size_bytes = 4;
-  Int64HistogramMetric response_size_bytes = 5;
-
-  // Backend metrics
-  CounterMetric backend_requests_total = 6;
-  HistogramMetric backend_request_duration = 7;
-  GaugeMetric backend_active_requests = 8;
-
-  // Auth metrics
-  CounterMetric auth_requests_total = 9;
-  CounterMetric policy_evaluations_total = 10;
-
-  // Route metrics
-  CounterMetric route_matches_total = 11;
-  CounterMetric route_no_match_total = 12;
+  repeated MetricSeries series = 1;
 }
 
-// Int64Series represents a single counter bucket (sum per interval).
-message Int64Series {
+message Label {
+  string name = 1;
+  string value = 2;
+}
+
+message MetricBucket {
   google.protobuf.Timestamp start = 1;
-  int64 value = 2;
+  double value = 2;
+  int64 count = 3;
+  double sum = 4;
 }
 
-// Float64Series represents a single float64 histogram bucket
-// (observation count + sum per interval).
-message Float64Series {
-  google.protobuf.Timestamp start = 1;
-  int64 count = 2;
-  double sum = 3;
-}
-
-// Int64HistogramSeries represents a single int64 histogram bucket
-// (observation count + sum per interval).
-message Int64HistogramSeries {
-  google.protobuf.Timestamp start = 1;
-  int64 count = 2;
-  int64 sum = 3;
-}
-
-// GaugeSeries represents a single gauge bucket (max value per interval).
-message GaugeSeries {
-  google.protobuf.Timestamp start = 1;
-  int64 max = 2;
-}
-
-message CounterMetric {
-  int64 total = 1;
-  repeated Int64Series buckets = 2;
-}
-
-message HistogramMetric {
-  repeated Float64Series buckets = 1;
-}
-
-message Int64HistogramMetric {
-  repeated Int64HistogramSeries buckets = 1;
-}
-
-message GaugeMetric {
-  repeated GaugeSeries buckets = 1;
+message MetricSeries {
+  string metric = 1;
+  string kind = 2;
+  repeated Label labels = 3;
+  repeated MetricBucket buckets = 4;
 }

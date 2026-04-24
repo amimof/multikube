@@ -1,22 +1,28 @@
 
-# V1Int64HistogramMetric
+# V1MetricBucket
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`buckets` | [Array&lt;V1Int64HistogramSeries&gt;](V1Int64HistogramSeries.md)
+`start` | Date
+`value` | number
+`count` | string
+`sum` | number
 
 ## Example
 
 ```typescript
-import type { V1Int64HistogramMetric } from ''
+import type { V1MetricBucket } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "buckets": null,
-} satisfies V1Int64HistogramMetric
+  "start": null,
+  "value": null,
+  "count": null,
+  "sum": null,
+} satisfies V1MetricBucket
 
 console.log(example)
 
@@ -25,7 +31,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as V1Int64HistogramMetric
+const exampleParsed = JSON.parse(exampleJSON) as V1MetricBucket
 console.log(exampleParsed)
 ```
 

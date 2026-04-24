@@ -10,7 +10,7 @@ All URIs are relative to *http://localhost*
 
 ## metricsServiceGet
 
-> V1GetResponse metricsServiceGet()
+> V1GetResponse metricsServiceGet(windowMinutes)
 
 
 
@@ -27,8 +27,13 @@ async function example() {
   console.log("🚀 Testing  SDK...");
   const api = new MetricsServiceApi();
 
+  const body = {
+    // number (optional)
+    windowMinutes: 56,
+  } satisfies MetricsServiceGetRequest;
+
   try {
-    const data = await api.metricsServiceGet();
+    const data = await api.metricsServiceGet(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -41,7 +46,10 @@ example().catch(console.error);
 
 ### Parameters
 
-This endpoint does not need any parameter.
+
+| Name | Type | Description  | Notes |
+|------------- | ------------- | ------------- | -------------|
+| **windowMinutes** | `number` |  | [Optional] [Defaults to `undefined`] |
 
 ### Return type
 

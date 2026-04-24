@@ -33,6 +33,15 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "windowMinutes",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "MetricsService"
         ]
@@ -40,6 +49,17 @@
     }
   },
   "definitions": {
+    "metricsv1Label": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
     "protobufAny": {
       "type": "object",
       "properties": {
@@ -68,28 +88,28 @@
         }
       }
     },
-    "v1CounterMetric": {
+    "v1GetResponse": {
       "type": "object",
       "properties": {
-        "total": {
-          "type": "string",
-          "format": "int64"
-        },
-        "buckets": {
+        "series": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Int64Series"
+            "$ref": "#/definitions/v1MetricSeries"
           }
         }
       }
     },
-    "v1Float64Series": {
+    "v1MetricBucket": {
       "type": "object",
       "properties": {
         "start": {
           "type": "string",
           "format": "date-time"
+        },
+        "value": {
+          "type": "number",
+          "format": "double"
         },
         "count": {
           "type": "string",
@@ -99,135 +119,32 @@
           "type": "number",
           "format": "double"
         }
-      },
-      "description": "Float64Series represents a single float64 histogram bucket\n(observation count + sum per interval)."
+      }
     },
-    "v1GaugeMetric": {
+    "v1MetricSeries": {
       "type": "object",
       "properties": {
+        "metric": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/metricsv1Label"
+          }
+        },
         "buckets": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1GaugeSeries"
+            "$ref": "#/definitions/v1MetricBucket"
           }
         }
       }
-    },
-    "v1GaugeSeries": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "max": {
-          "type": "string",
-          "format": "int64"
-        }
-      },
-      "description": "GaugeSeries represents a single gauge bucket (max value per interval)."
-    },
-    "v1GetResponse": {
-      "type": "object",
-      "properties": {
-        "requestsTotal": {
-          "$ref": "#/definitions/v1CounterMetric",
-          "title": "Request metrics"
-        },
-        "requestDuration": {
-          "$ref": "#/definitions/v1HistogramMetric"
-        },
-        "activeRequests": {
-          "$ref": "#/definitions/v1GaugeMetric"
-        },
-        "requestSizeBytes": {
-          "$ref": "#/definitions/v1Int64HistogramMetric"
-        },
-        "responseSizeBytes": {
-          "$ref": "#/definitions/v1Int64HistogramMetric"
-        },
-        "backendRequestsTotal": {
-          "$ref": "#/definitions/v1CounterMetric",
-          "title": "Backend metrics"
-        },
-        "backendRequestDuration": {
-          "$ref": "#/definitions/v1HistogramMetric"
-        },
-        "backendActiveRequests": {
-          "$ref": "#/definitions/v1GaugeMetric"
-        },
-        "authRequestsTotal": {
-          "$ref": "#/definitions/v1CounterMetric",
-          "title": "Auth metrics"
-        },
-        "policyEvaluationsTotal": {
-          "$ref": "#/definitions/v1CounterMetric"
-        },
-        "routeMatchesTotal": {
-          "$ref": "#/definitions/v1CounterMetric",
-          "title": "Route metrics"
-        },
-        "routeNoMatchTotal": {
-          "$ref": "#/definitions/v1CounterMetric"
-        }
-      }
-    },
-    "v1HistogramMetric": {
-      "type": "object",
-      "properties": {
-        "buckets": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Float64Series"
-          }
-        }
-      }
-    },
-    "v1Int64HistogramMetric": {
-      "type": "object",
-      "properties": {
-        "buckets": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Int64HistogramSeries"
-          }
-        }
-      }
-    },
-    "v1Int64HistogramSeries": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "count": {
-          "type": "string",
-          "format": "int64"
-        },
-        "sum": {
-          "type": "string",
-          "format": "int64"
-        }
-      },
-      "description": "Int64HistogramSeries represents a single int64 histogram bucket\n(observation count + sum per interval)."
-    },
-    "v1Int64Series": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "value": {
-          "type": "string",
-          "format": "int64"
-        }
-      },
-      "description": "Int64Series represents a single counter bucket (sum per interval)."
     }
   }
 }

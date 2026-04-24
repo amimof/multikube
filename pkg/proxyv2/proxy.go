@@ -9,17 +9,19 @@ import (
 	"time"
 
 	"github.com/amimof/multikube/pkg/audit"
+	"github.com/nakabonne/tstorage"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
 type Proxy struct {
-	runtime   *RuntimeStore
-	pubKey    *ecdsa.PublicKey
-	publisher audit.Publisher
-	metrics   *ProxyMetrics
-	meter     metric.Meter
+	runtime        *RuntimeStore
+	pubKey         *ecdsa.PublicKey
+	publisher      audit.Publisher
+	metrics        *ProxyMetrics
+	meter          metric.Meter
+	metricsStorage tstorage.Storage
 }
 
 // NewProxy creates a Proxy that serves requests from the given runtime store.
@@ -34,7 +36,7 @@ func NewProxy(runtime *RuntimeStore, opts ...ProxyOption) *Proxy {
 	}
 
 	if p.metrics == nil {
-		m, err := InitMetrics(p.meter)
+		m, err := InitMetrics(p.meter, p.metricsStorage, "")
 		if err != nil {
 			log.Printf("failed to initialize proxy metrics: %v", err)
 		}
@@ -72,6 +74,12 @@ func WithMetrics(m *ProxyMetrics) ProxyOption {
 	}
 }
 
+func WithMetricsStorage(s tstorage.Storage) ProxyOption {
+	return func(p *Proxy) {
+		p.metricsStorage = s
+	}
+}
+
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rt := p.runtime.Load()
 	ctx := r.Context()
@@ -84,7 +92,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if r.ContentLength > 0 {
 			p.metrics.RequestSizeBytes.Record(ctx, r.ContentLength,
-				metric.WithAttributes(attribute.String("method", r.Method)))
+				attribute.String("method", r.Method),
+				attribute.String("route", routeLabelValue("")),
+			)
 		}
 	}
 
@@ -104,7 +114,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					result = "missing"
 				}
 				p.metrics.AuthRequestsTotal.Inc(ctx, 1,
-					metric.WithAttributes(attribute.String("result", result)))
+					attribute.String("result", result),
+				)
 			}
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -113,7 +124,8 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if p.metrics != nil {
 			p.metrics.AuthRequestsTotal.Inc(ctx, 1,
-				metric.WithAttributes(attribute.String("result", "success")))
+				attribute.String("result", "success"),
+			)
 		}
 		ctx = WithPrincipal(ctx, principal)
 		ctx = WithJWTClaims(ctx, flat)
@@ -124,7 +136,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route, ok := rt.Match(r)
 	if !ok {
 		if p.metrics != nil {
-			p.metrics.RouteNoMatchTotal.Inc(ctx, 1)
+			p.metrics.RouteNoMatchTotal.Inc(ctx, 1,
+				attribute.String("route", routeLabelValue("")),
+			)
 		}
 		http.NotFound(w, r)
 		p.recordRequestMetrics(ctx, start, r.Method, "", http.StatusNotFound, mw)
@@ -134,9 +148,10 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Record route match
 	if p.metrics != nil {
 		p.metrics.RouteMatchesTotal.Inc(ctx, 1,
-			metric.WithAttributes(attribute.String("match_kind", matchKindString(route.Kind))))
+			attribute.String("match_kind", matchKindString(route.Kind)),
+			attribute.String("route", routeLabelValue(route.Name)),
+		)
 	}
-
 	ctx = WithMatchedRoute(ctx, route)
 	r = r.WithContext(ctx)
 
@@ -152,10 +167,9 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				evalResult = "deny"
 			}
 			p.metrics.PolicyEvaluationsTotal.Inc(ctx, 1,
-				metric.WithAttributes(
-					attribute.String("result", evalResult),
-					attribute.String("route", route.Name),
-				))
+				attribute.String("result", evalResult),
+				attribute.String("route", routeLabelValue(route.Name)),
+			)
 		}
 		if result == EvalDeny {
 			http.Error(w, "Forbidden", http.StatusForbidden)
@@ -185,19 +199,21 @@ func (p *Proxy) recordRequestMetrics(ctx context.Context, start time.Time, metho
 	if code == 0 {
 		code = http.StatusOK
 	}
-	attrs := metric.WithAttributes(
+	p.metrics.RequestsTotal.Inc(ctx, 1,
 		attribute.String("method", method),
-		attribute.String("route", route),
+		attribute.String("route", routeLabelValue(route)),
 		attribute.Int("status_code", code),
 	)
-	p.metrics.RequestsTotal.Inc(ctx, 1, attrs)
-	p.metrics.RequestDuration.Record(ctx, duration, attrs)
+	p.metrics.RequestDuration.Record(ctx, duration,
+		attribute.String("method", method),
+		attribute.String("route", routeLabelValue(route)),
+		attribute.Int("status_code", code),
+	)
 	if mw.bytesWritten > 0 {
 		p.metrics.ResponseSizeBytes.Record(ctx, mw.bytesWritten,
-			metric.WithAttributes(
-				attribute.String("method", method),
-				attribute.String("route", route),
-			))
+			attribute.String("method", method),
+			attribute.String("route", routeLabelValue(route)),
+		)
 	}
 }
 
@@ -243,6 +259,13 @@ func matchKindString(k RouteMatchKind) string {
 	default:
 		return "unknown"
 	}
+}
+
+func routeLabelValue(route string) string {
+	if route == "" {
+		return "__unmatched__"
+	}
+	return route
 }
 
 func timeoutMiddleware(d time.Duration) func(http.Handler) http.Handler {

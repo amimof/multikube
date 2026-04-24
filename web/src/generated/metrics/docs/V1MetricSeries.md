@@ -1,24 +1,28 @@
 
-# V1CounterMetric
+# V1MetricSeries
 
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`total` | string
-`buckets` | [Array&lt;V1Int64Series&gt;](V1Int64Series.md)
+`metric` | string
+`kind` | string
+`labels` | [Array&lt;Metricsv1Label&gt;](Metricsv1Label.md)
+`buckets` | [Array&lt;V1MetricBucket&gt;](V1MetricBucket.md)
 
 ## Example
 
 ```typescript
-import type { V1CounterMetric } from ''
+import type { V1MetricSeries } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "total": null,
+  "metric": null,
+  "kind": null,
+  "labels": null,
   "buckets": null,
-} satisfies V1CounterMetric
+} satisfies V1MetricSeries
 
 console.log(example)
 
@@ -27,7 +31,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as V1CounterMetric
+const exampleParsed = JSON.parse(exampleJSON) as V1MetricSeries
 console.log(exampleParsed)
 ```
 

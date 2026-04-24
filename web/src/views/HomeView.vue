@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref, watch } from 'vue'
 import { Monitor, Guide, Key, Lock, Document, List } from '@element-plus/icons-vue'
 import { Line } from 'vue-chartjs'
 import {
@@ -20,7 +20,7 @@ import { useCredentialStore } from '@/stores/credential'
 import { useCertificateStore } from '@/stores/certificate'
 import { usePolicyStore } from '@/stores/policy'
 import { useMetricsStore } from '@/stores/metrics'
-import type { V1Int64Series, V1Float64Series, V1Int64HistogramSeries, V1GaugeSeries } from '@/generated/metrics'
+import type { Metricsv1Label, V1MetricBucket, V1MetricSeries } from '@/generated/metrics'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
@@ -31,6 +31,9 @@ const credentialStore = useCredentialStore()
 const certificateStore = useCertificateStore()
 const policyStore = usePolicyStore()
 const metricsStore = useMetricsStore()
+
+const selectedRoute = ref<string[]>([])
+const selectedBackend = ref<string[]>([])
 
 onMounted(() => {
 	backendStore.fetchBackends().catch(() => { })
@@ -47,12 +50,90 @@ function formatTime(d?: Date): string {
 	return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function labelValue(labels: Metricsv1Label[] | undefined, name: string): string {
+	return labels?.find(label => label.name === name)?.value ?? ''
+}
+
+function seriesLabel(series: V1MetricSeries, primary: string): string {
+	const value = labelValue(series.labels, primary)
+	if (value) return value
+	const fallback = (series.labels ?? [])
+		.map(label => `${label.name}=${label.value}`)
+		.join(', ')
+	return fallback || series.metric || 'series'
+}
+
+function sortedBuckets(series?: V1MetricSeries) {
+	return [...(series?.buckets ?? [])].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
+}
+
+function counterValue(bucket: V1MetricBucket): number {
+	return Number(bucket.value ?? 0)
+}
+
+function gaugeValue(bucket: V1MetricBucket): number {
+	return Number(bucket.value ?? 0)
+}
+
+function histogramAverage(bucket: V1MetricBucket): number {
+	const count = Number(bucket.count ?? 0)
+	return count > 0 ? Number(bucket.sum ?? 0) / count : 0
+}
+
+function aggregateSeriesBuckets(seriesList: V1MetricSeries[]): V1MetricBucket[] {
+	const buckets = new Map<number, V1MetricBucket>()
+	for (const series of seriesList) {
+		for (const bucket of sortedBuckets(series)) {
+			const startTime = bucket.start?.getTime()
+			if (startTime == null) continue
+			const existing = buckets.get(startTime)
+			if (existing) {
+				existing.value = Number(existing.value ?? 0) + Number(bucket.value ?? 0)
+				existing.count = String(Number(existing.count ?? 0) + Number(bucket.count ?? 0))
+				existing.sum = Number(existing.sum ?? 0) + Number(bucket.sum ?? 0)
+				continue
+			}
+			buckets.set(startTime, {
+				start: bucket.start,
+				value: Number(bucket.value ?? 0),
+				count: bucket.count == null ? undefined : String(Number(bucket.count ?? 0)),
+				sum: Number(bucket.sum ?? 0),
+			})
+		}
+	}
+	return [...buckets.values()].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
+}
+
+function chartFromGroupedSeries(
+	groups: Array<{ label: string, series: V1MetricSeries[] }>,
+	color: string,
+	valueForBucket: (bucket: V1MetricBucket) => number,
+) {
+	const aggregatedGroups = groups.map(group => ({
+		label: group.label,
+		buckets: aggregateSeriesBuckets(group.series),
+	}))
+	const labels = aggregatedGroups[0]?.buckets.map(bucket => formatTime(bucket.start)) ?? []
+	return {
+		labels,
+		datasets: aggregatedGroups.map((group, index) => ({
+			label: group.label,
+			data: group.buckets.map(valueForBucket),
+			borderColor: index === 0 ? color : palette[index % palette.length],
+			backgroundColor: (index === 0 ? color : palette[index % palette.length]) + '1a',
+			fill: true,
+		})),
+	}
+}
+
+const palette = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#909399', '#b37feb']
+
 const chartOptions = {
 	responsive: true,
 	maintainAspectRatio: false,
 	interaction: { intersect: false, mode: 'index' as const },
 	plugins: {
-		legend: { display: false },
+		legend: { display: true, position: 'bottom' as const },
 	},
 	scales: {
 		x: {
@@ -68,89 +149,113 @@ const chartOptions = {
 	},
 	elements: {
 		point: { radius: 0, hoverRadius: 4 },
-		line: { tension: 0.4, borderWidth: 1.5, stepped: false },
+		line: { tension: 0.2, borderWidth: 1, stepped: false },
 	},
 }
 
-function makeCounterChart(buckets: V1Int64Series[] | undefined, color: string) {
-	const sorted = [...(buckets ?? [])].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
-	return {
-		labels: sorted.map(b => formatTime(b.start)),
-		datasets: [{
-			data: sorted.map(b => Number(b.value ?? 0)),
-			borderColor: color,
-			backgroundColor: color + '1a',
-			fill: true,
-		}],
+const allSeries = computed(() => metricsStore.data?.series ?? [])
+
+const routeOptions = computed(() => {
+	const values = new Set<string>()
+	for (const series of allSeries.value) {
+		const route = labelValue(series.labels, 'route')
+		if (route && route !== '__unmatched__') values.add(route)
 	}
+	return [...values].sort()
+})
+
+const backendOptions = computed(() => {
+	const values = new Set<string>()
+	for (const series of allSeries.value) {
+		const backend = labelValue(series.labels, 'backend')
+		if (backend) values.add(backend)
+	}
+	return [...values].sort()
+})
+
+watch(routeOptions, values => {
+	selectedRoute.value = selectedRoute.value.filter(value => values.includes(value))
+}, { immediate: true })
+
+watch(backendOptions, values => {
+	selectedBackend.value = selectedBackend.value.filter(value => values.includes(value))
+}, { immediate: true })
+
+function seriesByMetric(metric: string) {
+	return allSeries.value.filter(series => series.metric === metric)
 }
 
-function makeHistogramCountChart(buckets: V1Float64Series[] | undefined, color: string) {
-	const sorted = [...(buckets ?? [])].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
-	return {
-		labels: sorted.map(b => formatTime(b.start)),
-		datasets: [{
-			label: 'Avg',
-			data: sorted.map(b => {
-				const count = Number(b.count ?? 0)
-				return count > 0 ? (b.sum ?? 0) / count : 0
-			}),
-			borderColor: color,
-			backgroundColor: color + '1a',
-			fill: true,
-		}],
-	}
+function seriesByMetricAndLabel(metric: string, labelName: string, labelValueText: string) {
+	return seriesByMetric(metric).filter(series => labelValue(series.labels, labelName) === labelValueText)
 }
 
-function makeInt64HistogramChart(buckets: V1Int64HistogramSeries[] | undefined, color: string) {
-	const sorted = [...(buckets ?? [])].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
-	return {
-		labels: sorted.map(b => formatTime(b.start)),
-		datasets: [{
-			label: 'Avg',
-			data: sorted.map(b => {
-				const count = Number(b.count ?? 0)
-				return count > 0 ? Number(b.sum ?? 0) / count : 0
-			}),
-			borderColor: color,
-			backgroundColor: color + '1a',
-			fill: true,
-		}],
-	}
+function seriesByMetricWithoutLabel(metric: string, labelName: string) {
+	return seriesByMetric(metric).filter(series => !labelValue(series.labels, labelName))
 }
 
-function makeGaugeChart(buckets: V1GaugeSeries[] | undefined, color: string) {
-	const sorted = [...(buckets ?? [])].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
-	return {
-		labels: sorted.map(b => formatTime(b.start)),
-		datasets: [{
-			data: sorted.map(b => Number(b.max ?? 0)),
-			borderColor: color,
-			backgroundColor: color + '1a',
-			fill: true,
-		}],
+function groupedSeriesByMetricSelection(
+	metric: string,
+	labelName: string,
+	selectedValues: string[],
+	allLabel: string,
+	options?: { exclude?: string },
+) {
+	const grouped = new Map<string, V1MetricSeries[]>()
+	for (const series of seriesByMetric(metric)) {
+		const value = labelValue(series.labels, labelName)
+		if (!value || value === options?.exclude) continue
+		const existing = grouped.get(value)
+		if (existing) {
+			existing.push(series)
+		} else {
+			grouped.set(value, [series])
+		}
 	}
+
+	if (selectedValues.length === 0) {
+		return grouped.size > 0
+			? [{ label: allLabel, series: [...grouped.values()].flat() }]
+			: []
+	}
+
+	return selectedValues
+		.map(value => {
+			const series = grouped.get(value)
+			if (!series || series.length === 0) return null
+			return { label: value, series }
+		})
+		.filter((group): group is { label: string, series: V1MetricSeries[] } => group !== null)
 }
 
-// Requests section
-const requestsTotalChart = computed(() => makeCounterChart(metricsStore.data?.requestsTotal?.buckets, '#409eff'))
-const requestDurationChart = computed(() => makeHistogramCountChart(metricsStore.data?.requestDuration?.buckets, '#e6a23c'))
-const activeRequestsChart = computed(() => makeGaugeChart(metricsStore.data?.activeRequests?.buckets, '#67c23a'))
-const requestSizeChart = computed(() => makeInt64HistogramChart(metricsStore.data?.requestSizeBytes?.buckets, '#909399'))
-const responseSizeChart = computed(() => makeInt64HistogramChart(metricsStore.data?.responseSizeBytes?.buckets, '#909399'))
+const requestRateSeries = computed(() => groupedSeriesByMetricSelection('proxy.http.requests.total', 'route', selectedRoute.value, 'All routes', { exclude: '__unmatched__' }))
+const requestDurationSeries = computed(() => groupedSeriesByMetricSelection('proxy.http.request.duration.seconds', 'route', selectedRoute.value, 'All routes', { exclude: '__unmatched__' }))
+const requestSizeSeries = computed(() => groupedSeriesByMetricSelection('proxy.http.request.size.bytes', 'route', selectedRoute.value, 'All routes', { exclude: '__unmatched__' }))
+const responseSizeSeries = computed(() => groupedSeriesByMetricSelection('proxy.http.response.size.bytes', 'route', selectedRoute.value, 'All routes', { exclude: '__unmatched__' }))
 
-// Backend section
-const backendRequestsTotalChart = computed(() => makeCounterChart(metricsStore.data?.backendRequestsTotal?.buckets, '#409eff'))
-const backendRequestDurationChart = computed(() => makeHistogramCountChart(metricsStore.data?.backendRequestDuration?.buckets, '#e6a23c'))
-const backendActiveRequestsChart = computed(() => makeGaugeChart(metricsStore.data?.backendActiveRequests?.buckets, '#67c23a'))
+const backendRequestSeries = computed(() => groupedSeriesByMetricSelection('proxy.backend.requests.total', 'backend', selectedBackend.value, 'All backends'))
+const backendDurationSeries = computed(() => groupedSeriesByMetricSelection('proxy.backend.request.duration.seconds', 'backend', selectedBackend.value, 'All backends'))
+const backendActiveSeries = computed(() => groupedSeriesByMetricSelection('proxy.backend.active.requests', 'backend', selectedBackend.value, 'All backends'))
 
-// Auth & Policy section
-const authRequestsTotalChart = computed(() => makeCounterChart(metricsStore.data?.authRequestsTotal?.buckets, '#f56c6c'))
-const policyEvaluationsTotalChart = computed(() => makeCounterChart(metricsStore.data?.policyEvaluationsTotal?.buckets, '#b37feb'))
+const authSeries = computed(() => seriesByMetric('proxy.auth.requests.total'))
+const policySeries = computed(() => seriesByMetric('proxy.policy.evaluations.total'))
+const routeMatchSeries = computed(() => seriesByMetric('proxy.route.matches.total'))
+const routeNoMatchSeries = computed(() => seriesByMetric('proxy.route.no_match.total'))
+const activeRequestsSeries = computed(() => seriesByMetricWithoutLabel('proxy.http.active.requests', 'route'))
 
-// Routing section
-const routeMatchesTotalChart = computed(() => makeCounterChart(metricsStore.data?.routeMatchesTotal?.buckets, '#67c23a'))
-const routeNoMatchTotalChart = computed(() => makeCounterChart(metricsStore.data?.routeNoMatchTotal?.buckets, '#f56c6c'))
+const requestRateChart = computed(() => chartFromGroupedSeries(requestRateSeries.value, '#409eff', counterValue))
+const requestDurationChart = computed(() => chartFromGroupedSeries(requestDurationSeries.value, '#e6a23c', histogramAverage))
+const activeRequestsChart = computed(() => chartFromGroupedSeries(activeRequestsSeries.value.map(series => ({ label: seriesLabel(series, 'route'), series: [series] })), '#67c23a', gaugeValue))
+const requestSizeChart = computed(() => chartFromGroupedSeries(requestSizeSeries.value, '#909399', histogramAverage))
+const responseSizeChart = computed(() => chartFromGroupedSeries(responseSizeSeries.value, '#909399', histogramAverage))
+
+const backendRequestsChart = computed(() => chartFromGroupedSeries(backendRequestSeries.value, '#409eff', counterValue))
+const backendDurationChart = computed(() => chartFromGroupedSeries(backendDurationSeries.value, '#e6a23c', histogramAverage))
+const backendActiveChart = computed(() => chartFromGroupedSeries(backendActiveSeries.value, '#67c23a', gaugeValue))
+
+const authChart = computed(() => chartFromGroupedSeries(authSeries.value.map(series => ({ label: seriesLabel(series, 'result'), series: [series] })), '#f56c6c', counterValue))
+const policyChart = computed(() => chartFromGroupedSeries(policySeries.value.map(series => ({ label: seriesLabel(series, 'result'), series: [series] })), '#b37feb', counterValue))
+const routeMatchesChart = computed(() => chartFromGroupedSeries(routeMatchSeries.value.map(series => ({ label: seriesLabel(series, 'match_kind'), series: [series] })), '#67c23a', counterValue))
+const routeNoMatchChart = computed(() => chartFromGroupedSeries(routeNoMatchSeries.value.map(series => ({ label: seriesLabel(series, 'route'), series: [series] })), '#f56c6c', counterValue))
 </script>
 
 <template>
@@ -291,120 +396,147 @@ const routeNoMatchTotalChart = computed(() => makeCounterChart(metricsStore.data
 			</el-col>
 		</el-row>
 
-		<!-- Metrics Graphs -->
+
 		<el-skeleton v-if="metricsStore.loading" :rows="6" animated style="margin-top: 12px" />
 		<template v-else-if="metricsStore.data">
-			<!-- Requests -->
-			<h2 style="margin: 32px 0 16px">Requests</h2>
+
+			<el-row justify="space-between" align="middle" style="margin-bottom: 16px">
+				<el-col :span="12">
+					<div style="display: flex; align-items: center; gap: 12px">
+						<h2>Requests</h2>
+						<div>
+							<el-select v-model="selectedRoute" placeholder="Select routes" style="width: 280px" multiple collapse-tags
+								collapse-tags-tooltip clearable>
+								<el-option v-for="route in routeOptions" :key="route" :label="route" :value="route" />
+							</el-select>
+						</div>
+					</div>
+				</el-col>
+				<el-col :span="12" style="text-align: left">
+				</el-col>
+			</el-row>
+
 			<el-row :gutter="20">
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Requests Total</span></template>
-						<div style="height: 140px">
-							<Line :data="requestsTotalChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="requestRateChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Request Duration (avg)</span></template>
-						<div style="height: 140px">
+						<div style="height: 180px">
 							<Line :data="requestDurationChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Active Requests (max)</span></template>
-						<div style="height: 140px">
+						<div style="height: 180px">
 							<Line :data="activeRequestsChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Request Size (avg bytes)</span></template>
-						<div style="height: 140px">
+						<div style="height: 180px">
 							<Line :data="requestSizeChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Response Size (avg bytes)</span></template>
-						<div style="height: 140px">
+						<div style="height: 180px">
 							<Line :data="responseSizeChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
 			</el-row>
 
-			<!-- Backend -->
-			<h2 style="margin: 32px 0 16px">Backend</h2>
+			<el-row justify="space-between" align="middle" style="margin-bottom: 16px">
+				<el-col :span="12">
+					<div style="display: flex; align-items: center; gap: 12px">
+						<h2>Backend</h2>
+						<div>
+							<el-select v-model="selectedBackend" placeholder="Select backends" style="width: 280px" multiple
+								collapse-tags collapse-tags-tooltip clearable>
+								<el-option v-for="backend in backendOptions" :key="backend" :label="backend" :value="backend" />
+							</el-select>
+						</div>
+					</div>
+				</el-col>
+				<el-col :span="12" style="text-align: left">
+				</el-col>
+			</el-row>
+
 			<el-row :gutter="20">
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Backend Requests Total</span></template>
-						<div style="height: 140px">
-							<Line :data="backendRequestsTotalChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="backendRequestsChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Backend Request Duration (avg)</span></template>
-						<div style="height: 140px">
-							<Line :data="backendRequestDurationChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="backendDurationChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Backend Active Requests (max)</span></template>
-						<div style="height: 140px">
-							<Line :data="backendActiveRequestsChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="backendActiveChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
 			</el-row>
 
-			<!-- Auth & Policy -->
-			<h2 style="margin: 32px 0 16px">Auth &amp; Policy</h2>
+			<h2>Auth &amp; Policy</h2>
 			<el-row :gutter="20">
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Auth Requests Total</span></template>
-						<div style="height: 140px">
-							<Line :data="authRequestsTotalChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="authChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Policy Evaluations Total</span></template>
-						<div style="height: 140px">
-							<Line :data="policyEvaluationsTotalChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="policyChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
 			</el-row>
 
-			<!-- Routing -->
-			<h2 style="margin: 32px 0 16px">Routing</h2>
+			<h2>Routing</h2>
 			<el-row :gutter="20">
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Route Matches Total</span></template>
-						<div style="height: 140px">
-							<Line :data="routeMatchesTotalChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="routeMatchesChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>
-				<el-col :xs="24" :md="12" style="margin-bottom: 20px">
+				<el-col :xs="24" :md="8" style="margin-bottom: 20px">
 					<el-card shadow="hover">
 						<template #header><span>Route No-Match Total</span></template>
-						<div style="height: 140px">
-							<Line :data="routeNoMatchTotalChart" :options="chartOptions" />
+						<div style="height: 180px">
+							<Line :data="routeNoMatchChart" :options="chartOptions" />
 						</div>
 					</el-card>
 				</el-col>

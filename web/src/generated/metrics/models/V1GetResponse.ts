@@ -13,34 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
-import type { V1HistogramMetric } from './V1HistogramMetric';
+import type { V1MetricSeries } from './V1MetricSeries';
 import {
-    V1HistogramMetricFromJSON,
-    V1HistogramMetricFromJSONTyped,
-    V1HistogramMetricToJSON,
-    V1HistogramMetricToJSONTyped,
-} from './V1HistogramMetric';
-import type { V1CounterMetric } from './V1CounterMetric';
-import {
-    V1CounterMetricFromJSON,
-    V1CounterMetricFromJSONTyped,
-    V1CounterMetricToJSON,
-    V1CounterMetricToJSONTyped,
-} from './V1CounterMetric';
-import type { V1GaugeMetric } from './V1GaugeMetric';
-import {
-    V1GaugeMetricFromJSON,
-    V1GaugeMetricFromJSONTyped,
-    V1GaugeMetricToJSON,
-    V1GaugeMetricToJSONTyped,
-} from './V1GaugeMetric';
-import type { V1Int64HistogramMetric } from './V1Int64HistogramMetric';
-import {
-    V1Int64HistogramMetricFromJSON,
-    V1Int64HistogramMetricFromJSONTyped,
-    V1Int64HistogramMetricToJSON,
-    V1Int64HistogramMetricToJSONTyped,
-} from './V1Int64HistogramMetric';
+    V1MetricSeriesFromJSON,
+    V1MetricSeriesFromJSONTyped,
+    V1MetricSeriesToJSON,
+    V1MetricSeriesToJSONTyped,
+} from './V1MetricSeries';
 
 /**
  * 
@@ -50,76 +29,10 @@ import {
 export interface V1GetResponse {
     /**
      * 
-     * @type {V1CounterMetric}
+     * @type {Array<V1MetricSeries>}
      * @memberof V1GetResponse
      */
-    requestsTotal?: V1CounterMetric;
-    /**
-     * 
-     * @type {V1HistogramMetric}
-     * @memberof V1GetResponse
-     */
-    requestDuration?: V1HistogramMetric;
-    /**
-     * 
-     * @type {V1GaugeMetric}
-     * @memberof V1GetResponse
-     */
-    activeRequests?: V1GaugeMetric;
-    /**
-     * 
-     * @type {V1Int64HistogramMetric}
-     * @memberof V1GetResponse
-     */
-    requestSizeBytes?: V1Int64HistogramMetric;
-    /**
-     * 
-     * @type {V1Int64HistogramMetric}
-     * @memberof V1GetResponse
-     */
-    responseSizeBytes?: V1Int64HistogramMetric;
-    /**
-     * 
-     * @type {V1CounterMetric}
-     * @memberof V1GetResponse
-     */
-    backendRequestsTotal?: V1CounterMetric;
-    /**
-     * 
-     * @type {V1HistogramMetric}
-     * @memberof V1GetResponse
-     */
-    backendRequestDuration?: V1HistogramMetric;
-    /**
-     * 
-     * @type {V1GaugeMetric}
-     * @memberof V1GetResponse
-     */
-    backendActiveRequests?: V1GaugeMetric;
-    /**
-     * 
-     * @type {V1CounterMetric}
-     * @memberof V1GetResponse
-     */
-    authRequestsTotal?: V1CounterMetric;
-    /**
-     * 
-     * @type {V1CounterMetric}
-     * @memberof V1GetResponse
-     */
-    policyEvaluationsTotal?: V1CounterMetric;
-    /**
-     * 
-     * @type {V1CounterMetric}
-     * @memberof V1GetResponse
-     */
-    routeMatchesTotal?: V1CounterMetric;
-    /**
-     * 
-     * @type {V1CounterMetric}
-     * @memberof V1GetResponse
-     */
-    routeNoMatchTotal?: V1CounterMetric;
+    series?: Array<V1MetricSeries>;
 }
 
 /**
@@ -139,18 +52,7 @@ export function V1GetResponseFromJSONTyped(json: any, ignoreDiscriminator: boole
     }
     return {
         
-        'requestsTotal': json['requestsTotal'] == null ? undefined : V1CounterMetricFromJSON(json['requestsTotal']),
-        'requestDuration': json['requestDuration'] == null ? undefined : V1HistogramMetricFromJSON(json['requestDuration']),
-        'activeRequests': json['activeRequests'] == null ? undefined : V1GaugeMetricFromJSON(json['activeRequests']),
-        'requestSizeBytes': json['requestSizeBytes'] == null ? undefined : V1Int64HistogramMetricFromJSON(json['requestSizeBytes']),
-        'responseSizeBytes': json['responseSizeBytes'] == null ? undefined : V1Int64HistogramMetricFromJSON(json['responseSizeBytes']),
-        'backendRequestsTotal': json['backendRequestsTotal'] == null ? undefined : V1CounterMetricFromJSON(json['backendRequestsTotal']),
-        'backendRequestDuration': json['backendRequestDuration'] == null ? undefined : V1HistogramMetricFromJSON(json['backendRequestDuration']),
-        'backendActiveRequests': json['backendActiveRequests'] == null ? undefined : V1GaugeMetricFromJSON(json['backendActiveRequests']),
-        'authRequestsTotal': json['authRequestsTotal'] == null ? undefined : V1CounterMetricFromJSON(json['authRequestsTotal']),
-        'policyEvaluationsTotal': json['policyEvaluationsTotal'] == null ? undefined : V1CounterMetricFromJSON(json['policyEvaluationsTotal']),
-        'routeMatchesTotal': json['routeMatchesTotal'] == null ? undefined : V1CounterMetricFromJSON(json['routeMatchesTotal']),
-        'routeNoMatchTotal': json['routeNoMatchTotal'] == null ? undefined : V1CounterMetricFromJSON(json['routeNoMatchTotal']),
+        'series': json['series'] == null ? undefined : ((json['series'] as Array<any>).map(V1MetricSeriesFromJSON)),
     };
 }
 
@@ -165,18 +67,7 @@ export function V1GetResponseToJSONTyped(value?: V1GetResponse | null, ignoreDis
 
     return {
         
-        'requestsTotal': V1CounterMetricToJSON(value['requestsTotal']),
-        'requestDuration': V1HistogramMetricToJSON(value['requestDuration']),
-        'activeRequests': V1GaugeMetricToJSON(value['activeRequests']),
-        'requestSizeBytes': V1Int64HistogramMetricToJSON(value['requestSizeBytes']),
-        'responseSizeBytes': V1Int64HistogramMetricToJSON(value['responseSizeBytes']),
-        'backendRequestsTotal': V1CounterMetricToJSON(value['backendRequestsTotal']),
-        'backendRequestDuration': V1HistogramMetricToJSON(value['backendRequestDuration']),
-        'backendActiveRequests': V1GaugeMetricToJSON(value['backendActiveRequests']),
-        'authRequestsTotal': V1CounterMetricToJSON(value['authRequestsTotal']),
-        'policyEvaluationsTotal': V1CounterMetricToJSON(value['policyEvaluationsTotal']),
-        'routeMatchesTotal': V1CounterMetricToJSON(value['routeMatchesTotal']),
-        'routeNoMatchTotal': V1CounterMetricToJSON(value['routeNoMatchTotal']),
+        'series': value['series'] == null ? undefined : ((value['series'] as Array<any>).map(V1MetricSeriesToJSON)),
     };
 }
 

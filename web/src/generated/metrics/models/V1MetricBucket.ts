@@ -14,60 +14,66 @@
 
 import { mapValues } from '../runtime';
 /**
- * Float64Series represents a single float64 histogram bucket
- * (observation count + sum per interval).
+ * 
  * @export
- * @interface V1Float64Series
+ * @interface V1MetricBucket
  */
-export interface V1Float64Series {
+export interface V1MetricBucket {
     /**
      * 
      * @type {Date}
-     * @memberof V1Float64Series
+     * @memberof V1MetricBucket
      */
     start?: Date;
     /**
      * 
+     * @type {number}
+     * @memberof V1MetricBucket
+     */
+    value?: number;
+    /**
+     * 
      * @type {string}
-     * @memberof V1Float64Series
+     * @memberof V1MetricBucket
      */
     count?: string;
     /**
      * 
      * @type {number}
-     * @memberof V1Float64Series
+     * @memberof V1MetricBucket
      */
     sum?: number;
 }
 
 /**
- * Check if a given object implements the V1Float64Series interface.
+ * Check if a given object implements the V1MetricBucket interface.
  */
-export function instanceOfV1Float64Series(value: object): value is V1Float64Series {
+export function instanceOfV1MetricBucket(value: object): value is V1MetricBucket {
     return true;
 }
 
-export function V1Float64SeriesFromJSON(json: any): V1Float64Series {
-    return V1Float64SeriesFromJSONTyped(json, false);
+export function V1MetricBucketFromJSON(json: any): V1MetricBucket {
+    return V1MetricBucketFromJSONTyped(json, false);
 }
 
-export function V1Float64SeriesFromJSONTyped(json: any, ignoreDiscriminator: boolean): V1Float64Series {
+export function V1MetricBucketFromJSONTyped(json: any, ignoreDiscriminator: boolean): V1MetricBucket {
     if (json == null) {
         return json;
     }
     return {
         
         'start': json['start'] == null ? undefined : (new Date(json['start'])),
+        'value': json['value'] == null ? undefined : json['value'],
         'count': json['count'] == null ? undefined : json['count'],
         'sum': json['sum'] == null ? undefined : json['sum'],
     };
 }
 
-export function V1Float64SeriesToJSON(json: any): V1Float64Series {
-    return V1Float64SeriesToJSONTyped(json, false);
+export function V1MetricBucketToJSON(json: any): V1MetricBucket {
+    return V1MetricBucketToJSONTyped(json, false);
 }
 
-export function V1Float64SeriesToJSONTyped(value?: V1Float64Series | null, ignoreDiscriminator: boolean = false): any {
+export function V1MetricBucketToJSONTyped(value?: V1MetricBucket | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
@@ -75,6 +81,7 @@ export function V1Float64SeriesToJSONTyped(value?: V1Float64Series | null, ignor
     return {
         
         'start': value['start'] == null ? value['start'] : value['start'].toISOString(),
+        'value': value['value'],
         'count': value['count'],
         'sum': value['sum'],
     };

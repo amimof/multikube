@@ -25,6 +25,10 @@ import {
     V1GetResponseToJSON,
 } from '../models/index';
 
+export interface MetricsServiceGetRequest {
+    windowMinutes?: number;
+}
+
 /**
  * 
  */
@@ -33,8 +37,12 @@ export class MetricsServiceApi extends runtime.BaseAPI {
     /**
      * Creates request options for metricsServiceGet without sending the request
      */
-    async metricsServiceGetRequestOpts(): Promise<runtime.RequestOpts> {
+    async metricsServiceGetRequestOpts(requestParameters: MetricsServiceGetRequest): Promise<runtime.RequestOpts> {
         const queryParameters: any = {};
+
+        if (requestParameters['windowMinutes'] != null) {
+            queryParameters['windowMinutes'] = requestParameters['windowMinutes'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -51,8 +59,8 @@ export class MetricsServiceApi extends runtime.BaseAPI {
 
     /**
      */
-    async metricsServiceGetRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<V1GetResponse>> {
-        const requestOptions = await this.metricsServiceGetRequestOpts();
+    async metricsServiceGetRaw(requestParameters: MetricsServiceGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<V1GetResponse>> {
+        const requestOptions = await this.metricsServiceGetRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
         return new runtime.JSONApiResponse(response, (jsonValue) => V1GetResponseFromJSON(jsonValue));
@@ -60,8 +68,8 @@ export class MetricsServiceApi extends runtime.BaseAPI {
 
     /**
      */
-    async metricsServiceGet(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<V1GetResponse> {
-        const response = await this.metricsServiceGetRaw(initOverrides);
+    async metricsServiceGet(requestParameters: MetricsServiceGetRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<V1GetResponse> {
+        const response = await this.metricsServiceGetRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -51,6 +51,10 @@ oci: ; $(info $(M) building container image) @ ## Build container image from Doc
 protos: ; $(info $(M) generating protos) @ ## Generate protos
 	buf generate
 
+.PHONY: run
+run: ; $(info $(M) run dev server) @ ## Run server locally with go run
+	 $Q $(GO) run -tags=testui_stub ./cmd/multikube --log-level debug
+
 MOCKGEN ?= mockgen
 .PHONY: mockgen
 mockgen: ; $(info $(M) generating mock clients) @ ## Generate Go mock clients for backend

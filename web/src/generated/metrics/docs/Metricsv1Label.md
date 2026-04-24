@@ -1,27 +1,24 @@
 
-# V1Float64Series
+# Metricsv1Label
 
-Float64Series represents a single float64 histogram bucket (observation count + sum per interval).
 
 ## Properties
 
 Name | Type
 ------------ | -------------
-`start` | Date
-`count` | string
-`sum` | number
+`name` | string
+`value` | string
 
 ## Example
 
 ```typescript
-import type { V1Float64Series } from ''
+import type { Metricsv1Label } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "start": null,
-  "count": null,
-  "sum": null,
-} satisfies V1Float64Series
+  "name": null,
+  "value": null,
+} satisfies Metricsv1Label
 
 console.log(example)
 
@@ -30,7 +27,7 @@ const exampleJSON: string = JSON.stringify(example)
 console.log(exampleJSON)
 
 // Parse the JSON string back to an object
-const exampleParsed = JSON.parse(exampleJSON) as V1Float64Series
+const exampleParsed = JSON.parse(exampleJSON) as Metricsv1Label
 console.log(exampleParsed)
 ```
 

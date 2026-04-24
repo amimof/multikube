@@ -21,6 +21,8 @@ import (
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 	proxy "github.com/amimof/multikube/pkg/proxyv2"
+	"github.com/nakabonne/tstorage"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
 // ---------------------------------------------------------------------------
@@ -196,6 +198,83 @@ func TestCompile_VersionIncrement(t *testing.T) {
 			t.Errorf("compile %d: expected version %d, got %d", i, i, res.Runtime.Version)
 		}
 	}
+}
+
+func TestCompile_BackendForwarderEmitsMetrics(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	tempDir := t.TempDir()
+	storage, err := tstorage.NewStorage(tstorage.WithDataPath(tempDir))
+	if err != nil {
+		t.Fatalf("new storage: %v", err)
+	}
+	defer func() {
+		_ = storage.Close()
+	}()
+
+	meter := noop.NewMeterProvider().Meter("test")
+	metrics, err := proxy.InitMetrics(meter, storage, tempDir)
+	if err != nil {
+		t.Fatalf("init metrics: %v", err)
+	}
+
+	c := NewCompiler(WithMetrics(metrics))
+	backend := newBackend("be", upstream.URL)
+	backend.Config.ImpersonationConfig = &backendv1.ImpersonationConfig{Enabled: false}
+	st := &State{
+		Backends: map[string]*backendv1.Backend{
+			"be": backend,
+		},
+		Routes: map[string]*routev1.Route{
+			"route": newRoute("route", "be", &routev1.Match{Path: "/demo"}),
+		},
+		Certificates:           map[string]*certificatev1.Certificate{},
+		CertificateAuthorities: map[string]*cav1.CertificateAuthority{},
+		Credentials:            map[string]*credentialv1.Credential{},
+	}
+
+	res, err := c.Compile(st)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if len(res.Runtime.Routes.Paths) != 1 {
+		t.Fatalf("expected 1 compiled path route, got %d", len(res.Runtime.Routes.Paths))
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://proxy.local/demo", nil)
+	rr := httptest.NewRecorder()
+	res.Runtime.Routes.Paths[0].Handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusCreated)
+	}
+
+	series, err := metrics.Series()
+	if err != nil {
+		t.Fatalf("series: %v", err)
+	}
+
+	assertBackendSeries := func(metricName string) {
+		t.Helper()
+		for _, entry := range series {
+			if entry.Metric != metricName {
+				continue
+			}
+			for _, label := range entry.Labels {
+				if label.Name == "backend" && label.Value == "be" {
+					return
+				}
+			}
+		}
+		t.Fatalf("expected backend series for %s", metricName)
+	}
+
+	assertBackendSeries("proxy.backend.requests.total")
+	assertBackendSeries("proxy.backend.request.duration.seconds")
+	assertBackendSeries("proxy.backend.active.requests")
 }
 
 func TestCompile_BackendTargetProbeStateFromStatus(t *testing.T) {

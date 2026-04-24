@@ -6,6 +6,7 @@
   --main-bg: #f5f7fa;
   --header-bg: #fff;
   --header-border: #e4e7ed;
+
 }
 
 html.dark {
@@ -42,7 +43,9 @@ html.dark {
 
 }
 
-.el-tag {
+.el-card {
+  --el-card-border-radius: 8px !important;
+	--el-card-border-color: #2b2c2c !important;
 }
 
 body {
@@ -50,7 +53,7 @@ body {
   padding: 0;
   min-height: 100vh;
   line-height: 1.6;
-  font-family: Helvetica Neue,Helvetica,PingFang SC,Hiragino Sans GB,Microsoft YaHei,Arial,sans-serif;
+	font-family: -apple-system,system-ui,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; */
   font-size: 15px;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

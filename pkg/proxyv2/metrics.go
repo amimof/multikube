@@ -2,219 +2,505 @@ package proxy
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"math"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/nakabonne/tstorage"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
-var (
-	interval = time.Second * 60
-	points   = 120
+const (
+	seriesStep      = time.Minute
+	seriesPoints    = 120
+	seriesIndexFile = "series-index.json"
+
+	kindCounter   = "counter"
+	kindHistogram = "histogram"
+	kindGauge     = "gauge"
 )
 
-// bucketPtr is the generic constraint: T is a struct type whose pointer *T
-// implements start() and zero(). This lets advanceBuckets and makeBuckets
-// work on []T (value slices) while calling pointer-receiver methods.
-type bucketPtr[T any] interface {
-	~*T
-	start() time.Time
-	zero(t time.Time)
+type MetricLabel struct {
+	Name  string
+	Value string
 }
 
-// Int64Bucket stores a running sum for a single time interval (counters).
-type Int64Bucket struct {
+type MetricBucket struct {
 	Start time.Time
-	Value int64
-}
-
-func (b *Int64Bucket) start() time.Time { return b.Start }
-func (b *Int64Bucket) zero(t time.Time) { b.Start = t; b.Value = 0 }
-
-// Float64Bucket stores observation count and sum for a single time interval
-// (float64 histograms such as request duration).
-type Float64Bucket struct {
-	Start time.Time
+	Value float64
 	Count int64
 	Sum   float64
 }
 
-func (b *Float64Bucket) start() time.Time { return b.Start }
-func (b *Float64Bucket) zero(t time.Time) { b.Start = t; b.Count = 0; b.Sum = 0 }
-
-// Int64HistogramBucket stores observation count and sum for a single time
-// interval (int64 histograms such as request/response size).
-type Int64HistogramBucket struct {
-	Start time.Time
-	Count int64
-	Sum   int64
+type MetricSeries struct {
+	Metric  string
+	Kind    string
+	Labels  []MetricLabel
+	Buckets []MetricBucket
 }
 
-func (b *Int64HistogramBucket) start() time.Time { return b.Start }
-func (b *Int64HistogramBucket) zero(t time.Time) { b.Start = t; b.Count = 0; b.Sum = 0 }
-
-// Int64GaugeBucket stores the maximum gauge value observed during a single
-// time interval (up-down counters such as active requests).
-type Int64GaugeBucket struct {
-	Start time.Time
-	Max   int64
+type seriesRegistry struct {
+	mu      sync.RWMutex
+	entries map[string]MetricSeries
 }
 
-func (b *Int64GaugeBucket) start() time.Time { return b.Start }
-func (b *Int64GaugeBucket) zero(t time.Time) { b.Start = t; b.Max = 0 }
+func newSeriesRegistry() *seriesRegistry {
+	return &seriesRegistry{entries: make(map[string]MetricSeries)}
+}
 
-// advanceBuckets shifts the rolling window forward so that the last bucket
-// covers the interval containing now. Buckets that fall outside the window
-// are zeroed.
-func advanceBuckets[T any, P bucketPtr[T]](buckets []T, now time.Time) {
-	last := len(buckets) - 1
-	steps := int(now.Sub(P(&buckets[last]).start()) / interval)
-	if steps <= 0 {
-		return
+func (r *seriesRegistry) Register(metricName, kind string, labels []tstorage.Label) {
+	entry := MetricSeries{
+		Metric: metricName,
+		Kind:   kind,
+		Labels: cloneMetricLabels(labels),
 	}
-	if steps >= len(buckets) {
-		for i := range buckets {
-			P(&buckets[i]).zero(now.Add(time.Duration(i-len(buckets)+1) * interval))
+
+	r.mu.Lock()
+	r.entries[seriesRegistryKey(metricName, kind, labels)] = entry
+	r.mu.Unlock()
+}
+
+func (r *seriesRegistry) RegisterSeries(entry MetricSeries) {
+	r.mu.Lock()
+	r.entries[seriesRegistryKey(entry.Metric, entry.Kind, metricLabelsToStorage(entry.Labels))] = MetricSeries{
+		Metric: entry.Metric,
+		Kind:   entry.Kind,
+		Labels: append([]MetricLabel(nil), entry.Labels...),
+	}
+	r.mu.Unlock()
+}
+
+func (r *seriesRegistry) List() []MetricSeries {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make([]MetricSeries, 0, len(r.entries))
+	for _, entry := range r.entries {
+		entry.Buckets = nil
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Metric != out[j].Metric {
+			return out[i].Metric < out[j].Metric
 		}
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return labelsKey(metricLabelsToStorage(out[i].Labels)) < labelsKey(metricLabelsToStorage(out[j].Labels))
+	})
+	return out
+}
+
+func seriesRegistryKey(metricName, kind string, labels []tstorage.Label) string {
+	return metricName + "|" + kind + "|" + labelsKey(labels)
+}
+
+func cloneMetricLabels(labels []tstorage.Label) []MetricLabel {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make([]MetricLabel, len(labels))
+	for i, label := range labels {
+		out[i] = MetricLabel{Name: label.Name, Value: label.Value}
+	}
+	return out
+}
+
+func metricLabelsToStorage(labels []MetricLabel) []tstorage.Label {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make([]tstorage.Label, len(labels))
+	for i, label := range labels {
+		out[i] = tstorage.Label{Name: label.Name, Value: label.Value}
+	}
+	return out
+}
+
+func labelsKey(labels []tstorage.Label) string {
+	if len(labels) == 0 {
+		return ""
+	}
+	normalized := cloneStorageLabels(labels)
+	var b strings.Builder
+	for i, label := range normalized {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(label.Name)
+		b.WriteByte('=')
+		b.WriteString(label.Value)
+	}
+	return b.String()
+}
+
+func cloneStorageLabels(labels []tstorage.Label) []tstorage.Label {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make([]tstorage.Label, 0, len(labels))
+	for _, label := range labels {
+		if label.Name == "" || label.Value == "" {
+			continue
+		}
+		out = append(out, tstorage.Label{Name: label.Name, Value: label.Value})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Value < out[j].Value
+	})
+	return out
+}
+
+func normalizeAttributes(attrs []attribute.KeyValue) ([]attribute.KeyValue, []tstorage.Label) {
+	if len(attrs) == 0 {
+		return nil, nil
+	}
+	normalized := make([]attribute.KeyValue, 0, len(attrs))
+	labels := make([]tstorage.Label, 0, len(attrs))
+	for _, attr := range attrs {
+		if !attr.Valid() {
+			continue
+		}
+		value := attr.Value.Emit()
+		if value == "" {
+			continue
+		}
+		normalized = append(normalized, attr)
+		labels = append(labels, tstorage.Label{Name: string(attr.Key), Value: value})
+	}
+	labels = cloneStorageLabels(labels)
+	sort.Slice(normalized, func(i, j int) bool {
+		if normalized[i].Key != normalized[j].Key {
+			return normalized[i].Key < normalized[j].Key
+		}
+		return normalized[i].Value.Emit() < normalized[j].Value.Emit()
+	})
+	return normalized, labels
+}
+
+type metricsStorage struct {
+	storage  tstorage.Storage
+	registry *seriesRegistry
+	index    *seriesIndex
+}
+
+func newMetricsStorage(storage tstorage.Storage, dataPath string) (*metricsStorage, error) {
+	if storage == nil {
+		var err error
+		storage, err = tstorage.NewStorage()
+		if err != nil {
+			return nil, err
+		}
+	}
+	registry := newSeriesRegistry()
+	index := newSeriesIndex(dataPath)
+	if err := index.LoadInto(registry); err != nil {
+		return nil, err
+	}
+	return &metricsStorage{storage: storage, registry: registry, index: index}, nil
+}
+
+func (s *metricsStorage) Insert(metricName, kind string, labels []tstorage.Label, value float64, timestamp int64) {
+	if s == nil || s.storage == nil {
 		return
 	}
-	copy(buckets, buckets[steps:])
-	for i := len(buckets) - steps; i < len(buckets); i++ {
-		P(&buckets[i]).zero(P(&buckets[i-1]).start().Add(interval))
+	labels = cloneStorageLabels(labels)
+	s.registry.Register(metricName, kind, labels)
+	if s.index != nil {
+		_ = s.index.Register(MetricSeries{Metric: metricName, Kind: kind, Labels: cloneMetricLabels(labels)})
+	}
+	_ = s.storage.InsertRows([]tstorage.Row{{
+		Metric: metricName,
+		Labels: labels,
+		DataPoint: tstorage.DataPoint{
+			Timestamp: timestamp,
+			Value:     value,
+		},
+	}})
+}
+
+func (s *metricsStorage) Series(step time.Duration, count int) ([]MetricSeries, error) {
+	if s == nil || s.storage == nil {
+		return nil, nil
+	}
+	if step <= 0 {
+		step = seriesStep
+	}
+	if count <= 0 {
+		count = seriesPoints
+	}
+
+	series := s.registry.List()
+	out := make([]MetricSeries, 0, len(series))
+	for _, entry := range series {
+		labels := metricLabelsToStorage(entry.Labels)
+		buckets, err := s.loadBuckets(entry.Metric, entry.Kind, labels, step, count)
+		if err != nil {
+			return nil, err
+		}
+		entry.Buckets = buckets
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+type seriesIndex struct {
+	path string
+	mu   sync.Mutex
+	seen map[string]struct{}
+}
+
+func newSeriesIndex(dataPath string) *seriesIndex {
+	if dataPath == "" {
+		return nil
+	}
+	return &seriesIndex{
+		path: filepath.Join(dataPath, seriesIndexFile),
+		seen: make(map[string]struct{}),
 	}
 }
 
-// makeBuckets pre-allocates a rolling window of n buckets ending at now.
-func makeBuckets[T any, P bucketPtr[T]](n int, now time.Time) []T {
-	s := make([]T, n)
-	for i := range s {
-		P(&s[i]).zero(now.Add(time.Duration(i-n+1) * interval))
+func (i *seriesIndex) LoadInto(registry *seriesRegistry) error {
+	if i == nil {
+		return nil
 	}
-	return s
+	data, err := os.ReadFile(i.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var entries []MetricSeries
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		registry.RegisterSeries(entry)
+		i.seen[seriesRegistryKey(entry.Metric, entry.Kind, metricLabelsToStorage(entry.Labels))] = struct{}{}
+	}
+	return nil
+}
+
+func (i *seriesIndex) Register(entry MetricSeries) error {
+	if i == nil {
+		return nil
+	}
+	key := seriesRegistryKey(entry.Metric, entry.Kind, metricLabelsToStorage(entry.Labels))
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if _, ok := i.seen[key]; ok {
+		return nil
+	}
+	i.seen[key] = struct{}{}
+	entries, err := i.entries()
+	if err != nil {
+		return err
+	}
+	entries = append(entries, MetricSeries{
+		Metric: entry.Metric,
+		Kind:   entry.Kind,
+		Labels: append([]MetricLabel(nil), entry.Labels...),
+	})
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(i.path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(i.path, data, 0o644)
+}
+
+func (i *seriesIndex) entries() ([]MetricSeries, error) {
+	data, err := os.ReadFile(i.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var entries []MetricSeries
+	if len(data) == 0 {
+		return nil, nil
+	}
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (s *metricsStorage) loadBuckets(metricName, kind string, labels []tstorage.Label, step time.Duration, count int) ([]MetricBucket, error) {
+	now := time.Now().UTC().Truncate(step)
+	start := now.Add(-time.Duration(count-1) * step)
+	end := now.Add(step)
+	buckets := makeBuckets(start, step, count)
+
+	switch kind {
+	case kindCounter:
+		points, err := s.selectPoints(metricName, labels, start, end)
+		if err != nil {
+			return nil, err
+		}
+		for _, point := range points {
+			idx := bucketIndex(point.Timestamp, start, step, count)
+			if idx < 0 {
+				continue
+			}
+			buckets[idx].Value += point.Value
+		}
+	case kindHistogram:
+		countPoints, err := s.selectPoints(metricName+".count", labels, start, end)
+		if err != nil {
+			return nil, err
+		}
+		sumPoints, err := s.selectPoints(metricName+".sum", labels, start, end)
+		if err != nil {
+			return nil, err
+		}
+		for _, point := range countPoints {
+			idx := bucketIndex(point.Timestamp, start, step, count)
+			if idx < 0 {
+				continue
+			}
+			buckets[idx].Count += int64(math.Round(point.Value))
+		}
+		for _, point := range sumPoints {
+			idx := bucketIndex(point.Timestamp, start, step, count)
+			if idx < 0 {
+				continue
+			}
+			buckets[idx].Sum += point.Value
+		}
+	case kindGauge:
+		points, err := s.selectPoints(metricName, labels, start, end)
+		if err != nil {
+			return nil, err
+		}
+		seen := make([]bool, len(buckets))
+		for _, point := range points {
+			idx := bucketIndex(point.Timestamp, start, step, count)
+			if idx < 0 {
+				continue
+			}
+			if !seen[idx] || point.Value > buckets[idx].Value {
+				buckets[idx].Value = point.Value
+				seen[idx] = true
+			}
+		}
+	default:
+		return nil, nil
+	}
+
+	return buckets, nil
+}
+
+func (s *metricsStorage) selectPoints(metricName string, labels []tstorage.Label, start, end time.Time) ([]*tstorage.DataPoint, error) {
+	points, err := s.storage.Select(metricName, labels, start.UnixNano(), end.UnixNano())
+	if errors.Is(err, tstorage.ErrNoDataPoints) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return points, nil
+}
+
+func makeBuckets(start time.Time, step time.Duration, count int) []MetricBucket {
+	buckets := make([]MetricBucket, count)
+	for i := range buckets {
+		buckets[i].Start = start.Add(time.Duration(i) * step)
+	}
+	return buckets
+}
+
+func bucketIndex(timestamp int64, start time.Time, step time.Duration, count int) int {
+	delta := timestamp - start.UnixNano()
+	if delta < 0 {
+		return -1
+	}
+	idx := int(delta / int64(step))
+	if idx < 0 || idx >= count {
+		return -1
+	}
+	return idx
 }
 
 type Int64Counter struct {
-	mu      sync.Mutex
 	Counter metric.Int64Counter
-	Current atomic.Int64
-	Buckets []Int64Bucket
+	storage *metricsStorage
+	name    string
 }
 
-func (m *Int64Counter) Inc(ctx context.Context, v int64, attrs ...metric.AddOption) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.Counter.Add(ctx, v, attrs...)
-	m.Current.Add(v)
-
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Int64Bucket, *Int64Bucket](m.Buckets, now)
-	m.Buckets[len(m.Buckets)-1].Value += v
-}
-
-func (m *Int64Counter) Load() int64 {
-	return m.Current.Load()
-}
-
-func (m *Int64Counter) SnapshotBuckets() []Int64Bucket {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Int64Bucket, *Int64Bucket](m.Buckets, now)
-	out := make([]Int64Bucket, len(m.Buckets))
-	copy(out, m.Buckets)
-	return out
+func (m *Int64Counter) Inc(ctx context.Context, v int64, attrs ...attribute.KeyValue) {
+	normalized, labels := normalizeAttributes(attrs)
+	m.Counter.Add(ctx, v, metric.WithAttributes(normalized...))
+	m.storage.Insert(m.name, kindCounter, labels, float64(v), time.Now().UTC().UnixNano())
 }
 
 type Float64Histogram struct {
-	mu        sync.Mutex
 	Histogram metric.Float64Histogram
-	Buckets   []Float64Bucket
+	storage   *metricsStorage
+	name      string
 }
 
-func (m *Float64Histogram) Record(ctx context.Context, v float64, attrs ...metric.RecordOption) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.Histogram.Record(ctx, v, attrs...)
-
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Float64Bucket, *Float64Bucket](m.Buckets, now)
-	last := &m.Buckets[len(m.Buckets)-1]
-	last.Count++
-	last.Sum += v
-}
-
-func (m *Float64Histogram) SnapshotBuckets() []Float64Bucket {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Float64Bucket, *Float64Bucket](m.Buckets, now)
-	out := make([]Float64Bucket, len(m.Buckets))
-	copy(out, m.Buckets)
-	return out
+func (m *Float64Histogram) Record(ctx context.Context, v float64, attrs ...attribute.KeyValue) {
+	normalized, labels := normalizeAttributes(attrs)
+	m.Histogram.Record(ctx, v, metric.WithAttributes(normalized...))
+	now := time.Now().UTC().UnixNano()
+	m.storage.Insert(m.name+".count", kindCounter, labels, 1, now)
+	m.storage.Insert(m.name+".sum", kindCounter, labels, v, now)
+	m.storage.registry.Register(m.name, kindHistogram, labels)
 }
 
 type Int64Histogram struct {
-	mu        sync.Mutex
 	Histogram metric.Int64Histogram
-	Buckets   []Int64HistogramBucket
+	storage   *metricsStorage
+	name      string
 }
 
-func (m *Int64Histogram) Record(ctx context.Context, v int64, attrs ...metric.RecordOption) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.Histogram.Record(ctx, v, attrs...)
-
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Int64HistogramBucket, *Int64HistogramBucket](m.Buckets, now)
-	last := &m.Buckets[len(m.Buckets)-1]
-	last.Count++
-	last.Sum += v
-}
-
-func (m *Int64Histogram) SnapshotBuckets() []Int64HistogramBucket {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Int64HistogramBucket, *Int64HistogramBucket](m.Buckets, now)
-	out := make([]Int64HistogramBucket, len(m.Buckets))
-	copy(out, m.Buckets)
-	return out
+func (m *Int64Histogram) Record(ctx context.Context, v int64, attrs ...attribute.KeyValue) {
+	normalized, labels := normalizeAttributes(attrs)
+	m.Histogram.Record(ctx, v, metric.WithAttributes(normalized...))
+	now := time.Now().UTC().UnixNano()
+	m.storage.Insert(m.name+".count", kindCounter, labels, 1, now)
+	m.storage.Insert(m.name+".sum", kindCounter, labels, float64(v), now)
+	m.storage.registry.Register(m.name, kindHistogram, labels)
 }
 
 type Int64UpDownCounter struct {
-	mu      sync.Mutex
 	Counter metric.Int64UpDownCounter
-	current int64
-	Buckets []Int64GaugeBucket
+	storage *metricsStorage
+	name    string
+
+	mu      sync.Mutex
+	current map[string]int64
 }
 
-func (m *Int64UpDownCounter) Add(ctx context.Context, v int64, attrs ...metric.AddOption) {
+func (m *Int64UpDownCounter) Add(ctx context.Context, v int64, attrs ...attribute.KeyValue) {
+	normalized, labels := normalizeAttributes(attrs)
+	m.Counter.Add(ctx, v, metric.WithAttributes(normalized...))
+
+	key := labelsKey(labels)
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.Counter.Add(ctx, v, attrs...)
-	m.current += v
-
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Int64GaugeBucket, *Int64GaugeBucket](m.Buckets, now)
-	last := &m.Buckets[len(m.Buckets)-1]
-	if m.current > last.Max {
-		last.Max = m.current
+	if m.current == nil {
+		m.current = make(map[string]int64)
 	}
-}
+	m.current[key] += v
+	current := m.current[key]
+	m.mu.Unlock()
 
-func (m *Int64UpDownCounter) SnapshotBuckets() []Int64GaugeBucket {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	now := time.Now().Truncate(interval)
-	advanceBuckets[Int64GaugeBucket, *Int64GaugeBucket](m.Buckets, now)
-	out := make([]Int64GaugeBucket, len(m.Buckets))
-	copy(out, m.Buckets)
-	return out
+	m.storage.Insert(m.name, kindGauge, labels, float64(current), time.Now().UTC().UnixNano())
 }
 
 // ProxyMetrics holds all OpenTelemetry instruments for the proxy.
@@ -238,33 +524,55 @@ type ProxyMetrics struct {
 	// Route matching metrics
 	RouteMatchesTotal Int64Counter
 	RouteNoMatchTotal Int64Counter
+
+	storage *metricsStorage
+}
+
+func (m *ProxyMetrics) Series() ([]MetricSeries, error) {
+	if m == nil || m.storage == nil {
+		return nil, nil
+	}
+	return m.storage.Series(seriesStep, seriesPoints)
 }
 
 // InitMetrics creates a fully-initialised ProxyMetrics from the given OTel
-// meter. Each metric is backed by both an OTel instrument (for Prometheus
-// scraping) and a rolling in-memory time series (for the web UI).
-func InitMetrics(meter metric.Meter) (*ProxyMetrics, error) {
-	now := time.Now().Truncate(interval)
-
-	m := &ProxyMetrics{
-		RequestsTotal:          Int64Counter{Buckets: makeBuckets[Int64Bucket, *Int64Bucket](points, now)},
-		BackendRequestsTotal:   Int64Counter{Buckets: makeBuckets[Int64Bucket, *Int64Bucket](points, now)},
-		AuthRequestsTotal:      Int64Counter{Buckets: makeBuckets[Int64Bucket, *Int64Bucket](points, now)},
-		PolicyEvaluationsTotal: Int64Counter{Buckets: makeBuckets[Int64Bucket, *Int64Bucket](points, now)},
-		RouteMatchesTotal:      Int64Counter{Buckets: makeBuckets[Int64Bucket, *Int64Bucket](points, now)},
-		RouteNoMatchTotal:      Int64Counter{Buckets: makeBuckets[Int64Bucket, *Int64Bucket](points, now)},
-
-		RequestDuration:        Float64Histogram{Buckets: makeBuckets[Float64Bucket, *Float64Bucket](points, now)},
-		BackendRequestDuration: Float64Histogram{Buckets: makeBuckets[Float64Bucket, *Float64Bucket](points, now)},
-
-		RequestSizeBytes:  Int64Histogram{Buckets: makeBuckets[Int64HistogramBucket, *Int64HistogramBucket](points, now)},
-		ResponseSizeBytes: Int64Histogram{Buckets: makeBuckets[Int64HistogramBucket, *Int64HistogramBucket](points, now)},
-
-		ActiveRequests:        Int64UpDownCounter{Buckets: makeBuckets[Int64GaugeBucket, *Int64GaugeBucket](points, now)},
-		BackendActiveRequests: Int64UpDownCounter{Buckets: makeBuckets[Int64GaugeBucket, *Int64GaugeBucket](points, now)},
+// meter. Each metric is backed by both an OTel instrument and a labeled time
+// series in tstorage for the web UI.
+func InitMetrics(meter metric.Meter, storage tstorage.Storage, dataPath string) (*ProxyMetrics, error) {
+	metricStore, err := newMetricsStorage(storage, dataPath)
+	if err != nil {
+		return nil, err
 	}
 
-	var err error
+	m := &ProxyMetrics{storage: metricStore}
+	bindCounter := func(name string) Int64Counter {
+		return Int64Counter{name: name, storage: metricStore}
+	}
+	bindFloatHistogram := func(name string) Float64Histogram {
+		return Float64Histogram{name: name, storage: metricStore}
+	}
+	bindIntHistogram := func(name string) Int64Histogram {
+		return Int64Histogram{name: name, storage: metricStore}
+	}
+	bindGauge := func(name string) Int64UpDownCounter {
+		return Int64UpDownCounter{name: name, storage: metricStore}
+	}
+
+	m.RequestsTotal = bindCounter("proxy.http.requests.total")
+	m.RequestDuration = bindFloatHistogram("proxy.http.request.duration.seconds")
+	m.ActiveRequests = bindGauge("proxy.http.active.requests")
+	m.RequestSizeBytes = bindIntHistogram("proxy.http.request.size.bytes")
+	m.ResponseSizeBytes = bindIntHistogram("proxy.http.response.size.bytes")
+
+	m.BackendRequestsTotal = bindCounter("proxy.backend.requests.total")
+	m.BackendRequestDuration = bindFloatHistogram("proxy.backend.request.duration.seconds")
+	m.BackendActiveRequests = bindGauge("proxy.backend.active.requests")
+
+	m.AuthRequestsTotal = bindCounter("proxy.auth.requests.total")
+	m.PolicyEvaluationsTotal = bindCounter("proxy.policy.evaluations.total")
+
+	m.RouteMatchesTotal = bindCounter("proxy.route.matches.total")
+	m.RouteNoMatchTotal = bindCounter("proxy.route.no_match.total")
 
 	// Request metrics
 	if m.RequestsTotal.Counter, err = meter.Int64Counter(

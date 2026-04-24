@@ -27,90 +27,44 @@ func (n *MetricsService) RegisterHandler(ctx context.Context, mux *runtime.Serve
 }
 
 func (s *MetricsService) Get(ctx context.Context, req *metricsv1.GetRequest) (*metricsv1.GetResponse, error) {
-	m := s.app.Metrics
+	series, err := s.app.MetricsSeries(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	return &metricsv1.GetResponse{
-		// Request metrics
-		RequestsTotal:     counterMetricProto(&m.RequestsTotal),
-		RequestDuration:   histogramMetricProto(&m.RequestDuration),
-		ActiveRequests:    gaugeMetricProto(&m.ActiveRequests),
-		RequestSizeBytes:  int64HistogramMetricProto(&m.RequestSizeBytes),
-		ResponseSizeBytes: int64HistogramMetricProto(&m.ResponseSizeBytes),
-
-		// Backend metrics
-		BackendRequestsTotal:   counterMetricProto(&m.BackendRequestsTotal),
-		BackendRequestDuration: histogramMetricProto(&m.BackendRequestDuration),
-		BackendActiveRequests:  gaugeMetricProto(&m.BackendActiveRequests),
-
-		// Auth metrics
-		AuthRequestsTotal:      counterMetricProto(&m.AuthRequestsTotal),
-		PolicyEvaluationsTotal: counterMetricProto(&m.PolicyEvaluationsTotal),
-
-		// Route metrics
-		RouteMatchesTotal: counterMetricProto(&m.RouteMatchesTotal),
-		RouteNoMatchTotal: counterMetricProto(&m.RouteNoMatchTotal),
-	}, nil
+	response := &metricsv1.GetResponse{
+		Series: make([]*metricsv1.MetricSeries, 0, len(series)),
+	}
+	for _, metricSeries := range series {
+		response.Series = append(response.Series, metricSeriesProto(metricSeries))
+	}
+	return response, nil
 }
 
 func NewMetricsService(app *app.MetricsService) *MetricsService {
 	return &MetricsService{app: app}
 }
 
-func counterMetricProto(c *proxy.Int64Counter) *metricsv1.CounterMetric {
-	buckets := c.SnapshotBuckets()
-	series := make([]*metricsv1.Int64Series, len(buckets))
-	for i, b := range buckets {
-		series[i] = &metricsv1.Int64Series{
-			Start: timestamppb.New(b.Start),
-			Value: b.Value,
-		}
+func metricSeriesProto(series proxy.MetricSeries) *metricsv1.MetricSeries {
+	labels := make([]*metricsv1.Label, len(series.Labels))
+	for i, label := range series.Labels {
+		labels[i] = &metricsv1.Label{Name: label.Name, Value: label.Value}
 	}
-	return &metricsv1.CounterMetric{
-		Total:   c.Load(),
-		Buckets: series,
-	}
-}
 
-func histogramMetricProto(h *proxy.Float64Histogram) *metricsv1.HistogramMetric {
-	buckets := h.SnapshotBuckets()
-	series := make([]*metricsv1.Float64Series, len(buckets))
-	for i, b := range buckets {
-		series[i] = &metricsv1.Float64Series{
-			Start: timestamppb.New(b.Start),
-			Count: b.Count,
-			Sum:   b.Sum,
+	buckets := make([]*metricsv1.MetricBucket, len(series.Buckets))
+	for i, bucket := range series.Buckets {
+		buckets[i] = &metricsv1.MetricBucket{
+			Start: timestamppb.New(bucket.Start),
+			Value: bucket.Value,
+			Count: bucket.Count,
+			Sum:   bucket.Sum,
 		}
 	}
-	return &metricsv1.HistogramMetric{
-		Buckets: series,
-	}
-}
 
-func int64HistogramMetricProto(h *proxy.Int64Histogram) *metricsv1.Int64HistogramMetric {
-	buckets := h.SnapshotBuckets()
-	series := make([]*metricsv1.Int64HistogramSeries, len(buckets))
-	for i, b := range buckets {
-		series[i] = &metricsv1.Int64HistogramSeries{
-			Start: timestamppb.New(b.Start),
-			Count: b.Count,
-			Sum:   b.Sum,
-		}
-	}
-	return &metricsv1.Int64HistogramMetric{
-		Buckets: series,
-	}
-}
-
-func gaugeMetricProto(g *proxy.Int64UpDownCounter) *metricsv1.GaugeMetric {
-	buckets := g.SnapshotBuckets()
-	series := make([]*metricsv1.GaugeSeries, len(buckets))
-	for i, b := range buckets {
-		series[i] = &metricsv1.GaugeSeries{
-			Start: timestamppb.New(b.Start),
-			Max:   b.Max,
-		}
-	}
-	return &metricsv1.GaugeMetric{
-		Buckets: series,
+	return &metricsv1.MetricSeries{
+		Metric:  series.Metric,
+		Kind:    series.Kind,
+		Labels:  labels,
+		Buckets: buckets,
 	}
 }

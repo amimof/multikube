@@ -37,7 +37,10 @@ type State struct {
 // It holds no shared state and each Compile call is self-contained.
 type Compiler struct {
 	version atomic.Uint64
+	metrics *proxy.ProxyMetrics
 }
+
+type Option func(*Compiler)
 
 const (
 	PhaseReady    = "READY"
@@ -57,8 +60,18 @@ type CompileResult struct {
 }
 
 // NewCompiler returns a new Compiler2.
-func NewCompiler() *Compiler {
-	return &Compiler{}
+func NewCompiler(opts ...Option) *Compiler {
+	c := &Compiler{}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+func WithMetrics(metrics *proxy.ProxyMetrics) Option {
+	return func(c *Compiler) {
+		c.metrics = metrics
+	}
 }
 
 // Compile converts the contents of a State into a runtime snapshot and route statuses.
@@ -81,7 +94,7 @@ func (c *Compiler) Compile(st *State) (*CompileResult, error) {
 	}
 
 	// Compile backends into a BackendPool
-	backendPools, forwarders, backendStatuses := compileBackendsPools(st.Backends, caPools, tlsCerts, compiledCreds)
+	backendPools, forwarders, backendStatuses := compileBackendsPools(st.Backends, caPools, tlsCerts, compiledCreds, c.metrics)
 
 	for name := range st.Backends {
 		if !st.Backends[name].GetConfig().GetEnabled() {
@@ -232,6 +245,7 @@ func compileBackendsPools(
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
 	credentials map[string]compiledCredential,
+	metrics *proxy.ProxyMetrics,
 ) (map[string]*proxy.BackendPool, map[string]*proxy.Forwarder, map[string]CompileStatus) {
 	out := make(map[string]*proxy.BackendPool, len(backends))
 	fwds := make(map[string]*proxy.Forwarder, len(backends))
@@ -247,7 +261,7 @@ func compileBackendsPools(
 			continue
 		}
 
-		br, fwd, err := compileBackendPool(be, caPools, tlsCerts, credentials)
+		br, fwd, err := compileBackendPool(be, caPools, tlsCerts, credentials, metrics)
 		if err != nil {
 			statuses[name] = CompileStatus{Phase: PhaseInvalid, Reason: err.Error()}
 			continue
@@ -267,6 +281,7 @@ func compileBackendPool(
 	caPools map[string]*x509.CertPool,
 	tlsCerts map[string]tls.Certificate,
 	credentials map[string]compiledCredential,
+	metrics *proxy.ProxyMetrics,
 ) (*proxy.BackendPool, *proxy.Forwarder, error) {
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: be.GetConfig().GetInsecureSkipTlsVerify(), //nolint:gosec // user-controlled
@@ -300,7 +315,7 @@ func compileBackendPool(
 	}
 
 	transport := buildTLSTransport(tlsCfg)
-	fwd := proxy.NewForwarder(transport)
+	fwd := proxy.NewForwarderWithMetrics(transport, metrics)
 
 	out := []*proxy.BackendRuntime{}
 

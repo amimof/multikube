@@ -6,18 +6,7 @@
 
 Name | Type
 ------------ | -------------
-`requestsTotal` | [V1CounterMetric](V1CounterMetric.md)
-`requestDuration` | [V1HistogramMetric](V1HistogramMetric.md)
-`activeRequests` | [V1GaugeMetric](V1GaugeMetric.md)
-`requestSizeBytes` | [V1Int64HistogramMetric](V1Int64HistogramMetric.md)
-`responseSizeBytes` | [V1Int64HistogramMetric](V1Int64HistogramMetric.md)
-`backendRequestsTotal` | [V1CounterMetric](V1CounterMetric.md)
-`backendRequestDuration` | [V1HistogramMetric](V1HistogramMetric.md)
-`backendActiveRequests` | [V1GaugeMetric](V1GaugeMetric.md)
-`authRequestsTotal` | [V1CounterMetric](V1CounterMetric.md)
-`policyEvaluationsTotal` | [V1CounterMetric](V1CounterMetric.md)
-`routeMatchesTotal` | [V1CounterMetric](V1CounterMetric.md)
-`routeNoMatchTotal` | [V1CounterMetric](V1CounterMetric.md)
+`series` | [Array&lt;V1MetricSeries&gt;](V1MetricSeries.md)
 
 ## Example
 
@@ -26,18 +15,7 @@ import type { V1GetResponse } from ''
 
 // TODO: Update the object below with actual values
 const example = {
-  "requestsTotal": null,
-  "requestDuration": null,
-  "activeRequests": null,
-  "requestSizeBytes": null,
-  "responseSizeBytes": null,
-  "backendRequestsTotal": null,
-  "backendRequestDuration": null,
-  "backendActiveRequests": null,
-  "authRequestsTotal": null,
-  "policyEvaluationsTotal": null,
-  "routeMatchesTotal": null,
-  "routeNoMatchTotal": null,
+  "series": null,
 } satisfies V1GetResponse
 
 console.log(example)

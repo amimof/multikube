@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 )
 
 type Forwarder struct {
@@ -40,9 +39,12 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 
 		// Track backend active requests
 		if f.metrics != nil {
-			backendAttr := metric.WithAttributes(attribute.String("backend", backendName))
-			f.metrics.BackendActiveRequests.Add(ctx, 1, backendAttr)
-			defer f.metrics.BackendActiveRequests.Add(ctx, -1, backendAttr)
+			f.metrics.BackendActiveRequests.Add(ctx, 1,
+				attribute.String("backend", backendName),
+			)
+			defer f.metrics.BackendActiveRequests.Add(ctx, -1,
+				attribute.String("backend", backendName),
+			)
 		}
 
 		outReq := cloneRequestForTarget(r, target)
@@ -76,12 +78,12 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 		if err != nil {
 			if f.metrics != nil {
 				f.metrics.BackendRequestsTotal.Inc(ctx, 1,
-					metric.WithAttributes(
-						attribute.String("backend", backendName),
-						attribute.Int("status_code", 502),
-					))
+					attribute.String("backend", backendName),
+					attribute.Int("status_code", 502),
+				)
 				f.metrics.BackendRequestDuration.Record(ctx, time.Since(start).Seconds(),
-					metric.WithAttributes(attribute.String("backend", backendName)))
+					attribute.String("backend", backendName),
+				)
 			}
 			writeProxyError(w, err)
 			return
@@ -92,12 +94,12 @@ func (f *Forwarder) Handler(pool *BackendPool) http.Handler {
 
 		if f.metrics != nil {
 			f.metrics.BackendRequestsTotal.Inc(ctx, 1,
-				metric.WithAttributes(
-					attribute.String("backend", backendName),
-					attribute.Int("status_code", resp.StatusCode),
-				))
+				attribute.String("backend", backendName),
+				attribute.Int("status_code", resp.StatusCode),
+			)
 			f.metrics.BackendRequestDuration.Record(ctx, time.Since(start).Seconds(),
-				metric.WithAttributes(attribute.String("backend", backendName)))
+				attribute.String("backend", backendName),
+			)
 		}
 
 		copyHeader(w.Header(), resp.Header)

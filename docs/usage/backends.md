@@ -3,9 +3,10 @@
 <!--toc:start-->
 - [Backends](#backends)
   - [What a backend is](#what-a-backend-is)
-  - [When to use a backend](#when-to-use-a-backend)
   - [How backends are used](#how-backends-are-used)
   - [Basic example](#basic-example)
+  - [Impersonation configuration](#impersonation-configuration)
+  - [Probe configuration](#probe-configuration)
   - [Example scenarios](#example-scenarios)
     - [Multiple backends](#multiple-backends)
     - [Token-authenticated cluster](#token-authenticated-cluster)
@@ -17,54 +18,20 @@
   - [Full Config](#full-config)
 <!--toc:end-->
 
-A backend defines how Multikube connects to one upstream Kubernetes API server.
+API Reference: [backend/v1](https://github.com/amimof/multikube/blob/master/api/backend/v1/backend.proto)
 
 ## What a backend is
 
-A backend contains the connection details for one upstream cluster:
-
-- the upstream API server URL
-- the CA to trust when verifying the upstream server
-- the credentials to use when authenticating to the upstream server
-- optional TLS verification overrides
-- an optional cache TTL
-
-Routes point to backends with `backend_ref`. Policies then evaluate requests after a route has selected a backend.
-
-## When to use a backend
-
-Create a backend when you want Multikube to send requests to:
-
-- a single Kubernetes cluster behind a stable API server URL
-- several clusters, each with their own credentials and CA
-- a development cluster with self-signed TLS
-- a cluster that requires bearer token, basic auth, or client certificate authentication
+A backend defines how Multikube connects to a set of upstream Kubernetes API servers. Backends should be though of as kubernetes *clusters* but we use the backend terminology here since it makes more sence in context of load balancing.  A backend contains the connection details, impersionation and heartbeat probe configuration for one or more API servers. The configuration is shared and used by all servers part of the backend. In terms of proxy and routing, the servers are known as the backend pool. [Routes](/docs/usage/routes.md) point to backends with `backend_ref`. [Policie](/docs/usage/policies.md) then evaluate requests after a route has selected a backend.
 
 ## How backends are used
 
-At runtime Multikube uses the backend to build the outgoing connection to the upstream API server.
+At runtime Multikube uses the backend to build the outgoing connection to the upstream API server. This is an important trust boundary: Multikube does not forward the end user's kubeconfig credentials directly to the backend cluster. Instead, each backend needs its own credentials that Multikube can use when it connects to that cluster. Those backend credentials are separate from the identity that the user presented to Multikube at the edge. 
 
-This is an important trust boundary: Multikube does not forward the end user's kubeconfig credentials directly to the backend cluster.
 
-Instead, each backend needs its own credentials that Multikube can use when it connects to that cluster. Those backend credentials are separate from the identity that the user presented to Multikube at the edge.
-
-In practice this means:
-
-- users authenticate to Multikube
-- Multikube authorizes the request using its own policies
-- Multikube then authenticates to the upstream Kubernetes API server with the credential configured on the backend
-
-This separation lets operators centralize user authentication and authorization in Multikube while still using a controlled machine identity for the actual upstream connection.
-
-Those backend credentials must be created on the target cluster ahead of time. In most environments, a cluster administrator sets this up by creating a dedicated ServiceAccount and issuing a long-lived token for Multikube to use. That token, client certificate, or other supported secret material is then stored in a Multikube credential resource and referenced by the backend.
+In practice this means that users authenticate to Multikube. Multikube authorizes the request using its own policies then authenticates to the upstream Kubernetes API server with the credential configured on the backend. Those backend credentials must be created on the target cluster ahead of time. In most environments, a cluster administrator sets this up by creating a dedicated ServiceAccount and issuing a long-lived token for Multikube to use. That token, client certificate, or other supported secret material is then stored in a Multikube credential resource and referenced by the backend.
 
 If you already have working cluster access in a kubeconfig file, [`multikubectl import`](#import-a-backend-from-kubeconfig) can speed this up by reusing the cluster CA and supported auth material from that kubeconfig context.
-
-- `server` becomes a list of target URLs for forwarded requests
-- `ca_ref` loads a certificate authority resource and uses it as the TLS root CA pool
-- `auth_ref` loads a credential resource and applies it to the upstream request or TLS client config
-- `insecure_skip_tls_verify` disables certificate verification for the upstream connection
-- `cache_ttl` is parsed as a duration and stored on the backend runtime
 
 ## Basic example
 
@@ -73,13 +40,11 @@ version: backend/v1
 meta:
   name: prod-cluster
 config:
-  name: prod-cluster
   servers:
   - https://prod-api.example.internal:6443
   ca_ref: prod-ca
   auth_ref: prod-token
   insecure_skip_tls_verify: false
-  cache_ttl: 30s
 ```
 
 This backend tells Multikube to:
@@ -88,22 +53,130 @@ This backend tells Multikube to:
 - verify the server certificate with the `prod-ca` CA resource
 - authenticate with the `prod-token` credential resource
 - keep TLS verification enabled
-- use a cache TTL of `30s`
+
+## Impersonation configuration
+
+By default, Multikube uses impersonation configuration to perform requests on the upstream servers on behalf of the user. You can read more about it on the [official kubernetes documentation](https://kubernetes.io/docs/reference/access-authn-authz/user-impersonation/). In essence, impersonation is the ability for a user or service account to act as another user, group, or service account when making API requests, typically for debugging, auditing, or delegated access control. We use this mechanic to separate Multikubes credentials from the users credentials which is important.
+
+> Note: Multikube does not provision RBAC on the clusters. It manages authorization and routing on the edge. Once a request is authorized in the Multikube realm, and successfully routed to a Kuberenets Cluster then authorization still occurs in that cluster. So platform engineers should, as always, provision appropriate RBAC rules for users accessing clusters. 
+
+Backends can define `config.impersonation_config` to control how Multikube builds Kubernetes impersonation headers for upstream requests. Fields under `config.impersonation_config`:
+
+- `name`: optional label for the impersonation profile
+- `enabled`: enable or disable header injection
+- `username_claim`: claim used for `Impersonate-User`
+- `groups_claim`: claim used for `Impersonate-Group`
+- `extra_claims`: claims copied into `Impersonate-Extra-<claim>` headers
+
+If the `impersonation_config` field is omitted when creating a backend, a default impersonation configuration will be created automatically to ensure that impersionation always is enabled. A default impersionation configuration looks like this:
+
+```yaml
+version: backend/v1
+meta:
+  name: prod-cluster
+config:
+  servers:
+  - https://prod-api.example.internal:6443
+  ca_ref: prod-ca
+  auth_ref: prod-token
+  impersonation_config:
+    name: default
+    enabled: true
+    username_claim: sub
+    groups_claim: groups
+```
+
+Custom claim mapping example:
+
+```yaml
+version: backend/v1
+meta:
+  name: sso-cluster
+config:
+  servers:
+  - https://sso-api.example.internal:6443
+  ca_ref: sso-ca
+  auth_ref: sso-backend-token
+  impersonation_config:
+    name: oidc
+    enabled: true
+    username_claim: email
+    groups_claim: roles
+    extra_claims:
+    - tenant
+    - scopes
+```
+
+## Probe configuration
+
+Backends can define `config.probes` to control health and readiness checks for each upstream target in the backend pool. Multikube runs HTTP `GET` probes against each configured backend target. Probe results are reflected in backend status and runtime target eligibility.
+
+Fields under `config.probes`:
+
+- `healthiness`: health probe configuration (is it safe to send traffic?)
+- `readiness`: readiness probe configuration (is it alive?)
+
+Each probe supports:
+
+- `path`: URL path to probe
+- `timeout_seconds`: how long a single probe request may take
+- `period_seconds`: how often the probe runs
+- `failure_threshold`: consecutive failures before the target is marked unhealthy or not ready
+- `success_threshold`: consecutive successes before the target is marked healthy or ready again
+- `initial_delay_seconds`: delay before the first probe runs
+
+Default behavior when `probes` is omitted:
+
+- `healthiness.path: /healthz`
+- `readiness.path: /readyz`
+- `timeout_seconds: 1`
+- `period_seconds: 5`
+- `failure_threshold: 3`
+- `success_threshold: 3`
+- `initial_delay_seconds: 1`
+
+Example:
+
+```yaml
+version: backend/v1
+meta:
+  name: prod-cluster
+config:
+  servers:
+  - https://control-plane-1.example.internal:6443
+  - https://control-plane-2.example.internal:6443
+  probes:
+    healthiness:
+      path: /healthz
+      timeout_seconds: 1
+      period_seconds: 5
+      failure_threshold: 3
+      success_threshold: 3
+      initial_delay_seconds: 1
+    readiness:
+      path: /readyz
+      timeout_seconds: 1
+      period_seconds: 10
+      failure_threshold: 2
+      success_threshold: 2
+      initial_delay_seconds: 2
+```
+
+> Notes: probe failures include transport errors, timeouts, and any response other than `200 OK`. A target is excluded only when a configured probe has produced a known failing state. If probe state is still unknown, the target remains eligible for routing
 
 ## Example scenarios
 
 ### Multiple backends
 
-Use multiple server URLs to have Multikube load balance requests to servers in the pool
+Use multiple server URLs to let Multikube load balance requests across the backend pool.
 
-> This feature is WIP so only basic round robin load balancing is available. Stay tuned!
+> This feature is still evolving. Round robin is the default load balancing strategy today.
 
 ```yaml
 version: backend/v1
 meta:
   name: staging
 config:
-  name: staging
   servers:
   - https://control-plane-1.example.internal:6443
   - https://control-plane-2.example.internal:6443
@@ -121,7 +194,6 @@ version: backend/v1
 meta:
   name: staging
 config:
-  name: staging
   servers:
   - https://staging-api.example.internal:6443
   ca_ref: staging-ca
@@ -139,8 +211,8 @@ version: backend/v1
 meta:
   name: mtls-cluster
 config:
-  name: mtls-cluster
-  server: https://mtls-api.example.internal:6443
+  servers:
+  - https://mtls-api.example.internal:6443
   ca_ref: mtls-ca
   auth_ref: mtls-client-credential
 ```
@@ -157,13 +229,12 @@ version: backend/v1
 meta:
   name: dev-cluster
 config:
-  name: dev-cluster
   servers:
   - https://dev-api.example.internal:6443
   insecure_skip_tls_verify: true
 ```
 
-This can be useful during local testing, but it disables upstream certificate verification and should not be used in normal production setups.
+This can be useful during local testing, but it disables upstream certificate verification and should not be used in production.
 
 ## Import a backend from kubeconfig
 
@@ -233,57 +304,28 @@ multikubectl create backend prod-cluster \
 
 Useful flags:
 
-- `--server` required upstream API server URL. Can be used multiple times on the cmd line
-- `--ca-ref` reference to a CA resource
-- `--auth-ref` reference to a credential resource
-- `--insecure-skip-tls-verify` disable upstream certificate verification
-- `--cache-ttl` duration such as `30s`, `5m`, or `1h`
-- `--label` attach one or more metadata labels
+- `--server` required upstream API server URL. Can be used multiple times.
+- `--ca-ref` reference to a CA resource.
+- `--auth-ref` reference to a credential resource.
+- `--insecure-skip-tls-verify` disables upstream certificate verification.
+- `--cache-ttl` duration such as `30s`, `5m`, or `1h`.
+- `--label` attaches one or more metadata labels.
+
+The CLI currently exposes only the core backend connection fields. `impersonation_config`, `probes`, `type`, and `enabled` are currently YAML or API driven settings.
 
 ## Current behavior and caveats
 
-- `ca_ref` must point to an existing CA resource or compilation fails
-- `auth_ref` must point to an existing credential resource or compilation fails
-- if the credential referenced by `auth_ref` points to a client certificate, that certificate must exist or compilation fails
-- backend health is present in status, but the compiler currently does not skip unhealthy backends
-- `cache_ttl` is optional and defaults to zero when omitted
-- `servers` is required in practice; parsing errors are caught during compilation
-- `multikubectl import` supports kubeconfig contexts that use one supported auth method at a time: token, basic auth, or client certificate auth
-- `multikubectl import` does not currently support kubeconfig `exec` plugins or legacy `auth-provider` entries
-- `multikubectl import` reads referenced files relative to the kubeconfig file, which makes it work with normal kubeconfig CA, token, and client certificate file references
+- `servers` must contain at least one upstream API server URL.
+- `ca_ref` must point to an existing CA resource or compilation fails when verification depends on it.
+- `auth_ref` must point to an existing credential resource or compilation fails.
+- if the credential referenced by `auth_ref` points to a client certificate, that certificate must exist or compilation fails.
+- `cache_ttl` defaults to `30s` when omitted on create or full update.
+- `type` defaults to `LOAD_BALANCING_TYPE_ROUND_ROBIN` when omitted on create or full update.
+- `enabled` defaults to `true` when omitted on create or full update.
+- `impersonation_config` defaults to the built-in `default` profile when omitted on create or full update.
+- `probes` defaults to built-in `/healthz` and `/readyz` probes when omitted on create or full update.
+- client-supplied `Impersonate-*` headers are always stripped before forwarding.
+- `multikubectl import` supports kubeconfig contexts that use one supported auth method at a time: token, basic auth, or client certificate auth.
+- `multikubectl import` does not currently support kubeconfig `exec` plugins or legacy `auth-provider` entries.
+- `multikubectl import` reads referenced files relative to the kubeconfig file, which makes it work with normal kubeconfig CA, token, and client certificate file references.
 
-## Full Config
-
-```yaml
-version: backend/v1 # Required. API version for backend resources.
-meta:
-  name: prod-cluster # Required. Resource name. Must be unique for this backend resource type.
-  labels: # Optional. Arbitrary metadata labels used for organization and filtering.
-    env: production
-    team: platform
-  created: "2026-04-04T12:00:00Z" # Server-managed. Creation timestamp.
-  updated: "2026-04-04T12:00:00Z" # Server-managed. Last update timestamp.
-  generation: 1 # Server-managed. Monotonic version of desired state.
-  resource_version: 1 # Server-managed. Internal resource revision.
-  uid: "11111111-2222-3333-4444-555555555555" # Server-managed. Unique identifier.
-config:
-  name: prod-cluster # Optional but normally set to the same value as meta.name.
-  servers: # Required in practice. Full upstream Kubernetes API URL.
-  - https://prod-api.example.internal:6443
-  ca_ref: prod-ca # Optional. Name of a CA resource used to verify the upstream server certificate.
-  auth_ref: prod-token # Optional. Name of a credential resource used for upstream auth.
-  insecure_skip_tls_verify: false # Optional. Defaults to false. When true, disables upstream TLS certificate verification.
-  cache_ttl: 30s # Optional. Duration string. Examples: 0s, 30s, 5m, 1h.
-status:
-  healthy: true # Runtime status field. Not currently used to exclude a backend from compilation.
-```
-
-Field notes:
-
-- `version` should be `backend/v1`
-- `meta.name` is the stable identifier other resources use when they refer to this backend
-- `config.name` is part of the schema and is typically set to the same value as `meta.name`
-- `servers` each item should include scheme, host, and port
-- `ca_ref` should be set when the upstream server uses TLS and you want normal certificate verification
-- `auth_ref` should reference a credential that matches the upstream server's auth method
-- `insecure_skip_tls_verify: true` trades safety for convenience and is mainly for development or debugging
