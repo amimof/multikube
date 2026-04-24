@@ -74,6 +74,7 @@ generate-ts-clients: ; $(info $(M) generating TypeScript OpenAPI clients) @ ## G
 	$Q $(OPENAPI_GENERATOR) generate -i api/credential/v1/credential.swagger.json -g typescript-fetch -o web/src/generated/credential
 	$Q $(OPENAPI_GENERATOR) generate -i api/policy/v1/policy.swagger.json -g typescript-fetch -o web/src/generated/policy
 	$Q $(OPENAPI_GENERATOR) generate -i api/route/v1/route.swagger.json -g typescript-fetch -o web/src/generated/route
+	$Q rm -rf web/src/generated/metrics
 	$Q $(OPENAPI_GENERATOR) generate -i api/metrics/v1/metrics.swagger.json -g typescript-fetch -o web/src/generated/metrics
 
 # Tools

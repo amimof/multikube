@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	"github.com/golang-jwt/jwt"
 	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
+	"github.com/nakabonne/tstorage"
 	"github.com/opentracing/opentracing-go"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -97,6 +98,7 @@ var (
 	kubeconfigPath  string
 	cacheTTL        time.Duration
 	dataPath        string
+	metricsPath     string
 	logLevel        string
 
 	log *slog.Logger
@@ -130,6 +132,7 @@ func init() {
 
 	defaultStatePath := filepath.Join(home, ".local", "state", "multikube")
 	defaultSocketPath := filepath.Join(cacheDir, "multikube.sock")
+	defaultMetricsPath := filepath.Join(defaultStatePath, "metrics")
 
 	pflag.StringVar(&socketPath, "socket-path", defaultSocketPath, "the unix socket to listen on")
 	pflag.StringVar(&serverAddress, "server-address", "0.0.0.0:5743", "Address to listen the TCP server on")
@@ -146,6 +149,7 @@ func init() {
 	pflag.StringVar(&oidcUsernameClaim, "oidc-username-claim", "sub", " The OpenID claim to use as the user name. Note that claims other than the default is not guaranteed to be unique and immutable")
 	pflag.StringVar(&oidcCaFile, "oidc-ca-file", "", "the certificate authority file to be used for verifyign the OpenID server")
 	pflag.StringVar(&dataPath, "data-path", defaultStatePath, "Directory to store state")
+	pflag.StringVar(&metricsPath, "metrics-path", defaultMetricsPath, "Directory to store metrics data points")
 	pflag.StringVar(&logLevel, "log-level", "info", "The level of verbosity of log output")
 	pflag.StringSliceVar(&enabledListeners, "scheme", []string{"https"}, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
 
@@ -299,8 +303,19 @@ func main() {
 		log.Error("Failed to start prometheus exporter", "error", err)
 		os.Exit(1)
 	}
+
+	metricsStorage, err := tstorage.NewStorage(tstorage.WithDataPath(metricsPath))
+	if err != nil {
+		log.Error("error creating metrics storage", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := metricsStorage.Close(); err != nil {
+			log.Error("error closing metrics storage", "error", err)
+		}
+	}()
 	meter := meterProvider.Meter("multikube")
-	proxyMetrics, err := proxyv2.InitMetrics(meter)
+	proxyMetrics, err := proxyv2.InitMetrics(meter, metricsStorage, metricsPath)
 	if err != nil {
 		log.Error("error setting up metrics", "error", err)
 		os.Exit(1)
@@ -483,7 +498,7 @@ func main() {
 
 	// Setup controller
 	runtimeStore := proxyv2.NewRuntimeStore()
-	compiler := compile.NewCompiler()
+	compiler := compile.NewCompiler(compile.WithMetrics(proxyMetrics))
 	ctrl := controller.New(
 		cs,
 		controller.WithLogger(log),
