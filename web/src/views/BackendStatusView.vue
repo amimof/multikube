@@ -1,12 +1,24 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed, watch, toRaw, reactive } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch, toRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Refresh, Document, Plus, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import type { FormRules } from 'element-plus'
+import { Line } from 'vue-chartjs'
+import {
+	Chart as ChartJS,
+	CategoryScale,
+	LinearScale,
+	PointElement,
+	LineElement,
+	Title,
+	Tooltip,
+	Legend,
+	Filler,
+} from 'chart.js'
 import { useBackendStore } from '@/stores/backend'
 import { useCaStore } from '@/stores/ca'
 import { useCredentialStore } from '@/stores/credential'
+import { useMetricsStore } from '@/stores/metrics'
 import { stringify as yamlStringify, parse as yamlParse } from 'yaml'
 import { Codemirror } from 'vue-codemirror'
 import { yaml as yamlLang } from '@codemirror/lang-yaml'
@@ -30,14 +42,18 @@ import {
 } from '@/utils/backend'
 import { V1LoadBalancingType } from '@/generated/backend'
 import type { V1Backend } from '@/generated/backend'
+import type { Metricsv1Label, V1MetricBucket, V1MetricSeries } from '@/generated/metrics'
 import { formatDate, formatDateFull } from '@/utils/format'
 import { normalizeBackendForm } from '@/utils/backendForm'
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
 const route = useRoute()
 const router = useRouter()
 const backendStore = useBackendStore()
 const caStore = useCaStore()
 const credentialStore = useCredentialStore()
+const metricsStore = useMetricsStore()
 
 const backendName = computed(() => route.params.name as string)
 const backend = computed(() => backendStore.current)
@@ -165,6 +181,170 @@ const statusTagType = computed(() => {
 			return 'warning'
 	}
 })
+
+const palette = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#909399', '#b37feb']
+
+function formatTime(d?: Date): string {
+	if (!d) return ''
+	return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function labelValue(labels: Metricsv1Label[] | undefined, name: string): string {
+	return labels?.find(label => label.name === name)?.value ?? ''
+}
+
+function sortedBuckets(series?: V1MetricSeries) {
+	return [...(series?.buckets ?? [])].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
+}
+
+function counterValue(bucket: V1MetricBucket): number {
+	return Number(bucket.value ?? 0)
+}
+
+function gaugeValue(bucket: V1MetricBucket): number {
+	return Number(bucket.value ?? 0)
+}
+
+function histogramAverage(bucket: V1MetricBucket): number {
+	const count = Number(bucket.count ?? 0)
+	return count > 0 ? Number(bucket.sum ?? 0) / count : 0
+}
+
+function aggregateSeriesBuckets(seriesList: V1MetricSeries[]): V1MetricBucket[] {
+	const buckets = new Map<number, V1MetricBucket>()
+	for (const series of seriesList) {
+		for (const bucket of sortedBuckets(series)) {
+			const startTime = bucket.start?.getTime()
+			if (startTime == null) continue
+			const existing = buckets.get(startTime)
+			if (existing) {
+				existing.value = Number(existing.value ?? 0) + Number(bucket.value ?? 0)
+				existing.count = String(Number(existing.count ?? 0) + Number(bucket.count ?? 0))
+				existing.sum = Number(existing.sum ?? 0) + Number(bucket.sum ?? 0)
+				continue
+			}
+			buckets.set(startTime, {
+				start: bucket.start,
+				value: Number(bucket.value ?? 0),
+				count: bucket.count == null ? undefined : String(Number(bucket.count ?? 0)),
+				sum: Number(bucket.sum ?? 0),
+			})
+		}
+	}
+	return [...buckets.values()].sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
+}
+
+function mapBucketsByTime(
+	buckets: V1MetricBucket[],
+	timestamps: number[],
+	valueForBucket: (bucket: V1MetricBucket) => number,
+) {
+	const bucketMap = new Map<number, V1MetricBucket>()
+	for (const bucket of buckets) {
+		const startTime = bucket.start?.getTime()
+		if (startTime != null) bucketMap.set(startTime, bucket)
+	}
+	return timestamps.map(timestamp => {
+		const bucket = bucketMap.get(timestamp)
+		return bucket ? valueForBucket(bucket) : null
+	})
+}
+
+const backendMetricSeries = computed(() => {
+	const name = backend.value?.meta?.name ?? backendName.value
+	const allSeries = metricsStore.data?.series ?? []
+	return allSeries.filter(series => labelValue(series.labels, 'backend') === name)
+})
+
+function backendSeriesByMetric(metric: string) {
+	return backendMetricSeries.value.filter(series => series.metric === metric)
+}
+
+const backendRequestsBuckets = computed(() => aggregateSeriesBuckets(backendSeriesByMetric('proxy.backend.requests.total')))
+const backendDurationBuckets = computed(() => aggregateSeriesBuckets(backendSeriesByMetric('proxy.backend.request.duration.seconds')))
+const backendActiveBuckets = computed(() => aggregateSeriesBuckets(backendSeriesByMetric('proxy.backend.active.requests')))
+
+const backendMetricTimestamps = computed(() => {
+	const timestamps = new Set<number>()
+	for (const bucket of [
+		...backendRequestsBuckets.value,
+		...backendDurationBuckets.value,
+		...backendActiveBuckets.value,
+	]) {
+		const startTime = bucket.start?.getTime()
+		if (startTime != null) timestamps.add(startTime)
+	}
+	return [...timestamps].sort((a, b) => a - b)
+})
+
+const hasBackendMetrics = computed(() => backendMetricTimestamps.value.length > 0)
+
+const backendMetricsChart = computed(() => {
+	const timestamps = backendMetricTimestamps.value
+	return {
+		labels: timestamps.map(timestamp => formatTime(new Date(timestamp))),
+		datasets: [
+			{
+				label: 'Requests Total',
+				data: mapBucketsByTime(backendRequestsBuckets.value, timestamps, counterValue),
+				borderColor: palette[0],
+				backgroundColor: palette[0] + '1a',
+				fill: true,
+				yAxisID: 'y',
+			},
+			{
+				label: 'Active Requests',
+				data: mapBucketsByTime(backendActiveBuckets.value, timestamps, gaugeValue),
+				borderColor: palette[1],
+				backgroundColor: palette[1] + '1a',
+				fill: true,
+				yAxisID: 'y',
+			},
+			{
+				label: 'Request Duration Avg (s)',
+				data: mapBucketsByTime(backendDurationBuckets.value, timestamps, histogramAverage),
+				borderColor: palette[2],
+				backgroundColor: palette[2] + '1a',
+				fill: false,
+				yAxisID: 'y1',
+			},
+		],
+	}
+})
+
+const backendMetricsChartOptions = {
+	responsive: true,
+	maintainAspectRatio: false,
+	interaction: { intersect: false, mode: 'index' as const },
+	plugins: {
+		legend: { display: true, position: 'bottom' as const },
+	},
+	scales: {
+		x: {
+			display: false,
+			grid: { display: false },
+			ticks: { maxTicksLimit: 8, font: { size: 11 } },
+		},
+		y: {
+			grid: { display: false },
+			beginAtZero: true,
+			ticks: { font: { size: 11 } },
+			title: { display: true, text: 'Requests' },
+		},
+		y1: {
+			position: 'right' as const,
+			grid: { drawOnChartArea: false },
+			beginAtZero: true,
+			ticks: { font: { size: 11 } },
+			title: { display: true, text: 'Seconds' },
+		},
+	},
+	elements: {
+		point: { radius: 0, hoverRadius: 4 },
+		line: { tension: 0.2, borderWidth: 2, stepped: false },
+	},
+}
+
 async function handleSave() {
 	saving.value = true
 	try {
@@ -198,6 +378,7 @@ async function handleYamlSave(parsed: unknown) {
 
 function handleRefresh() {
 	backendStore.fetchBackend(backendName.value).catch(() => { })
+	metricsStore.fetchMetrics().catch(() => { })
 }
 
 function goBack() {
@@ -219,6 +400,7 @@ onMounted(() => {
 	backendStore.fetchBackend(backendName.value).catch(() => { })
 	caStore.fetchCas().catch(() => { })
 	credentialStore.fetchCredentials().catch(() => { })
+	metricsStore.fetchMetrics().catch(() => { })
 })
 
 onUnmounted(() => {
@@ -265,6 +447,18 @@ onUnmounted(() => {
 				<div class="topology-container">
 					<NetworkTopology :backendName="backend.meta?.name ?? '-'" :lbType="lbLabel(backend.config?.type as string)"
 						:servers="normalizedServers" @select="openTopologySelection" />
+				</div>
+			</el-card>
+
+			<el-card shadow="never" style="margin-bottom: 16px">
+				<el-alert v-if="metricsStore.error" :title="metricsStore.error" type="warning" :closable="false"
+					style="margin-bottom: 16px" />
+
+				<el-skeleton v-if="metricsStore.loading" :rows="6" animated />
+				<el-empty v-else-if="!hasBackendMetrics" style="height: 180px"
+					description="No metrics available for this backend yet" />
+				<div v-else style="height: 180px">
+					<Line :data="backendMetricsChart" :options="backendMetricsChartOptions" />
 				</div>
 			</el-card>
 

@@ -22,12 +22,11 @@ API Reference: [backend/v1](https://github.com/amimof/multikube/blob/master/api/
 
 ## What a backend is
 
-A backend defines how Multikube connects to a set of upstream Kubernetes API servers. Backends should be though of as kubernetes *clusters* but we use the backend terminology here since it makes more sence in context of load balancing.  A backend contains the connection details, impersionation and heartbeat probe configuration for one or more API servers. The configuration is shared and used by all servers part of the backend. In terms of proxy and routing, the servers are known as the backend pool. [Routes](/docs/usage/routes.md) point to backends with `backend_ref`. [Policie](/docs/usage/policies.md) then evaluate requests after a route has selected a backend.
+A backend defines how Multikube connects to a set of upstream Kubernetes API servers. Backends should be thought of as kubernetes *clusters* but we use the backend terminology here since it makes more sence in the context of load balancing.  A backend contains the connection details, impersonation and heartbeat probe configuration for one or more API servers. The configuration is shared and used by all servers part of the backend. In terms of proxy and routing, the servers are known as the backend pool. [Routes](/docs/usage/routes.md) point to backends with `backend_ref`. [Policies](/docs/usage/policies.md) then evaluate requests after a route has selected a backend.
 
 ## How backends are used
 
 At runtime Multikube uses the backend to build the outgoing connection to the upstream API server. This is an important trust boundary: Multikube does not forward the end user's kubeconfig credentials directly to the backend cluster. Instead, each backend needs its own credentials that Multikube can use when it connects to that cluster. Those backend credentials are separate from the identity that the user presented to Multikube at the edge. 
-
 
 In practice this means that users authenticate to Multikube. Multikube authorizes the request using its own policies then authenticates to the upstream Kubernetes API server with the credential configured on the backend. Those backend credentials must be created on the target cluster ahead of time. In most environments, a cluster administrator sets this up by creating a dedicated ServiceAccount and issuing a long-lived token for Multikube to use. That token, client certificate, or other supported secret material is then stored in a Multikube credential resource and referenced by the backend.
 
