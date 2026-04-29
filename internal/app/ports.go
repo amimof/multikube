@@ -11,9 +11,10 @@ import (
 )
 
 type TokenManager interface {
-	Issue(ctx context.Context, token *tokenv1.Token) (string, error)
+	Issue(ctx context.Context, token *tokenv1.Token) (string, string, error)
 	Revoke(ctx context.Context, token *tokenv1.Token) error
-	Verify(ctx context.Context, accessToken string) (*jwt.Token, error)
+	VerifyAccessToken(ctx context.Context, accessToken string) (string, error)
+	VerifyRefreshToken(ctx context.Context, refreshToken string) (string, error)
 }
 
 type TokenValidator interface {

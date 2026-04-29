@@ -34,7 +34,7 @@ func (s *TokenService) IssueToken(ctx context.Context, req *tokenv1.Token) (*tok
 	_, span := tracer.Start(ctx, "token.Issue")
 	defer span.End()
 
-	token, err := s.Issuer.Issue(ctx, req)
+	accessToken, _, err := s.Issuer.Issue(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (s *TokenService) IssueToken(ctx context.Context, req *tokenv1.Token) (*tok
 	}
 
 	return &tokenv1.IssueResponse{
-		AccessToken: token,
+		AccessToken: accessToken,
 	}, nil
 }
 
@@ -55,7 +55,7 @@ func (s *TokenService) Verify(ctx context.Context, accessToken string) error {
 	_, span := tracer.Start(ctx, "token.Verify")
 	defer span.End()
 
-	_, err := s.Issuer.Verify(ctx, accessToken)
+	_, err := s.Issuer.VerifyAccessToken(ctx, accessToken)
 	if err != nil {
 		return err
 	}

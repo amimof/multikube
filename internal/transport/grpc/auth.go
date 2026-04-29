@@ -27,12 +27,16 @@ func (n *AuthService) RegisterHandler(ctx context.Context, mux *runtime.ServeMux
 	return authv1.RegisterAuthServiceHandler(ctx, mux, conn)
 }
 
-func (a *AuthService) Logout(ctx context.Context, req *authv1.LogoutRequest) (*emptypb.Empty, error) {
-	return a.app.Logout(ctx, req)
+func (n *AuthService) Logout(ctx context.Context, req *authv1.LogoutRequest) (*emptypb.Empty, error) {
+	return n.app.Logout(ctx, req)
 }
 
-func (a *AuthService) Login(ctx context.Context, req *authv1.LoginRequest) (*authv1.LoginResponse, error) {
-	return a.app.Login(ctx, req)
+func (n *AuthService) Login(ctx context.Context, req *authv1.LoginRequest) (*authv1.LoginResponse, error) {
+	return n.app.Login(ctx, req)
+}
+
+func (n *AuthService) Refresh(ctx context.Context, req *authv1.RefreshRequest) (*authv1.RefreshResponse, error) {
+	return n.app.Refresh(ctx, req)
 }
 
 func NewAuthService(app *app.AuthService) *AuthService {

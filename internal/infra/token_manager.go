@@ -19,12 +19,19 @@ type TokenManager struct {
 	Key          *ecdsa.PrivateKey
 	VerifyKey    *ecdsa.PublicKey
 	AllowedAud   []string
-	DefaultTTL   time.Duration
+	AccessTTL    time.Duration
+	RefreshTTL   time.Duration
 	MaxTTL       time.Duration
 	DefaultAud   []string
 	Issuer       string
 	SigningKeyID string
 }
+
+const (
+	tokenTypeClaim   = "typ"
+	accessTokenType  = "access"
+	refreshTokenType = "refresh"
+)
 
 type IssueResponse struct {
 	AccessToken *jwt.Token
@@ -33,30 +40,35 @@ type IssueResponse struct {
 	TokenType   string
 }
 
-func (s *TokenManager) Issue(ctx context.Context, req *tokenv1.Token) (string, error) {
+func (s *TokenManager) Issue(ctx context.Context, req *tokenv1.Token) (string, string, error) {
 	if req.GetConfig().GetSubject() == "" {
-		return "", errors.New("subject is req.GetConfig().Getired")
+		return "", "", errors.New("subject is req.GetConfig().Getired")
 	}
-	if req.GetConfig().GetTtl() == nil && s.DefaultTTL <= 0 {
-		return "", errors.New("default ttl must be configured")
+	if s.AccessTTL <= 0 {
+		return "", "", errors.New("access ttl must be configured")
+	}
+	if s.RefreshTTL <= 0 {
+		return "", "", errors.New("refresh ttl must be configured")
 	}
 	if s.Key == nil {
-		return "", errors.New("signing key is not configured")
+		return "", "", errors.New("signing key is not configured")
 	}
 
-	var ttl time.Duration
+	accessTTL := s.AccessTTL
 	if req.GetConfig().GetTtl() != nil {
-		ttl = req.GetConfig().GetTtl().AsDuration()
+		accessTTL = req.GetConfig().GetTtl().AsDuration()
 	}
-	if ttl <= 0 {
-		ttl = s.DefaultTTL
+	if accessTTL <= 0 {
+		accessTTL = s.AccessTTL
 	}
-	if ttl > s.MaxTTL {
-		return "", fmt.Errorf("req.GetConfig().Getested ttl %s exceeds max ttl %s", ttl, s.MaxTTL)
+	if accessTTL > s.MaxTTL {
+		return "", "", fmt.Errorf("req.GetConfig().Getested ttl %s exceeds max ttl %s", accessTTL, s.MaxTTL)
+	}
+	if s.RefreshTTL > s.MaxTTL {
+		return "", "", fmt.Errorf("refresh ttl %s exceeds max ttl %s", s.RefreshTTL, s.MaxTTL)
 	}
 
 	now := time.Now().UTC()
-	exp := now.Add(ttl)
 
 	aud := req.GetConfig().GetAudience()
 	if len(aud) == 0 {
@@ -66,56 +78,90 @@ func (s *TokenManager) Issue(ctx context.Context, req *tokenv1.Token) (string, e
 		aud = []string{"multikube-proxy"}
 	}
 
-	claims := jwt.MapClaims{
-		"iss": s.Issuer,
-		"sub": req.GetConfig().GetSubject(),
-		"aud": aud,
-		"iat": now.Unix(),
-		"nbf": now.Unix(),
-		"exp": exp.Unix(),
-		"jti": uuid.NewString(),
+	accessClaims := jwt.MapClaims{
+		"iss":          s.Issuer,
+		"sub":          req.GetConfig().GetSubject(),
+		"aud":          aud,
+		"iat":          now.Unix(),
+		"nbf":          now.Unix(),
+		"exp":          now.Add(accessTTL).Unix(),
+		"jti":          uuid.NewString(),
+		tokenTypeClaim: accessTokenType,
+	}
+
+	refreshClaims := jwt.MapClaims{
+		"iss":          s.Issuer,
+		"sub":          req.GetConfig().GetSubject(),
+		"aud":          aud,
+		"iat":          now.Unix(),
+		"nbf":          now.Unix(),
+		"exp":          now.Add(s.RefreshTTL).Unix(),
+		"jti":          uuid.NewString(),
+		tokenTypeClaim: refreshTokenType,
 	}
 
 	if req.GetConfig().GetUsername() != "" {
-		claims["preferred_username"] = req.GetConfig().GetUsername()
+		accessClaims["preferred_username"] = req.GetConfig().GetUsername()
 	}
 	if len(req.GetConfig().GetGroups()) > 0 {
-		claims["groups"] = req.GetConfig().GetGroups()
+		accessClaims["groups"] = req.GetConfig().GetGroups()
 	}
 	if len(req.GetConfig().GetServiceAccounts()) > 0 {
-		claims["service_accounts"] = req.GetConfig().GetServiceAccounts()
+		accessClaims["service_accounts"] = req.GetConfig().GetServiceAccounts()
 	}
 	if len(req.GetConfig().GetScopes()) > 0 {
-		claims["scope"] = req.GetConfig().GetScopes()
+		accessClaims["scope"] = req.GetConfig().GetScopes()
 	}
 	if len(req.GetConfig().GetClusters()) > 0 {
-		claims["clusters"] = req.GetConfig().GetClusters()
+		accessClaims["clusters"] = req.GetConfig().GetClusters()
 	}
 
 	for k, v := range req.GetConfig().GetExtraClaims() {
 		switch k {
-		case "iss", "sub", "aud", "iat", "nbf", "exp", "jti", "groups", "service_accounts":
-			return "", fmt.Errorf("extra claim %q is reserved", k)
+		case "iss", "sub", "aud", "iat", "nbf", "exp", "jti", tokenTypeClaim, "groups", "service_accounts":
+			return "", "", fmt.Errorf("extra claim %q is reserved", k)
 		default:
-			claims[k] = v
+			accessClaims[k] = v
 		}
 	}
 
+	accessToken, err := s.generateSignedToken(accessClaims)
+	if err != nil {
+		return "", "", err
+	}
+
+	refreshToken, err := s.generateSignedToken(refreshClaims)
+	if err != nil {
+		return "", "", err
+	}
+
+	return accessToken, refreshToken, nil
+}
+
+func (s *TokenManager) generateSignedToken(claims jwt.MapClaims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	token.Header["kid"] = s.SigningKeyID
 	token.Header["typ"] = "JWT"
-
 	signed, err := token.SignedString(s.Key)
 	if err != nil {
 		return "", fmt.Errorf("sign token: %w", err)
 	}
-
 	return signed, nil
 }
 
-func (s *TokenManager) Verify(ctx context.Context, accessToken string) (*jwt.Token, error) {
+func (s *TokenManager) VerifyAccessToken(ctx context.Context, accessToken string) (string, error) {
+	return s.verifyToken(ctx, accessToken, accessTokenType)
+}
+
+func (s *TokenManager) VerifyRefreshToken(ctx context.Context, refreshToken string) (string, error) {
+	return s.verifyToken(ctx, refreshToken, refreshTokenType)
+}
+
+func (s *TokenManager) verifyToken(ctx context.Context, rawToken string, expectedType string) (string, error) {
+	_ = ctx
+
 	token, err := jwt.ParseWithClaims(
-		accessToken,
+		rawToken,
 		&jwt.MapClaims{},
 		func(token *jwt.Token) (any, error) {
 			if token.Method != jwt.SigningMethodES256 {
@@ -130,12 +176,25 @@ func (s *TokenManager) Verify(ctx context.Context, accessToken string) (*jwt.Tok
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
+		return "", fmt.Errorf("invalid token: %w", err)
 	}
 	if !token.Valid {
-		return nil, errors.New("invalid token")
+		return "", errors.New("invalid token")
 	}
 
+	claims, err := claimsFromToken(token)
+	if err != nil {
+		return "", err
+	}
+	if err := s.validateClaims(claims, token, expectedType); err != nil {
+		return "", err
+	}
+
+	sub, _ := claims["sub"].(string)
+	return sub, nil
+}
+
+func claimsFromToken(token *jwt.Token) (jwt.MapClaims, error) {
 	var claims jwt.MapClaims
 	switch c := token.Claims.(type) {
 	case jwt.MapClaims:
@@ -145,14 +204,22 @@ func (s *TokenManager) Verify(ctx context.Context, accessToken string) (*jwt.Tok
 	default:
 		return nil, errors.New("invalid token claims")
 	}
+
+	return claims, nil
+}
+
+func (s *TokenManager) validateClaims(claims jwt.MapClaims, token *jwt.Token, expectedType string) error {
 	if typ, ok := token.Header["typ"].(string); ok && typ != "JWT" {
-		return nil, errors.New("invalid token type")
+		return errors.New("invalid token type")
 	}
 	if !claims.VerifyIssuer(s.Issuer, true) {
-		return nil, errors.New("invalid token issuer")
+		return errors.New("invalid token issuer")
 	}
 	if sub, ok := claims["sub"].(string); !ok || sub == "" {
-		return nil, errors.New("invalid token subject")
+		return errors.New("invalid token subject")
+	}
+	if typ, ok := claims[tokenTypeClaim].(string); !ok || typ != expectedType {
+		return fmt.Errorf("invalid token purpose")
 	}
 
 	allowedAud := s.AllowedAud
@@ -160,7 +227,7 @@ func (s *TokenManager) Verify(ctx context.Context, accessToken string) (*jwt.Tok
 		allowedAud = s.DefaultAud
 	}
 	if len(allowedAud) == 0 {
-		return nil, errors.New("allowed audiences are not configured")
+		return errors.New("allowed audiences are not configured")
 	}
 
 	var audValid bool
@@ -171,10 +238,10 @@ func (s *TokenManager) Verify(ctx context.Context, accessToken string) (*jwt.Tok
 		}
 	}
 	if !audValid {
-		return nil, errors.New("invalid token audience")
+		return errors.New("invalid token audience")
 	}
 
-	return token, nil
+	return nil
 }
 
 func (s *TokenManager) Revoke(ctx context.Context, token *tokenv1.Token) error {
@@ -187,7 +254,8 @@ func NewTokenManager(key *ecdsa.PrivateKey, opts ...NewTokenManagerOption) (*Tok
 		AllowedAud:   []string{"multikube"},
 		Issuer:       "https://auth.multikube.io",
 		Key:          key,
-		DefaultTTL:   time.Hour * 24,
+		AccessTTL:    10 * time.Minute,
+		RefreshTTL:   24 * time.Hour,
 		MaxTTL:       time.Hour * 72,
 		DefaultAud:   []string{"multikube"},
 		SigningKeyID: "key-2026-04",

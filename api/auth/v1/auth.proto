@@ -18,6 +18,13 @@ service AuthService {
   rpc Logout(LogoutRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {post: "/api/v1/auth/logout"};
   }
+
+  rpc Refresh(RefreshRequest) returns (RefreshResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/refresh"
+      body: "*"
+    };
+  }
 }
 
 message LoginRequest {
@@ -27,8 +34,17 @@ message LoginRequest {
 
 message LoginResponse {
   string access_token = 1;
+  string refresh_token = 2;
 }
 
 message LogoutRequest {
+  string access_token = 1;
+}
+
+message RefreshRequest {
+  string refresh_token = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+message RefreshResponse {
   string access_token = 1;
 }
