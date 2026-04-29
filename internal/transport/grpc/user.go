@@ -90,6 +90,7 @@ func (n *UserService) Update(ctx context.Context, req *userv1.UpdateRequest) (*u
 	if err != nil {
 		return nil, toStatus(err)
 	}
+	user.GetConfig().Password = ""
 
 	return &userv1.UpdateResponse{User: user}, nil
 }
@@ -109,6 +110,7 @@ func (n *UserService) Patch(ctx context.Context, req *userv1.PatchRequest) (*use
 	if err != nil {
 		return nil, toStatus(err)
 	}
+	user.GetConfig().Password = ""
 
 	return &userv1.PatchResponse{User: user}, nil
 }

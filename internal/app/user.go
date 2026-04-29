@@ -127,23 +127,27 @@ func (l *UserService) Patch(ctx context.Context, id keys.ID, patch *userv1.User)
 	}
 
 	updated := maskedUpdate.(*userv1.User)
-	existing = protoutils.StrategicMerge(existing, updated)
+	candidate := protoutils.StrategicMerge(existing, updated)
 
-	hashedPass, err := bcrypt.GenerateFromPassword([]byte(existing.GetConfig().GetPassword()), bcrypt.DefaultCost)
+	if patch.GetConfig() == nil || patch.GetConfig().GetPassword() == "" {
+		candidate.GetConfig().Password = existing.GetConfig().GetPassword()
+	} else {
+		hashedPass, err := bcrypt.GenerateFromPassword([]byte(candidate.GetConfig().GetPassword()), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		candidate.GetConfig().Password = string(hashedPass)
+	}
+
+	equal, err := protoutils.SpecEqual(existing.GetConfig(), candidate.GetConfig())
 	if err != nil {
 		return err
 	}
-	existing.GetConfig().Password = string(hashedPass)
 
 	// Update the user
-	user, err := l.Repo.Update(ctx, id, existing)
+	user, err := l.Repo.Update(ctx, id, candidate)
 	if err != nil {
-		l.Logger.Error("error updating user", "error", err, "name", existing.GetMeta().GetName())
-		return err
-	}
-
-	equal, err := protoutils.SpecEqual(existing.GetConfig(), user.GetConfig())
-	if err != nil {
+		l.Logger.Error("error updating user", "error", err, "name", candidate.GetMeta().GetName())
 		return err
 	}
 
@@ -151,7 +155,7 @@ func (l *UserService) Patch(ctx context.Context, id keys.ID, patch *userv1.User)
 	if !equal {
 		err = l.Exchange.Forward(ctx, events.NewEvent(events.UserPatch, user))
 		if err != nil {
-			l.Logger.Error("error publishing user patch event", "error", err, "name", existing.GetMeta().GetName())
+			l.Logger.Error("error publishing user patch event", "error", err, "name", candidate.GetMeta().GetName())
 			return err
 		}
 	}
