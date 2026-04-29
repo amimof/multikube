@@ -16,8 +16,7 @@ var _ authv1.AuthServiceServer = &AuthService{}
 
 type AuthService struct {
 	authv1.UnimplementedAuthServiceServer
-	app   *app.AuthService
-	token *app.TokenService
+	app *app.AuthService
 }
 
 func (n *AuthService) Register(server *grpc.Server) {

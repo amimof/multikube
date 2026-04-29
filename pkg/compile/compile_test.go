@@ -29,7 +29,8 @@ import (
 // Helpers — self-signed cert + key generation
 // ---------------------------------------------------------------------------
 
-func boolPtr(v bool) *bool { return &v }
+//go:fix inline
+func boolPtr(v bool) *bool { return new(v) }
 
 // selfSignedPEM returns a self-signed certificate PEM and its private-key PEM.
 func selfSignedPEM(t *testing.T) (certPEM, keyPEM string) {
@@ -71,15 +72,12 @@ func selfSignedPEM(t *testing.T) (certPEM, keyPEM string) {
 func newBackend(name, server string) *backendv1.Backend {
 	return &backendv1.Backend{
 		Meta:   &metav1.Meta{Name: name},
-		Config: &backendv1.BackendConfig{Servers: []string{server}, InsecureSkipTlsVerify: true, Enabled: boolPtr(true)},
+		Config: &backendv1.BackendConfig{Servers: []string{server}, InsecureSkipTlsVerify: true, Enabled: new(true)},
 	}
 }
 
 func requireSingleBackendTarget(t *testing.T, pool *proxy.BackendPool) *proxy.BackendRuntime {
 	t.Helper()
-	if pool == nil {
-		t.Fatal("expected backend pool")
-	}
 	if len(pool.Targets) != 1 {
 		t.Fatalf("expected 1 backend target, got %d", len(pool.Targets))
 	}
@@ -92,7 +90,7 @@ func newRoute(name, backendRef string, match *routev1.Match) *routev1.Route {
 		Config: &routev1.RouteConfig{
 			BackendRef: backendRef,
 			Match:      match,
-			Enabled:    boolPtr(true),
+			Enabled:    new(true),
 		},
 	}
 }
@@ -103,7 +101,7 @@ func newCertificate(name, certPEM, keyPEM string) *certificatev1.Certificate {
 		Config: &certificatev1.CertificateConfig{
 			CertificateData: certPEM,
 			KeyData:         keyPEM,
-			Enabled:         boolPtr(true),
+			Enabled:         new(true),
 		},
 	}
 }
@@ -113,7 +111,7 @@ func newCAInline(name, certPEM string) *cav1.CertificateAuthority {
 		Meta: &metav1.Meta{Name: name},
 		Config: &cav1.CertificateAuthorityConfig{
 			CertificateData: certPEM,
-			Enabled:         boolPtr(true),
+			Enabled:         new(true),
 		},
 	}
 }
@@ -123,7 +121,7 @@ func newTokenCredential(name, token string) *credentialv1.Credential {
 		Meta: &metav1.Meta{Name: name},
 		Config: &credentialv1.CredentialConfig{
 			Token:   token,
-			Enabled: boolPtr(true),
+			Enabled: new(true),
 		},
 	}
 }
@@ -136,7 +134,7 @@ func newBasicCredential(name, username, password string) *credentialv1.Credentia
 				Username: username,
 				Password: password,
 			},
-			Enabled: boolPtr(true),
+			Enabled: new(true),
 		},
 	}
 }
@@ -146,7 +144,7 @@ func newClientCertCredential(name, certRef string) *credentialv1.Credential {
 		Meta: &metav1.Meta{Name: name},
 		Config: &credentialv1.CredentialConfig{
 			ClientCertificateRef: certRef,
-			Enabled:              boolPtr(true),
+			Enabled:              new(true),
 		},
 	}
 }
@@ -286,7 +284,7 @@ func TestCompile_BackendTargetProbeStateFromStatus(t *testing.T) {
 				Config: &backendv1.BackendConfig{
 					Servers:               []string{"http://example.com"},
 					InsecureSkipTlsVerify: true,
-					Enabled:               boolPtr(true),
+					Enabled:               new(true),
 					Probes: &backendv1.ProbeConfig{
 						Healthiness: &backendv1.Probe{Path: "/healthz"},
 						Readiness:   &backendv1.Probe{Path: "/readyz"},
@@ -295,8 +293,8 @@ func TestCompile_BackendTargetProbeStateFromStatus(t *testing.T) {
 				Status: &backendv1.BackendStatus{
 					TargetStatuses: map[string]*backendv1.TargetStatus{
 						"http://example.com": {
-							Healthiness: &backendv1.TargetHealthStatus{IsHealthy: boolPtr(false)},
-							Readiness:   &backendv1.TargetReadyStatus{IsReady: boolPtr(true)},
+							Healthiness: &backendv1.TargetHealthStatus{IsHealthy: new(false)},
+							Readiness:   &backendv1.TargetReadyStatus{IsReady: new(true)},
 						},
 					},
 				},
@@ -652,9 +650,6 @@ func TestCompile_BackendPool_SingleTarget(t *testing.T) {
 		t.Fatalf("expected 1 compiled route, got %d", len(res.Runtime.Routes.Paths))
 	}
 	pool := res.Runtime.Routes.Paths[0].BackendPool
-	if pool == nil {
-		t.Fatal("BackendPool is nil")
-	}
 	if len(pool.Targets) != 1 {
 		t.Fatalf("expected 1 target in pool, got %d", len(pool.Targets))
 	}
@@ -987,13 +982,7 @@ func TestCompile_ImpersonationConfig_DefaultWhenNil(t *testing.T) {
 	}
 
 	pool := res.Runtime.Backends["be"]
-	if pool == nil {
-		t.Fatal("expected backend pool")
-	}
 	imp := pool.Impersonation
-	if imp == nil {
-		t.Fatal("expected default impersonation config")
-	}
 	if imp.Name != "default" {
 		t.Errorf("name = %q, want %q", imp.Name, "default")
 	}
@@ -1046,9 +1035,6 @@ func TestCompile_ImpersonationConfig_ExplicitEnabled(t *testing.T) {
 	}
 
 	imp := res.Runtime.Backends["be"].Impersonation
-	if imp == nil {
-		t.Fatal("expected impersonation config")
-	}
 	if imp.Name != "custom" {
 		t.Errorf("name = %q, want %q", imp.Name, "custom")
 	}
@@ -1098,9 +1084,6 @@ func TestCompile_ImpersonationConfig_ExplicitDisabled(t *testing.T) {
 	}
 
 	imp := res.Runtime.Backends["be"].Impersonation
-	if imp == nil {
-		t.Fatal("expected impersonation config")
-	}
 	if imp.Enabled {
 		t.Error("expected enabled=false")
 	}
