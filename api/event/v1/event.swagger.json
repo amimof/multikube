@@ -96,7 +96,13 @@
         "EVENT_CREDENTIAL_UPDATE",
         "EVENT_CREDENTIAL_PATCH",
         "EVENT_TOKEN_ISSUE",
-        "EVENT_TOKEN_REVOKE"
+        "EVENT_TOKEN_REVOKE",
+        "EVENT_AUTH_LOGIN",
+        "EVENT_AUTH_LOGOUT",
+        "EVENT_USER_CREATE",
+        "EVENT_USER_DELETE",
+        "EVENT_USER_UPDATE",
+        "EVENT_USER_PATCH"
       ],
       "default": "EVENT_UNSPECIFIED"
     },

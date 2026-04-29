@@ -47,6 +47,14 @@ const (
 
 	TokenIssue  = eventv1.Event_EVENT_TOKEN_ISSUE
 	TokenRevoke = eventv1.Event_EVENT_TOKEN_REVOKE
+
+	AuthLogin  = eventv1.Event_EVENT_AUTH_LOGIN
+	AuthLogout = eventv1.Event_EVENT_AUTH_LOGOUT
+
+	UserCreate = eventv1.Event_EVENT_USER_CREATE
+	UserDelete = eventv1.Event_EVENT_USER_DELETE
+	UserUpdate = eventv1.Event_EVENT_USER_UPDATE
+	UserPatch  = eventv1.Event_EVENT_USER_PATCH
 )
 
 type Subscriber interface {

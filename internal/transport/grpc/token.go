@@ -29,7 +29,7 @@ func (n *TokenService) RegisterHandler(ctx context.Context, mux *runtime.ServeMu
 }
 
 func (n *TokenService) Issue(ctx context.Context, req *tokenv1.IssueRequest) (*tokenv1.IssueResponse, error) {
-	tokenResp, err := n.app.IssueToken(ctx, req.GetToken().GetConfig())
+	tokenResp, err := n.app.IssueToken(ctx, req.GetToken())
 	if err != nil {
 		return nil, toStatus(err)
 	}

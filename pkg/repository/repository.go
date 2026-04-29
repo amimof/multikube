@@ -21,6 +21,7 @@ import (
 	metav1 "github.com/amimof/multikube/api/meta/v1"
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
+	userv1 "github.com/amimof/multikube/api/user/v1"
 )
 
 var (
@@ -92,6 +93,14 @@ var CredentialCodec = ProtoCodec[*credentialv1.Credential]{
 
 func NewCredentialRepo[T *credentialv1.Credential](db DB) *Repo[*credentialv1.Credential] {
 	return NewRepo(db, CredentialCodec, []byte("credential/"), []byte("i/credential/"), []byte("i/idx/credential"))
+}
+
+var UserCodec = ProtoCodec[*userv1.User]{
+	New: func() *userv1.User { return &userv1.User{} },
+}
+
+func NewUserRepo[T *userv1.User](db DB) *Repo[*userv1.User] {
+	return NewRepo(db, UserCodec, []byte("user/"), []byte("i/user/"), []byte("i/idx/user"))
 }
 
 type Codec[T proto.Message] interface {

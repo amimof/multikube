@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package user.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "meta/v1/meta.proto";
+
+option go_package = "github.com/amimof/multikube/api/user/v1;user";
+
+service UserService {
+  rpc List(ListRequest) returns (ListResponse) {
+    option (google.api.http) = {get: "/api/v1/users"};
+  }
+  rpc Get(GetRequest) returns (GetResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{uid}"
+      additional_bindings: {get: "/api/v1/users/{name}"}
+    };
+  }
+  rpc Create(CreateRequest) returns (CreateResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/users"
+      body: "user"
+    };
+  }
+  rpc Update(UpdateRequest) returns (UpdateResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/users/{uid}"
+      body: "user"
+      additional_bindings: {
+        put: "/api/v1/users/{name}"
+        body: "user"
+      }
+    };
+  }
+  rpc Patch(PatchRequest) returns (PatchResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/users/{uid}"
+      body: "user"
+      additional_bindings: {
+        patch: "/api/v1/users/{name}"
+        body: "user"
+      }
+    };
+  }
+  rpc Delete(DeleteRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/users/{uid}"
+      additional_bindings: {delete: "/api/v1/users/{name}"}
+    };
+  }
+}
+
+message User {
+  string version = 1 [
+    (buf.validate.field).string.min_len = 4,
+    (buf.validate.field).string.pattern = "^[a-z0-9]+(?:[._-][a-z0-9]+)*/[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+    (buf.validate.field).required = true
+  ];
+  meta.v1.Meta meta = 2 [(buf.validate.field).required = true];
+  UserConfig config = 3;
+  UserStatus status = 4;
+}
+
+message UserConfig {
+  string id = 1;
+  google.protobuf.Timestamp created = 2;
+  google.protobuf.Timestamp updated = 3;
+  map<string, string> labels = 4;
+  string email = 5 [(buf.validate.field).string.email = true];
+  string password = 6;
+  string token_hash = 10;
+  repeated string roles = 18;
+  optional bool enabled = 7;
+}
+
+message UserBasic {
+  string username = 1 [(buf.validate.field).string.min_len = 1];
+  string password = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message UserStatus {
+  bool healthy = 1;
+}
+
+message GetRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+}
+
+message GetResponse {
+  User user = 1;
+}
+
+message CreateRequest {
+  User user = 1 [(buf.validate.field).required = true];
+}
+
+message CreateResponse {
+  User user = 1;
+}
+
+message DeleteRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  bool purge = 3;
+}
+
+message UpdateRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  User user = 3 [(buf.validate.field).required = true];
+  google.protobuf.FieldMask update_mask = 4;
+}
+
+message UpdateResponse {
+  User user = 1;
+}
+
+message ListRequest {
+  int32 limit = 1;
+  map<string, string> selector = 2;
+}
+
+message ListResponse {
+  repeated User users = 1;
+}
+
+message PatchRequest {
+  option (buf.validate.message).oneof = {
+    fields: [
+      "uid",
+      "name"
+    ]
+  };
+  string uid = 1 [(buf.validate.field).string.min_len = 1];
+  string name = 2 [(buf.validate.field).string.min_len = 1];
+  User user = 3 [(buf.validate.field).required = true];
+  google.protobuf.FieldMask update_mask = 4;
+}
+
+message PatchResponse {
+  User user = 1;
+}

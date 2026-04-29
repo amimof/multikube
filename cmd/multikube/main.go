@@ -50,6 +50,7 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/amimof/multikube/internal/app"
+	"github.com/amimof/multikube/internal/infra"
 	transport "github.com/amimof/multikube/internal/transport/grpc"
 	badgerrepo "github.com/amimof/multikube/pkg/repository/badger"
 )
@@ -281,15 +282,31 @@ func main() {
 		Exchange: exchange,
 		Logger:   log,
 	})
+
+	userApp := &app.UserService{
+		Repo:     repository.NewUserRepo(repo),
+		Exchange: exchange,
+		Logger:   log,
+	}
+	userService := transport.NewUserService(userApp)
+
+	tokenManager, err := infra.NewTokenManager(rs256PrivKey)
+	if err != nil {
+		log.Error("error creating token manager", "error", err)
+		os.Exit(1)
+	}
+
 	tokenService := transport.NewTokenService(&app.TokenService{
-		Exchange:     exchange,
-		Logger:       log,
-		Issuer:       "https://auth.multikube.io",
-		Key:          rs256PrivKey,
-		DefaultTTL:   time.Hour * 24,
-		MaxTTL:       time.Hour * 72,
-		DefaultAud:   []string{"multikube"},
-		SigningKeyID: "key-2026-04",
+		Exchange: exchange,
+		Logger:   log,
+		Issuer:   tokenManager,
+	})
+
+	authService := transport.NewAuthService(&app.AuthService{
+		Exchange: exchange,
+		Logger:   log,
+		Issuser:  tokenManager,
+		Users:    userApp,
 	})
 
 	// Context
@@ -439,6 +456,8 @@ func main() {
 		tokenService,
 		auditService,
 		metricsService,
+		authService,
+		userService,
 	)
 
 	// Used by clientset and the gateway to connect internally
@@ -465,6 +484,8 @@ func main() {
 		tokenService,
 		auditService,
 		metricsService,
+		authService,
+		userService,
 	)
 	if err != nil {
 		log.Error("error registering service handler", "error", err)
