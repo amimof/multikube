@@ -64,6 +64,8 @@ mockgen: ; $(info $(M) generating mock clients) @ ## Generate Go mock clients fo
 	$Q $(MOCKGEN) -package v1 api/credential/v1 CredentialServiceClient > pkg/client/credential/v1/mock.go
 	$Q $(MOCKGEN) -package v1 api/polizy/v1 PolicyServiceClient > pkg/client/policy/v1/mock.go
 	$Q $(MOCKGEN) -package v1 api/route/v1 RouteServiceClient > pkg/client/route/v1/mock.go
+	$Q $(MOCKGEN) -package v1 api/user/v1 UserServiceClient > pkg/client/user/v1/mock.go
+	$Q $(MOCKGEN) -package v1 api/auth/v1 AuthServiceClient > pkg/client/auth/v1/mock.go
 
 OPENAPI_GENERATOR ?= openapi-generator
 .PHONY: generate-ts-clients
@@ -76,6 +78,8 @@ generate-ts-clients: ; $(info $(M) generating TypeScript OpenAPI clients) @ ## G
 	$Q $(OPENAPI_GENERATOR) generate -i api/route/v1/route.swagger.json -g typescript-fetch -o web/src/generated/route
 	$Q rm -rf web/src/generated/metrics
 	$Q $(OPENAPI_GENERATOR) generate -i api/metrics/v1/metrics.swagger.json -g typescript-fetch -o web/src/generated/metrics
+	$Q $(OPENAPI_GENERATOR) generate -i api/user/v1/user.swagger.json -g typescript-fetch -o web/src/generated/user
+	$Q $(OPENAPI_GENERATOR) generate -i api/auth/v1/auth.swagger.json -g typescript-fetch -o web/src/generated/auth
 
 # Tools
 

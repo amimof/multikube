@@ -7,12 +7,15 @@ import "./styles/main.css";
 // import '@/styles/element/theme.scss'
 // import '@/styles/element/dark-overrides.css'
 import ElementPlus from 'element-plus'
+import { initTheme } from './composables/useTheme'
 
 
 import App from './App.vue'
 import router from './router'
 
 const app = createApp(App)
+
+initTheme()
 
 app.use(createPinia())
 app.use(router)

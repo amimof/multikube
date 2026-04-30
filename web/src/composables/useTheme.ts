@@ -21,26 +21,33 @@ function applyTheme(dark: boolean) {
 const isDark = ref(false)
 
 let initialized = false
+let stopSync: (() => void) | null = null
+
+export function initTheme() {
+  if (initialized) {
+    return
+  }
+
+  initialized = true
+
+  const stored = getStoredPreference()
+  isDark.value = stored ? stored === 'dark' : getSystemPreference()
+  applyTheme(isDark.value)
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!getStoredPreference()) {
+      isDark.value = e.matches
+    }
+  })
+
+  stopSync = watch(isDark, (val) => {
+    applyTheme(val)
+    localStorage.setItem(STORAGE_KEY, val ? 'dark' : 'light')
+  })
+}
 
 export function useTheme() {
-  if (!initialized) {
-    initialized = true
-
-    const stored = getStoredPreference()
-    isDark.value = stored ? stored === 'dark' : getSystemPreference()
-    applyTheme(isDark.value)
-
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (!getStoredPreference()) {
-        isDark.value = e.matches
-      }
-    })
-
-    watch(isDark, (val) => {
-      applyTheme(val)
-      localStorage.setItem(STORAGE_KEY, val ? 'dark' : 'light')
-    })
-  }
+  initTheme()
 
   function toggleTheme() {
     isDark.value = !isDark.value
