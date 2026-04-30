@@ -21,6 +21,12 @@ type Server struct {
 	Name      string     `mapstructure:"name" json:"name" yaml:"name"`
 	Address   string     `mapstructure:"address" json:"address" yaml:"address"`
 	TLSConfig *TLSConfig `mapstructure:"tls" json:"tls" yaml:"tls"`
+	Session   *Session   `mapstructure:"session,omitempty" json:"session,omitempty" yaml:"session,omitempty"`
+}
+
+type Session struct {
+	AccessToken  string `mapstructure:"access_token,omitempty" json:"access_token,omitempty" yaml:"access_token,omitempty"`
+	RefreshToken string `mapstructure:"refresh_token,omitempty" json:"refresh_token,omitempty" yaml:"refresh_token,omitempty"`
 }
 
 type TLSConfig struct {

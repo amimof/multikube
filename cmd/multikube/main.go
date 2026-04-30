@@ -30,6 +30,7 @@ import (
 	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/controller"
+	"github.com/amimof/multikube/pkg/errs"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/instrumentation"
 	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
@@ -53,6 +54,9 @@ import (
 	"github.com/amimof/multikube/internal/infra"
 	transport "github.com/amimof/multikube/internal/transport/grpc"
 	badgerrepo "github.com/amimof/multikube/pkg/repository/badger"
+
+	"github.com/amimof/multikube/api/meta/v1"
+	userv1 "github.com/amimof/multikube/api/user/v1"
 )
 
 var (
@@ -517,6 +521,13 @@ func main() {
 		}
 	}()
 
+	// Create initial admin user
+	err = createAdminUser(ctx, cs)
+	if err != nil {
+		log.Error("error creating admin user", "error", err)
+		os.Exit(1)
+	}
+
 	// Setup controller
 	runtimeStore := proxyv2.NewRuntimeStore()
 	compiler := compile.NewCompiler(compile.WithMetrics(proxyMetrics))
@@ -691,19 +702,6 @@ func serveProxyServer(ps *server.Server, errChan chan error) {
 		return
 	}
 }
-
-// func serveGateway(addr string, gw *transport.Gateway, errChan chan error) {
-// 	l, err := net.Listen("tcp", addr)
-// 	if err != nil {
-// 		errChan <- fmt.Errorf("error creating gateway listener: %v", err)
-// 		return
-// 	}
-// 	log.Info("gateway listening", "address", addr)
-// 	if err := gw.ServeTLS(l, tlsCertificate, tlsCertificateKey); err != nil {
-// 		errChan <- fmt.Errorf("error serving gateway: %v", err)
-// 		return
-// 	}
-// }
 
 func serveMux(addr string, tlsConfig *tls.Config, mux *http.ServeMux, errChan chan error) {
 	// Create the server
@@ -906,4 +904,31 @@ func connectToServer(ctx context.Context, addr string, opts ...client.NewClientO
 		case <-ticker.C:
 		}
 	}
+}
+
+func createAdminUser(ctx context.Context, cs *client.ClientSet) error {
+	_, err := cs.UserV1().Get(ctx, "admin")
+	if err != nil {
+		if errs.IsNotFound(err) {
+			adminUser := &userv1.User{
+				Meta: &meta.Meta{
+					Name: "admin",
+					Labels: map[string]string{
+						"multikube.io/builtin": "true",
+					},
+				},
+				Config: &userv1.UserConfig{
+					Password: "admin",
+					Email:    "admin@multikube.io",
+					Enabled:  new(true),
+				},
+			}
+			if err := cs.UserV1().Create(ctx, adminUser); err != nil {
+				return err
+			}
+			return nil
+		}
+		return err
+	}
+	return nil
 }

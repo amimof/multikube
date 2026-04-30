@@ -75,18 +75,17 @@ This guide walks you through running a single-instance containerized Multikube c
    Commit: aeb75b2c896a209bf58cf87f00ee66e6354fdbb9
    ```
 
-## Configuring the CLI
+## Login to the control plane
 
-Multikubectl reads it's configuration from a yaml file located at `~/.multikube/multikube.yaml`. That file contains connection details and credentials to one or more multikube control planes. We simply use the `create-server` command to *connect* to the multikube instance you ran earlier with Docker.
+Multikubectl reads it's configuration from a yaml file located at `~/.config/multikubectl.yaml`. That file contains connection details and credentials to one or more multikube control planes. We simply use the `login` command to authenticate and *connect* to the multikube instance you ran earlier with Docker.
 
-1. **Adding servers**
+1. **Logging In**
 
    ```bash
-   multikubectl config init
-   multikubectl config create-server my-cluster --address localhost:5743 --tls --insecure
+   multikubectl login my-cluster --address localhost:5743 --tls --insecure
    ```
 
-   > The `init` command creates an empty config file at `~/.multikube/multikube.yaml` and is only necessary if you've never used multikubectl before.
+   > Default username and password is `admin/admin`
 
 2. **List backends**
 

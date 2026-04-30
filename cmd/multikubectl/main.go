@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -87,6 +88,20 @@ func withClientSet(run func(cmd *cobra.Command, args []string) error) func(cmd *
 
 func loadConfig(validate bool) error {
 	if err := viper.ReadInConfig(); err != nil {
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		if errors.As(err, &configFileNotFoundError) || errors.Is(err, os.ErrNotExist) {
+			cfg = client.Config{
+				Version: "config/v1",
+				Servers: []*client.Server{},
+			}
+			if validate {
+				if err := cfg.Validate(); err != nil {
+					logrus.Fatalf("config validation error: %v", err)
+					return err
+				}
+			}
+			return nil
+		}
 		logrus.Fatalf("error reading config: %v", err)
 		return err
 	}
@@ -100,6 +115,71 @@ func loadConfig(validate bool) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func buildServerConfig(serverName, address, caFile, certFile, keyFile string, insecure, tls bool) (*client.Server, error) {
+	newServer := &client.Server{
+		Name:    serverName,
+		Address: address,
+	}
+
+	if tls {
+		newServer.TLSConfig = &client.TLSConfig{
+			Insecure: insecure,
+		}
+		if caFile != "" {
+			caData, err := os.ReadFile(caFile)
+			if err != nil {
+				return nil, fmt.Errorf("error reading ca file: %v", err)
+			}
+			newServer.TLSConfig.CA = string(caData)
+		}
+
+		if certFile != "" {
+			certData, err := os.ReadFile(certFile)
+			if err != nil {
+				return nil, fmt.Errorf("error reading certificate file: %v", err)
+			}
+			newServer.TLSConfig.Certificate = string(certData)
+		}
+
+		if keyFile != "" {
+			keyData, err := os.ReadFile(keyFile)
+			if err != nil {
+				return nil, fmt.Errorf("error reading key file: %v", err)
+			}
+			newServer.TLSConfig.Key = string(keyData)
+		}
+	}
+
+	if err := newServer.Validate(); err != nil {
+		return nil, err
+	}
+
+	return newServer, nil
+}
+
+func upsertServerConfig(cfg *client.Config, srv *client.Server) error {
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if srv == nil {
+		return fmt.Errorf("server is nil")
+	}
+
+	if err := srv.Validate(); err != nil {
+		return err
+	}
+
+	for i, existing := range cfg.Servers {
+		if existing.Name == srv.Name {
+			cfg.Servers[i] = srv
+			return nil
+		}
+	}
+
+	cfg.Servers = append(cfg.Servers, srv)
 	return nil
 }
 
@@ -122,7 +202,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("home directory cannot be determined: %v", err)
 	}
-	defaultConfigPath := filepath.Join(home, ".multikube", "multikube.yaml")
+	defaultConfigPath := filepath.Join(home, ".config", "multikubectl.yaml")
 
 	// Setup flags
 	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", defaultConfigPath, "config file")
@@ -143,6 +223,7 @@ func main() {
 	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.AddCommand(newKubeconfigCmd())
 	rootCmd.AddCommand(newApplyCmd())
+	rootCmd.AddCommand(newLoginCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -2,13 +2,9 @@ package main
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/amimof/multikube/pkg/client"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"gopkg.in/yaml.v2"
 )
 
 func newConfigCreateServerCmd() *cobra.Command {
@@ -47,57 +43,23 @@ multikubectl config create-server dev --address localhost:5743 --ca ca.crt
 // runInitCmd creates an empty multikube configuration file at the path
 // resolved by viper, then immediately reads it back to verify it is valid.
 func runConfigCreateServerCmd(serverName, address, caFile, certFile, keyFile string, insecure, current, tls bool) error {
-	newServer := &client.Server{
-		Name:    serverName,
-		Address: address,
-	}
-
-	if tls {
-		newServer.TLSConfig = &client.TLSConfig{
-			Insecure: insecure,
-		}
-		if caFile != "" {
-			caData, err := os.ReadFile(caFile)
-			if err != nil {
-				return fmt.Errorf("error reading ca file: %v", err)
-			}
-			newServer.TLSConfig.CA = string(caData)
-		}
-
-		if certFile != "" {
-			certData, err := os.ReadFile(certFile)
-			if err != nil {
-				return fmt.Errorf("error reading certificate file: %v", err)
-			}
-			newServer.TLSConfig.Certificate = string(certData)
-		}
-
-		if keyFile != "" {
-			keyData, err := os.ReadFile(keyFile)
-			if err != nil {
-				return fmt.Errorf("error reading key file: %v", err)
-			}
-			newServer.TLSConfig.Key = string(keyData)
-		}
+	newServer, err := buildServerConfig(serverName, address, caFile, certFile, keyFile, insecure, tls)
+	if err != nil {
+		return err
 	}
 
 	if current {
 		cfg.Current = newServer.Name
 	}
 
-	err := cfg.AddServer(newServer)
+	err = cfg.AddServer(newServer)
 	if err != nil {
 		return fmt.Errorf("error addding server to config: %v", err)
 	}
 
-	b, err := yaml.Marshal(cfg)
+	err = writeConfig()
 	if err != nil {
-		return fmt.Errorf("error marshal: %v", err)
-	}
-
-	err = os.WriteFile(viper.GetViper().ConfigFileUsed(), b, 0o666)
-	if err != nil {
-		return fmt.Errorf("error writing config file: %v", err)
+		return err
 	}
 
 	logrus.Infof("Added server %v to configuration", serverName)

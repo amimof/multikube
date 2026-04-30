@@ -47,7 +47,7 @@ func (a *AuthService) Login(ctx context.Context, req *authv1.LoginRequest) (*aut
 
 	u, err := a.Users.Get(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.PermissionDenied, "incorrect username/password")
 	}
 
 	if !u.GetConfig().GetEnabled() {
@@ -55,7 +55,7 @@ func (a *AuthService) Login(ctx context.Context, req *authv1.LoginRequest) (*aut
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.GetConfig().GetPassword()), []byte(req.GetPassword())); err != nil {
-		return nil, status.Errorf(codes.PermissionDenied, "incorrect username/password %s", err.Error())
+		return nil, status.Errorf(codes.PermissionDenied, "incorrect username/password")
 	}
 
 	tokenReq := &tokenv1.Token{

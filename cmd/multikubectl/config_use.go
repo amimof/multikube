@@ -1,13 +1,9 @@
 package main
 
 import (
-	"os"
-
 	fzf "github.com/junegunn/fzf/src"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"gopkg.in/yaml.v2"
 )
 
 func newConfigUseCmd() *cobra.Command {
@@ -77,12 +73,7 @@ func runConfigUse(args []string) error {
 
 	cfg.Current = serverName
 
-	b, err := yaml.Marshal(cfg)
-	if err != nil {
-		logrus.Fatalf("error marshal: %v", err)
-	}
-
-	err = os.WriteFile(viper.GetViper().ConfigFileUsed(), b, 0o666)
+	err := writeConfig()
 	if err != nil {
 		logrus.Fatalf("error writing config file: %v", err)
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/amimof/multikube/pkg/client/identity"
 	"github.com/amimof/multikube/pkg/logger"
 
+	authv1 "github.com/amimof/multikube/pkg/client/auth/v1"
 	backendv1 "github.com/amimof/multikube/pkg/client/backend/v1"
 	cav1 "github.com/amimof/multikube/pkg/client/ca/v1"
 	certificatev1 "github.com/amimof/multikube/pkg/client/certificate/v1"
@@ -28,6 +29,7 @@ import (
 	policyv1 "github.com/amimof/multikube/pkg/client/policy/v1"
 	routev1 "github.com/amimof/multikube/pkg/client/route/v1"
 	tokenv1 "github.com/amimof/multikube/pkg/client/token/v1"
+	userv1 "github.com/amimof/multikube/pkg/client/user/v1"
 )
 
 var DefaultTLSConfig = &tls.Config{
@@ -46,6 +48,13 @@ func WithRouteClient(routev1Client routev1.ClientV1) NewClientOption {
 func WithBackendClient(backendv1Client backendv1.ClientV1) NewClientOption {
 	return func(c *ClientSet) error {
 		c.backendV1Client = backendv1Client
+		return nil
+	}
+}
+
+func WithAuthClient(authV1Client authv1.ClientV1) NewClientOption {
+	return func(c *ClientSet) error {
+		c.authV1Client = authV1Client
 		return nil
 	}
 }
@@ -126,6 +135,7 @@ func WithTLSConfigFromFlags(f *pflag.FlagSet) NewClientOption {
 // tls configuration, then tls config is not set on the client.
 func WithTLSConfigFromCfg(cfg *Config) NewClientOption {
 	return func(c *ClientSet) error {
+		c.cfg = cfg
 		if err := cfg.Validate(); err != nil {
 			return err
 		}
@@ -178,6 +188,7 @@ func getTLSConfig(cert, key, ca string, insecure bool) (*tls.Config, error) {
 
 type ClientSet struct {
 	conn                *grpc.ClientConn
+	authV1Client        authv1.ClientV1
 	healthV1Client      *healthv1.ClientV1
 	backendV1Client     backendv1.ClientV1
 	caV1Client          cav1.ClientV1
@@ -186,11 +197,17 @@ type ClientSet struct {
 	routeV1Client       routev1.ClientV1
 	policyV1Client      policyv1.ClientV1
 	tokenV1Client       tokenv1.ClientV1
+	userV1Client        userv1.ClientV1
 	mu                  sync.Mutex
 	grpcOpts            []grpc.DialOption
 	tlsConfig           *tls.Config
 	logger              logger.Logger
 	id                  *identity.AtomicIdentity
+	cfg                 *Config
+}
+
+func (c *ClientSet) AuthV1() authv1.ClientV1 {
+	return c.authV1Client
 }
 
 func (c *ClientSet) BackendV1() backendv1.ClientV1 {
@@ -219,6 +236,10 @@ func (c *ClientSet) PolicyV1() policyv1.ClientV1 {
 
 func (c *ClientSet) TokenV1() tokenv1.ClientV1 {
 	return c.tokenV1Client
+}
+
+func (c *ClientSet) UserV1() userv1.ClientV1 {
+	return c.userV1Client
 }
 
 func (c *ClientSet) State() connectivity.State {
@@ -296,7 +317,18 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	c.grpcOpts = append(c.grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(c.tlsConfig)))
 
 	// Add interceptors
-	c.grpcOpts = append(c.grpcOpts, grpc.WithUnaryInterceptor(identity.IdentityUnaryInterceptor(c.id)), grpc.WithStreamInterceptor(identity.IdentityStreamInterceptor(c.id)))
+	tokenProvider := ConfigAccessTokenProvider{Config: c.cfg}
+	c.grpcOpts = append(
+		c.grpcOpts,
+		grpc.WithChainUnaryInterceptor(
+			AccessTokenUnaryInterceptor(tokenProvider),
+			identity.IdentityUnaryInterceptor(c.id),
+		),
+		grpc.WithChainStreamInterceptor(
+			AccessTokenStreamInterceptor(tokenProvider),
+			identity.IdentityStreamInterceptor(c.id),
+		),
+	)
 
 	conn, err := grpc.NewClient(server, c.grpcOpts...)
 	if err != nil {
@@ -304,6 +336,9 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	}
 
 	c.conn = conn
+	if c.authV1Client == nil {
+		c.authV1Client = authv1.NewClientV1WithConn(conn)
+	}
 	if c.backendV1Client == nil {
 		c.backendV1Client = backendv1.NewClientV1WithConn(conn)
 	}
@@ -324,6 +359,9 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	}
 	if c.tokenV1Client == nil {
 		c.tokenV1Client = tokenv1.NewClientV1WithConn(conn)
+	}
+	if c.userV1Client == nil {
+		c.userV1Client = userv1.NewClientV1WithConn(conn)
 	}
 	if c.healthV1Client == nil {
 		c.healthV1Client = healthv1.NewClientV1WithConn(conn)

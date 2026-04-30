@@ -11,6 +11,7 @@ import (
 	policyv1 "github.com/amimof/multikube/api/policy/v1"
 	routev1 "github.com/amimof/multikube/api/route/v1"
 	tokenv1 "github.com/amimof/multikube/api/token/v1"
+	userv1 "github.com/amimof/multikube/api/user/v1"
 )
 
 var apiVersionByFullName = map[protoreflect.FullName]string{
@@ -21,6 +22,7 @@ var apiVersionByFullName = map[protoreflect.FullName]string{
 	"policy.v1.Policy":                              "policy/v1",
 	"credential.v1.Credential":                      "credential/v1",
 	"token.v1.Token":                                "token/v1",
+	"user.v1.User":                                  "user/v1",
 }
 
 var (
@@ -31,6 +33,7 @@ var (
 	VersionPolicy               = Version((&policyv1.Policy{}))
 	VersionCredential           = Version((&credentialv1.Credential{}))
 	VersionToken                = Version((&tokenv1.Token{}))
+	VersionUser                 = Version((&userv1.User{}))
 )
 
 func Version(m proto.Message) string {

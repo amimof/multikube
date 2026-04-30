@@ -25,7 +25,7 @@ with an error and leaves the existing file untouched.
 
 The generated file contains the required version field and an empty list of
 servers, ready to be populated with backends via 'multikubectl config import'.`,
-		Example: `  # Create the configuration file at the default location (~/.multikube/multikube.yaml)
+		Example: `  # Create the configuration file at the default location (~/.config/multikubectl.yaml)
   multikubectl config init
 
   # Create the configuration file at a custom path
