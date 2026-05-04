@@ -10,11 +10,15 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
-	"google.golang.org/protobuf/types/known/durationpb"
 
 	tokenv1 "github.com/amimof/multikube/api/token/v1"
 	"github.com/amimof/multikube/pkg/client"
+	tokenclientv1 "github.com/amimof/multikube/pkg/client/token/v1"
 )
+
+var createTokenClientFactory = func() tokenclientv1.ClientV1 {
+	return clientSet.TokenV1()
+}
 
 func newCreateTokenCmd(cfg *client.Config) *cobra.Command {
 	var (
@@ -22,10 +26,10 @@ func newCreateTokenCmd(cfg *client.Config) *cobra.Command {
 		username     string
 		groups       []string
 		serviceAccts []string
-		audience     []string
+		audience     string
 		scopes       []string
 		clusters     []string
-		ttl          time.Duration
+		ttlSeconds   uint64
 		extraClaims  []string
 	)
 
@@ -37,18 +41,18 @@ func newCreateTokenCmd(cfg *client.Config) *cobra.Command {
   multikubectl create token --subject alice --group platform --service-account default/builder --claim team=platform`,
 		Args: cobra.ExactArgs(0),
 		RunE: withClientSet(func(cmd *cobra.Command, args []string) error {
-			return runCreateTokenCmd(cmd, cfg, subject, username, groups, serviceAccts, audience, scopes, clusters, ttl, extraClaims)
+			return runCreateTokenCmd(cmd, cfg, subject, username, audience, groups, serviceAccts, scopes, clusters, ttlSeconds, extraClaims)
 		}),
 	}
 
 	cmd.Flags().StringVar(&subject, "subject", "", "Subject claim to issue as `sub`")
 	cmd.Flags().StringVar(&username, "username", "", "Optional preferred username claim")
+	cmd.Flags().StringVar(&audience, "audience", "", "Audience claim value, repeatable")
 	cmd.Flags().StringArrayVar(&groups, "group", []string{}, "Group claim value, repeatable")
 	cmd.Flags().StringArrayVar(&serviceAccts, "service-account", []string{}, "Service account claim value, repeatable")
-	cmd.Flags().StringArrayVar(&audience, "audience", []string{}, "Audience claim value, repeatable")
 	cmd.Flags().StringArrayVar(&scopes, "scope", []string{}, "Optional scope values, repeatable")
 	cmd.Flags().StringArrayVar(&clusters, "cluster", []string{}, "Optional cluster values, repeatable")
-	cmd.Flags().DurationVar(&ttl, "ttl", time.Minute*30, "Token time-to-live")
+	cmd.Flags().Uint64Var(&ttlSeconds, "ttl", 0, "Token time-to-live in seconds. Set to 0 to make the access token never expire")
 	cmd.Flags().StringArrayVar(&extraClaims, "claim", []string{}, "Additional claim in key=value format, repeatable")
 	_ = cmd.MarkFlagRequired("subject")
 
@@ -74,9 +78,9 @@ func claimMapFromStringArray(extraClaims []string) (map[string]string, error) {
 func runCreateTokenCmd(
 	cmd *cobra.Command,
 	cfg *client.Config,
-	subject, username string,
-	groups, serviceAccounts, audience, scopes, clusters []string,
-	ttl time.Duration,
+	subject, username, audience string,
+	groups, serviceAccounts, scopes, clusters []string,
+	ttlSeconds uint64,
 	extraClaims []string,
 ) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
@@ -100,12 +104,14 @@ func runCreateTokenCmd(
 			Audience:        audience,
 			Scopes:          scopes,
 			Clusters:        clusters,
-			Ttl:             durationpb.New(ttl),
 			ExtraClaims:     extraClaimsMap,
 		},
 	}
+	if cmd.Flags().Changed("ttl") {
+		req.Config.Ttl = &ttlSeconds
+	}
 
-	res, err := clientSet.TokenV1().IssueToken(ctx, req)
+	res, err := createTokenClientFactory().IssueToken(ctx, req)
 	if err != nil {
 		logrus.Fatalf("error creating token: %v", err)
 	}

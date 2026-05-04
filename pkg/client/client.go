@@ -115,6 +115,13 @@ func WithLogger(l logger.Logger) NewClientOption {
 	}
 }
 
+func WithConfig(cfg *Config) NewClientOption {
+	return func(c *ClientSet) error {
+		c.cfg = cfg
+		return nil
+	}
+}
+
 func WithTLSConfigFromFlags(f *pflag.FlagSet) NewClientOption {
 	insecure, _ := f.GetBool("insecure")
 	tlsCertificate, _ := f.GetString("tls-certificate")

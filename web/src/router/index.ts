@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { normalizeRedirectPath } from '@/router/redirect'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -104,9 +105,7 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.publicOnly && authStore.isAuthenticated) {
-    const redirect = typeof to.query.redirect === 'string' && to.query.redirect.length > 0
-      ? to.query.redirect
-      : '/'
+    const redirect = normalizeRedirectPath(typeof to.query.redirect === 'string' ? to.query.redirect : null)
 
     return redirect
   }

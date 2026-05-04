@@ -4,14 +4,17 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	authv1 "github.com/amimof/multikube/api/auth/v1"
 	meta "github.com/amimof/multikube/api/meta/v1"
 	tokenv1 "github.com/amimof/multikube/api/token/v1"
 	userv1 "github.com/amimof/multikube/api/user/v1"
+	"github.com/amimof/multikube/internal/infra"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/keys"
 	"github.com/amimof/multikube/pkg/logger"
+	"github.com/golang-jwt/jwt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -25,32 +28,37 @@ type stubTokenManager struct {
 	issuedRefresh  string
 	issueErr       error
 	issueCalls     int
+	issuedExpires  time.Time
 }
 
-func (s *stubTokenManager) Issue(context.Context, *tokenv1.Token) (string, string, error) {
+func (s *stubTokenManager) Issue(context.Context, *tokenv1.Token) (infra.IssueResponse, error) {
 	s.issueCalls++
 	if s.issueErr != nil {
-		return "", "", s.issueErr
+		return infra.IssueResponse{}, s.issueErr
 	}
-	return s.issuedAccess, s.issuedRefresh, nil
+	return infra.IssueResponse{
+		AccessToken:  s.issuedAccess,
+		RefreshToken: s.issuedRefresh,
+		ExpiresAt:    s.issuedExpires,
+	}, nil
 }
 
 func (s *stubTokenManager) Revoke(context.Context, *tokenv1.Token) error {
 	return nil
 }
 
-func (s *stubTokenManager) VerifyAccessToken(context.Context, string) (string, error) {
+func (s *stubTokenManager) VerifyAccessToken(context.Context, string) (jwt.MapClaims, error) {
 	if s.accessErr != nil {
-		return "", s.accessErr
+		return nil, s.accessErr
 	}
-	return s.accessSubject, nil
+	return jwt.MapClaims{"sub": s.accessSubject}, nil
 }
 
-func (s *stubTokenManager) VerifyRefreshToken(context.Context, string) (string, error) {
+func (s *stubTokenManager) VerifyRefreshToken(context.Context, string) (jwt.MapClaims, error) {
 	if s.refreshErr != nil {
-		return "", s.refreshErr
+		return nil, s.refreshErr
 	}
-	return s.refreshSubject, nil
+	return jwt.MapClaims{"sub": s.refreshSubject}, nil
 }
 
 type stubUsersGetter struct {
@@ -74,7 +82,7 @@ func TestAuthServiceLogoutInvalidToken(t *testing.T) {
 	svc := &AuthService{
 		Exchange: events.NewExchange(),
 		Logger:   &logger.DevNullLogger{},
-		Issuser:  issuer,
+		Issuer:   issuer,
 	}
 
 	_, err := svc.Logout(context.Background(), &authv1.LogoutRequest{AccessToken: "bad"})
@@ -106,7 +114,7 @@ func TestAuthServiceRefreshSuccess(t *testing.T) {
 				Enabled: boolPointer(true),
 			},
 		}},
-		Issuser: issuer,
+		Issuer: issuer,
 	}
 
 	resp, err := svc.Refresh(context.Background(), &authv1.RefreshRequest{RefreshToken: "refresh-token"})
@@ -121,12 +129,39 @@ func TestAuthServiceRefreshSuccess(t *testing.T) {
 	}
 }
 
+func TestAuthServiceRefreshOmitsExpiresAtForNonExpiringToken(t *testing.T) {
+	issuer := &stubTokenManager{
+		refreshSubject: "alice",
+		issuedAccess:   "new-access-token",
+		issuedRefresh:  "new-refresh-token",
+	}
+	svc := &AuthService{
+		Exchange: events.NewExchange(),
+		Logger:   &logger.DevNullLogger{},
+		Users: stubUsersGetter{user: &userv1.User{
+			Meta: &meta.Meta{Name: "alice"},
+			Config: &userv1.UserConfig{
+				Enabled: boolPointer(true),
+			},
+		}},
+		Issuer: issuer,
+	}
+
+	resp, err := svc.Refresh(context.Background(), &authv1.RefreshRequest{RefreshToken: "refresh-token"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ExpiresAt != nil {
+		t.Fatalf("expires at = %v, want nil", resp.ExpiresAt)
+	}
+}
+
 func TestAuthServiceRefreshInvalidToken(t *testing.T) {
 	issuer := &stubTokenManager{refreshErr: errors.New("bad refresh token")}
 	svc := &AuthService{
 		Exchange: events.NewExchange(),
 		Logger:   &logger.DevNullLogger{},
-		Issuser:  issuer,
+		Issuer:   issuer,
 	}
 
 	_, err := svc.Refresh(context.Background(), &authv1.RefreshRequest{RefreshToken: "bad"})
@@ -154,7 +189,7 @@ func TestAuthServiceRefreshDisabledUser(t *testing.T) {
 				Enabled: boolPointer(false),
 			},
 		}},
-		Issuser: issuer,
+		Issuer: issuer,
 	}
 
 	_, err := svc.Refresh(context.Background(), &authv1.RefreshRequest{RefreshToken: "refresh-token"})
@@ -179,7 +214,7 @@ func TestAuthServiceRefreshInvalidSubject(t *testing.T) {
 	svc := &AuthService{
 		Exchange: events.NewExchange(),
 		Logger:   &logger.DevNullLogger{},
-		Issuser:  issuer,
+		Issuer:   issuer,
 	}
 
 	_, err := svc.Refresh(context.Background(), &authv1.RefreshRequest{RefreshToken: "refresh-token"})

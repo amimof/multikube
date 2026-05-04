@@ -8,6 +8,7 @@ import { PolicyServiceApi, Configuration as PolicyConfiguration } from '@/genera
 import { RouteServiceApi, Configuration as RouteConfiguration } from '@/generated/route'
 import { UserServiceApi, Configuration as UserConfiguration } from '@/generated/user'
 import { clearAuthTokens, getAccessToken, getRefreshToken, setAccessToken } from '@/auth/session'
+import { normalizeRedirectPath } from '@/router/redirect'
 
 type ApiMiddleware = {
   pre?: (context: { url: string; init: RequestInit; fetch: typeof fetch }) => Promise<{ url: string; init: RequestInit } | void>
@@ -27,7 +28,7 @@ function redirectToLogin() {
   const loginUrl = new URL('login', window.location.origin + import.meta.env.BASE_URL)
   const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
   if (!currentPath.endsWith('/login') && !currentPath.includes('/login?')) {
-    loginUrl.searchParams.set('redirect', `${window.location.pathname}${window.location.search}`)
+    loginUrl.searchParams.set('redirect', normalizeRedirectPath(currentPath))
   }
   window.location.assign(loginUrl.toString())
 }

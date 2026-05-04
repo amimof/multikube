@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	tokenv1 "github.com/amimof/multikube/api/token/v1"
 )
@@ -28,10 +30,12 @@ func TestTokenManagerVerifyTokenPurpose(t *testing.T) {
 		t.Fatalf("new token manager: %v", err)
 	}
 
-	accessToken, refreshToken, err := mgr.Issue(ctx, &tokenv1.Token{Config: &tokenv1.TokenConfig{Subject: "alice"}})
+	resp, err := mgr.Issue(ctx, &tokenv1.Token{Config: &tokenv1.TokenConfig{Subject: "alice"}})
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
+	accessToken := resp.AccessToken
+	refreshToken := resp.RefreshToken
 
 	if _, err := mgr.VerifyAccessToken(ctx, accessToken); err != nil {
 		t.Fatalf("verify access token: %v", err)
@@ -59,10 +63,12 @@ func TestTokenManagerIssueUsesSeparateTTLs(t *testing.T) {
 		t.Fatalf("new token manager: %v", err)
 	}
 
-	accessToken, refreshToken, err := mgr.Issue(ctx, &tokenv1.Token{Config: &tokenv1.TokenConfig{Subject: "alice"}})
+	resp, err := mgr.Issue(ctx, &tokenv1.Token{Config: &tokenv1.TokenConfig{Subject: "alice"}})
 	if err != nil {
 		t.Fatalf("issue token: %v", err)
 	}
+	accessToken := resp.AccessToken
+	refreshToken := resp.RefreshToken
 	if accessToken == refreshToken {
 		t.Fatal("expected access and refresh tokens to differ")
 	}
@@ -96,6 +102,72 @@ func TestTokenManagerIssueUsesSeparateTTLs(t *testing.T) {
 	}
 }
 
+func TestTokenManagerIssueWithoutTTLUsesDefaultAccessTTL(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	mgr, err := NewTokenManager(key)
+	if err != nil {
+		t.Fatalf("new token manager: %v", err)
+	}
+
+	resp, err := mgr.Issue(context.Background(), &tokenv1.Token{Config: &tokenv1.TokenConfig{Subject: "alice"}})
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	if resp.ExpiresAt.IsZero() {
+		t.Fatal("expected exp to be set for default access ttl")
+	}
+
+	claims := decodeClaims(t, resp.AccessToken)
+	accessExp := int64(claims["exp"].(float64))
+	accessIat := int64(claims["iat"].(float64))
+	if got := time.Unix(accessExp, 0).Sub(time.Unix(accessIat, 0)); got != mgr.AccessTTL {
+		t.Fatalf("access ttl = %s, want %s", got, mgr.AccessTTL)
+	}
+}
+
+func TestTokenManagerIssueZeroTTLNeverExpiresAccessToken(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	mgr, err := NewTokenManager(key)
+	if err != nil {
+		t.Fatalf("new token manager: %v", err)
+	}
+
+	ttl := uint64(0)
+	resp, err := mgr.Issue(context.Background(), &tokenv1.Token{Config: &tokenv1.TokenConfig{
+		Subject: "alice",
+		Ttl:     &ttl,
+	}})
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	if !resp.ExpiresAt.IsZero() {
+		t.Fatalf("expires at = %v, want zero", resp.ExpiresAt)
+	}
+
+	accessClaims := decodeClaims(t, resp.AccessToken)
+	if _, ok := accessClaims["exp"]; ok {
+		t.Fatal("expected access token exp claim to be omitted")
+	}
+
+	refreshClaims := decodeClaims(t, resp.RefreshToken)
+	refreshExp := int64(refreshClaims["exp"].(float64))
+	refreshIat := int64(refreshClaims["iat"].(float64))
+	if got := time.Unix(refreshExp, 0).Sub(time.Unix(refreshIat, 0)); got != mgr.RefreshTTL {
+		t.Fatalf("refresh ttl = %s, want %s", got, mgr.RefreshTTL)
+	}
+	if _, err := mgr.VerifyAccessToken(context.Background(), resp.AccessToken); err != nil {
+		t.Fatalf("verify access token: %v", err)
+	}
+}
+
 func TestTokenManagerVerifyRejectsInvalidTokens(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -114,7 +186,7 @@ func TestTokenManagerVerifyRejectsInvalidTokens(t *testing.T) {
 		claims := jwt.MapClaims{
 			"iss":          mgr.Issuer,
 			"sub":          "alice",
-			"aud":          []string{mgr.DefaultAud[0]},
+			"aud":          []string{mgr.DefaultAud},
 			"iat":          time.Now().Add(-time.Minute).Unix(),
 			"nbf":          time.Now().Add(-time.Minute).Unix(),
 			"exp":          time.Now().Add(time.Hour).Unix(),
@@ -158,6 +230,87 @@ func TestTokenManagerVerifyRejectsInvalidTokens(t *testing.T) {
 	}
 }
 
+func TestTokenManagerUserFromContextReturnsRoles(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	mgr, err := NewTokenManager(key)
+	if err != nil {
+		t.Fatalf("new token manager: %v", err)
+	}
+
+	resp, err := mgr.Issue(context.Background(), &tokenv1.Token{Config: &tokenv1.TokenConfig{
+		Subject: "alice",
+		Roles:   []string{"admin"},
+	}})
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	accessToken := resp.AccessToken
+
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", accessToken))
+
+	username, roles, err := mgr.UserFromContext(ctx)
+	if err != nil {
+		t.Fatalf("user from context: %v", err)
+	}
+	if username != "alice" {
+		t.Fatalf("username = %q, want %q", username, "alice")
+	}
+	if len(roles) != 1 || roles[0] != "admin" {
+		t.Fatalf("roles = %v, want [admin]", roles)
+	}
+}
+
+func TestTokenManagerStreamInterceptorInjectsRolesIntoContext(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	mgr, err := NewTokenManager(key)
+	if err != nil {
+		t.Fatalf("new token manager: %v", err)
+	}
+
+	resp, err := mgr.Issue(context.Background(), &tokenv1.Token{Config: &tokenv1.TokenConfig{
+		Subject: "alice",
+		Roles:   []string{"admin"},
+	}})
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+	accessToken := resp.AccessToken
+
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", accessToken))
+	stream := &stubServerStream{ctx: ctx}
+
+	called := false
+	err = mgr.Stream()(nil, stream, &grpc.StreamServerInfo{FullMethod: "/user.v1.UserService/Get"}, func(_ interface{}, ss grpc.ServerStream) error {
+		called = true
+
+		username, _ := ss.Context().Value(ContextKeyUsername).(string)
+		roles, _ := ss.Context().Value(ContextKeyRoles).([]string)
+
+		if username != "alice" {
+			t.Fatalf("username = %q, want %q", username, "alice")
+		}
+		if len(roles) != 1 || roles[0] != "admin" {
+			t.Fatalf("roles = %v, want [admin]", roles)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("stream interceptor: %v", err)
+	}
+	if !called {
+		t.Fatal("expected handler to be called")
+	}
+}
+
 func decodeClaims(t *testing.T, rawToken string) map[string]any {
 	t.Helper()
 
@@ -185,7 +338,7 @@ func issueHS256Token(t *testing.T, mgr *TokenManager) string {
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"iss":          mgr.Issuer,
 		"sub":          "alice",
-		"aud":          []string{mgr.DefaultAud[0]},
+		"aud":          []string{mgr.DefaultAud},
 		"iat":          time.Now().Add(-time.Minute).Unix(),
 		"nbf":          time.Now().Add(-time.Minute).Unix(),
 		"exp":          time.Now().Add(time.Hour).Unix(),
@@ -200,4 +353,13 @@ func issueHS256Token(t *testing.T, mgr *TokenManager) string {
 	}
 
 	return signed
+}
+
+type stubServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *stubServerStream) Context() context.Context {
+	return s.ctx
 }

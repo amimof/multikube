@@ -5,7 +5,7 @@
   - [Prerequisites](#prerequisites)
   - [Running the Control Plane](#running-the-control-plane)
   - [Downloading and Installing the CLI](#downloading-and-installing-the-cli)
-  - [Configuring the CLI](#configuring-the-cli)
+  - [Login to the control plane](#login-to-the-control-plane)
   - [Next Steps](#next-steps)
 <!--toc:end-->
 

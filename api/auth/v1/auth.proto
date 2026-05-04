@@ -5,6 +5,7 @@ package auth.v1;
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/amimof/multikube/api/auth/v1;auth";
 
@@ -47,4 +48,6 @@ message RefreshRequest {
 
 message RefreshResponse {
   string access_token = 1;
+  string refresh_token = 2;
+  google.protobuf.Timestamp expires_at = 3;
 }

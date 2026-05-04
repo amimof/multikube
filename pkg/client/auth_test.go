@@ -3,78 +3,55 @@ package client
 import (
 	"context"
 	"testing"
+	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
+	authv1 "github.com/amimof/multikube/api/auth/v1"
 )
 
-func TestConfigAccessTokenProviderGetAccessToken(t *testing.T) {
-	provider := ConfigAccessTokenProvider{Config: &Config{
-		Current: "prod",
-		Servers: []*Server{{
-			Name:    "prod",
-			Address: "example.com:443",
-			Session: &Session{AccessToken: "secret-token"},
-		}},
-	}}
-
-	token, ok := provider.GetAccessToken(context.Background())
-	if !ok {
-		t.Fatal("expected access token to be available")
-	}
-	if token != "secret-token" {
-		t.Fatalf("token = %q, want %q", token, "secret-token")
-	}
+type stubRefreshAuthClient struct {
+	resp  *authv1.RefreshResponse
+	calls int
 }
 
-func TestAccessTokenUnaryInterceptorAddsAuthorizationMetadata(t *testing.T) {
-	provider := ConfigAccessTokenProvider{Config: &Config{
-		Current: "prod",
-		Servers: []*Server{{
-			Name:    "prod",
-			Address: "example.com:443",
-			Session: &Session{AccessToken: "secret-token"},
-		}},
-	}}
-
-	interceptor := AccessTokenUnaryInterceptor(provider)
-	err := interceptor(context.Background(), "/auth.v1.AuthService/Login", nil, nil, nil, func(ctx context.Context, _ string, _ any, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if !ok {
-			t.Fatal("expected outgoing metadata")
-		}
-		values := md.Get("authorization")
-		if len(values) != 1 {
-			t.Fatalf("authorization values = %#v, want one value", values)
-		}
-		if values[0] != "Bearer secret-token" {
-			t.Fatalf("authorization = %q, want %q", values[0], "Bearer secret-token")
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("interceptor returned error: %v", err)
-	}
+func (s *stubRefreshAuthClient) Login(context.Context, *authv1.LoginRequest) (*authv1.LoginResponse, error) {
+	return nil, nil
 }
 
-func TestAccessTokenUnaryInterceptorSkipsMissingToken(t *testing.T) {
-	provider := ConfigAccessTokenProvider{Config: &Config{
-		Current: "prod",
-		Servers: []*Server{{
-			Name:    "prod",
-			Address: "example.com:443",
-		}},
-	}}
+func (s *stubRefreshAuthClient) Logout(context.Context, *authv1.LogoutRequest) error {
+	return nil
+}
 
-	interceptor := AccessTokenUnaryInterceptor(provider)
-	err := interceptor(context.Background(), "/backend.v1.BackendService/List", nil, nil, nil, func(ctx context.Context, _ string, _ any, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if ok && len(md.Get("authorization")) > 0 {
-			t.Fatalf("unexpected authorization metadata: %#v", md.Get("authorization"))
-		}
-		return nil
-	})
+func (s *stubRefreshAuthClient) Refresh(context.Context, *authv1.RefreshRequest) (*authv1.RefreshResponse, error) {
+	s.calls++
+	return s.resp, nil
+}
+
+func TestRefreshTokenSourceHandlesOmittedExpiresAt(t *testing.T) {
+	client := &stubRefreshAuthClient{resp: &authv1.RefreshResponse{
+		AccessToken:  "new-access-token",
+		RefreshToken: "new-refresh-token",
+	}}
+	source := NewRefreshTokenSource(client, "", "refresh-token", time.Time{})
+
+	tok, err := source.Token(context.Background())
 	if err != nil {
-		t.Fatalf("interceptor returned error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tok.ExpiresAt != (time.Time{}) {
+		t.Fatalf("expires at = %v, want zero", tok.ExpiresAt)
+	}
+	if client.calls != 1 {
+		t.Fatalf("refresh calls = %d, want 1", client.calls)
+	}
+
+	tok, err = source.Token(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tok.AccessToken != "new-access-token" {
+		t.Fatalf("access token = %q, want %q", tok.AccessToken, "new-access-token")
+	}
+	if client.calls != 1 {
+		t.Fatalf("refresh calls = %d, want 1 after cached token reuse", client.calls)
 	}
 }
