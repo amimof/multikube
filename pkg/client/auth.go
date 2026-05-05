@@ -14,6 +14,8 @@ import (
 	authclientv1 "github.com/amimof/multikube/pkg/client/auth/v1"
 )
 
+const refreshMethod = "/auth.v1.AuthService/Refresh"
+
 type Token struct {
 	AccessToken  string
 	RefreshToken string
@@ -91,6 +93,14 @@ func (s *RefreshTokenSource) Token(ctx context.Context) (*Token, error) {
 	}, nil
 }
 
+func (s *RefreshTokenSource) GetAccessToken(_ context.Context) (string, bool) {
+	if s == nil || s.AccessToken == "" {
+		return "", false
+	}
+
+	return s.AccessToken, true
+}
+
 type AccessTokenProvider interface {
 	GetAccessToken(ctx context.Context) (string, bool)
 }
@@ -155,6 +165,10 @@ func RefreshUnaryInterceptor(source *RefreshTokenSource) grpc.UnaryClientInterce
 		invoker grpc.UnaryInvoker,
 		opts ...grpc.CallOption,
 	) error {
+		if method == refreshMethod {
+			return invoker(ctx, method, req, reply, cc, opts...)
+		}
+
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if status.Code(err) != codes.Unauthenticated {
 			return err
@@ -179,6 +193,10 @@ func RefreshStreamInterceptor(source *RefreshTokenSource) grpc.StreamClientInter
 		streamer grpc.Streamer,
 		opts ...grpc.CallOption,
 	) (grpc.ClientStream, error) {
+		if method == refreshMethod {
+			return streamer(ctx, desc, cc, method, opts...)
+		}
+
 		cs, err := streamer(ctx, desc, cc, method, opts...)
 		if status.Code(err) != codes.Unauthenticated {
 			return cs, err
@@ -208,26 +226,4 @@ func withAccessToken(ctx context.Context, p AccessTokenProvider) context.Context
 	md = md.Copy()
 	md.Set("authorization", "Bearer "+token)
 	return metadata.NewOutgoingContext(ctx, md)
-}
-
-type PerRPCTokenCredentials struct {
-	source TokenSource
-}
-
-func (c *PerRPCTokenCredentials) GetRequestMetadata(
-	ctx context.Context,
-	uri ...string,
-) (map[string]string, error) {
-	token, err := c.source.Token(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]string{
-		"authorization": "Bearer " + token.AccessToken,
-	}, nil
-}
-
-func (c *PerRPCTokenCredentials) RequireTransportSecurity() bool {
-	return true
 }

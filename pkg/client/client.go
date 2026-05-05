@@ -124,7 +124,7 @@ func WithConfig(cfg *Config) NewClientOption {
 
 func WithCredentialSet(accessToken, refreshToken string) NewClientOption {
 	return func(c *ClientSet) error {
-		c.tokenSource = NewRefreshTokenSource(c.authV1Client, accessToken, refreshToken, time.Now().Add(15*time.Minute))
+		c.tokenSource = NewRefreshTokenSource(c.authV1Client, accessToken, refreshToken, time.Now().Add(1*time.Minute))
 		return nil
 	}
 }
@@ -332,30 +332,35 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	c.grpcOpts = append(c.grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(c.tlsConfig)))
 
 	// Add interceptors
-	// tokenProvider := ConfigAccessTokenProvider{Config: c.cfg}
+	var tokenProvider AccessTokenProvider
+	if c.tokenSource != nil {
+		tokenProvider = c.tokenSource
+	} else if c.cfg != nil {
+		tokenProvider = ConfigAccessTokenProvider{Config: c.cfg}
+	}
+
+	clientUnaryInterceptors := []grpc.UnaryClientInterceptor{}
+	clientStreamInterceptors := []grpc.StreamClientInterceptor{}
+	if tokenProvider != nil {
+		clientUnaryInterceptors = append(clientUnaryInterceptors, AccessTokenUnaryInterceptor(tokenProvider))
+		clientStreamInterceptors = append(clientStreamInterceptors, AccessTokenStreamInterceptor(tokenProvider))
+	}
+	if c.tokenSource != nil {
+		clientUnaryInterceptors = append(clientUnaryInterceptors, RefreshUnaryInterceptor(c.tokenSource))
+		clientStreamInterceptors = append(clientStreamInterceptors, RefreshStreamInterceptor(c.tokenSource))
+	}
+	clientUnaryInterceptors = append(clientUnaryInterceptors, identity.IdentityUnaryInterceptor(c.id))
+	clientStreamInterceptors = append(clientStreamInterceptors, identity.IdentityStreamInterceptor(c.id))
+
 	c.grpcOpts = append(
 		c.grpcOpts,
 		grpc.WithChainUnaryInterceptor(
-			// AccessTokenUnaryInterceptor(tokenProvider),
-			identity.IdentityUnaryInterceptor(c.id),
+			clientUnaryInterceptors...,
 		),
 		grpc.WithChainStreamInterceptor(
-			// AccessTokenStreamInterceptor(tokenProvider),
-			identity.IdentityStreamInterceptor(c.id),
+			clientStreamInterceptors...,
 		),
 	)
-
-	if c.tokenSource != nil {
-		c.grpcOpts = append(c.grpcOpts,
-			grpc.WithPerRPCCredentials(&PerRPCTokenCredentials{c.tokenSource}),
-			grpc.WithChainUnaryInterceptor(
-				RefreshUnaryInterceptor(c.tokenSource),
-			),
-			grpc.WithChainStreamInterceptor(
-				RefreshStreamInterceptor(c.tokenSource),
-			),
-		)
-	}
 
 	conn, err := grpc.NewClient(server, c.grpcOpts...)
 	if err != nil {

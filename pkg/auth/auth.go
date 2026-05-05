@@ -147,6 +147,7 @@ var PrivateMethods = map[string]Permission{
 var PublicMethods = map[string]struct{}{
 	"/auth.v1.AuthService/Login":   {},
 	"/auth.v1.AuthService/Logout":  {},
+	"/auth.v1.AuthService/Refresh": {},
 	"/grpc.health.v1.Health/Check": {},
 	"/grpc.health.v1.Health/List":  {},
 	"/grpc.health.v1.Health/Watch": {},

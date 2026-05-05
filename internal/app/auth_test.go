@@ -29,10 +29,12 @@ type stubTokenManager struct {
 	issueErr       error
 	issueCalls     int
 	issuedExpires  time.Time
+	issuedToken    *tokenv1.Token
 }
 
-func (s *stubTokenManager) Issue(context.Context, *tokenv1.Token) (infra.IssueResponse, error) {
+func (s *stubTokenManager) Issue(_ context.Context, tok *tokenv1.Token) (infra.IssueResponse, error) {
 	s.issueCalls++
+	s.issuedToken = tok
 	if s.issueErr != nil {
 		return infra.IssueResponse{}, s.issueErr
 	}
@@ -112,6 +114,7 @@ func TestAuthServiceRefreshSuccess(t *testing.T) {
 			Meta: &meta.Meta{Name: "alice"},
 			Config: &userv1.UserConfig{
 				Enabled: boolPointer(true),
+				Roles:   []string{"admin"},
 			},
 		}},
 		Issuer: issuer,
@@ -126,6 +129,12 @@ func TestAuthServiceRefreshSuccess(t *testing.T) {
 	}
 	if issuer.issueCalls != 1 {
 		t.Fatalf("issue calls = %d, want 1", issuer.issueCalls)
+	}
+	if issuer.issuedToken == nil || issuer.issuedToken.GetConfig() == nil {
+		t.Fatal("expected issued token request to be captured")
+	}
+	if got := issuer.issuedToken.GetConfig().GetRoles(); len(got) != 1 || got[0] != "admin" {
+		t.Fatalf("roles = %v, want [admin]", got)
 	}
 }
 

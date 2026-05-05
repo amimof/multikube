@@ -66,8 +66,6 @@ type UserClaims struct {
 	Clusters        []string `json:"clusters,omitempty"`
 	ServiceAccounts []string `json:"service_accounts,omitempty"`
 	Type            string   `json:"typ,omitempty"`
-
-	Extra map[string]any `json:"-"`
 }
 
 func (s *TokenManager) Issue(ctx context.Context, req *tokenv1.Token) (IssueResponse, error) {
@@ -157,21 +155,22 @@ func (s *TokenManager) Issue(ctx context.Context, req *tokenv1.Token) (IssueResp
 		accessClaims.Roles = req.GetConfig().GetRoles()
 	}
 
+	extraClaims := make(map[string]string, len(req.GetConfig().GetExtraClaims()))
 	for k, v := range req.GetConfig().GetExtraClaims() {
 		switch k {
 		case "iss", "sub", "aud", "iat", "nbf", "exp", "jti", tokenTypeClaim, "groups", "service_accounts", "roles":
 			return IssueResponse{}, fmt.Errorf("extra claim %q is reserved", k)
 		default:
-			accessClaims.Extra[k] = v
+			extraClaims[k] = v
 		}
 	}
 
-	accessToken, err := s.generateSignedToken(accessClaims)
+	accessToken, err := s.generateSignedToken(accessClaims, extraClaims)
 	if err != nil {
 		return IssueResponse{}, err
 	}
 
-	refreshToken, err := s.generateSignedToken(refreshClaims)
+	refreshToken, err := s.generateSignedToken(refreshClaims, nil)
 	if err != nil {
 		return IssueResponse{}, err
 	}
@@ -189,8 +188,42 @@ func (s *TokenManager) Issue(ctx context.Context, req *tokenv1.Token) (IssueResp
 	return response, nil
 }
 
-func (s *TokenManager) generateSignedToken(claims UserClaims) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+func (s *TokenManager) generateSignedToken(claims UserClaims, extraClaims map[string]string) (string, error) {
+	claimsMap := jwt.MapClaims{
+		"iss": claims.Issuer,
+		"sub": claims.Subject,
+		"aud": claims.Audience,
+		"iat": claims.IssuedAt,
+		"nbf": claims.NotBefore,
+		"jti": claims.Id,
+		"typ": claims.Type,
+	}
+	if claims.ExpiresAt != 0 {
+		claimsMap["exp"] = claims.ExpiresAt
+	}
+	if claims.Username != "" {
+		claimsMap["preferred_username"] = claims.Username
+	}
+	if len(claims.Roles) > 0 {
+		claimsMap["roles"] = claims.Roles
+	}
+	if len(claims.Groups) > 0 {
+		claimsMap["groups"] = claims.Groups
+	}
+	if len(claims.Scopes) > 0 {
+		claimsMap["scope"] = claims.Scopes
+	}
+	if len(claims.Clusters) > 0 {
+		claimsMap["clusters"] = claims.Clusters
+	}
+	if len(claims.ServiceAccounts) > 0 {
+		claimsMap["service_accounts"] = claims.ServiceAccounts
+	}
+	for k, v := range extraClaims {
+		claimsMap[k] = v
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claimsMap)
 	token.Header["kid"] = s.SigningKeyID
 	token.Header["typ"] = "JWT"
 	signed, err := token.SignedString(s.Key)
@@ -282,10 +315,8 @@ func (s *TokenManager) validateClaims(claims jwt.MapClaims, token *jwt.Token, ex
 		return errors.New("allowed audiences are not configured")
 	}
 
-	audValid := false
-	if claims.VerifyAudience(allowedAud, true) {
-		audValid = true
-	}
+	audValid := claims.VerifyAudience(allowedAud, true)
+
 	if !audValid {
 		return errors.New("invalid token audience")
 	}

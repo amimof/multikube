@@ -103,6 +103,7 @@ func (a *AuthService) Refresh(ctx context.Context, req *authv1.RefreshRequest) (
 	tokenReq := &tokenv1.Token{
 		Config: &tokenv1.TokenConfig{
 			Subject: u.GetMeta().GetName(),
+			Roles:   u.GetConfig().GetRoles(),
 		},
 	}
 

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amimof/multikube/pkg/auth"
 	"github.com/golang-jwt/jwt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -168,6 +169,31 @@ func TestTokenManagerIssueZeroTTLNeverExpiresAccessToken(t *testing.T) {
 	}
 }
 
+func TestTokenManagerIssueIncludesExtraClaimsInAccessToken(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	mgr, err := NewTokenManager(key)
+	if err != nil {
+		t.Fatalf("new token manager: %v", err)
+	}
+
+	resp, err := mgr.Issue(context.Background(), &tokenv1.Token{Config: &tokenv1.TokenConfig{
+		Subject:     "alice",
+		ExtraClaims: map[string]string{"team": "platform"},
+	}})
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	claims := decodeClaims(t, resp.AccessToken)
+	if got := claims["team"]; got != "platform" {
+		t.Fatalf("team claim = %v, want %q", got, "platform")
+	}
+}
+
 func TestTokenManagerVerifyRejectsInvalidTokens(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -308,6 +334,33 @@ func TestTokenManagerStreamInterceptorInjectsRolesIntoContext(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("expected handler to be called")
+	}
+}
+
+func TestTokenManagerUnaryAllowsPublicRefreshWithoutAccessToken(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	mgr, err := NewTokenManager(key)
+	if err != nil {
+		t.Fatalf("new token manager: %v", err)
+	}
+
+	called := false
+	_, err = mgr.Unary()(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/auth.v1.AuthService/Refresh"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+		called = true
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("unary interceptor: %v", err)
+	}
+	if !called {
+		t.Fatal("expected handler to be called")
+	}
+	if !auth.IsPublicMethod("/auth.v1.AuthService/Refresh") {
+		t.Fatal("expected refresh method to be public")
 	}
 }
 

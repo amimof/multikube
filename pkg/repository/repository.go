@@ -504,13 +504,23 @@ func (r Repo[T]) Update(ctx context.Context, id keys.ID, resource T) (T, error) 
 			return err
 		}
 
+		specEqual, err := protoutils.SpecEqual(existing, resource)
+		if err != nil {
+			return err
+		}
+
 		// Preserve read-only fields from existing resource
 		existingMeta := existing.GetMeta()
 		resource.GetMeta().Uid = existingMeta.Uid
 		resource.GetMeta().Created = existingMeta.Created
 		resource.GetMeta().Updated = timestamppb.Now()
 		resource.GetMeta().ResourceVersion = existingMeta.ResourceVersion + 1
-		resource.GetMeta().Generation = existingMeta.Generation + 1
+		resource.GetMeta().Generation = existingMeta.Generation
+
+		// Bump generation if spec changed
+		if !specEqual {
+			resource.GetMeta().Generation = existingMeta.Generation + 1
+		}
 
 		// Marshal and save
 		b, err := proto.Marshal(resource)
