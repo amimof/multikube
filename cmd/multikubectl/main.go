@@ -72,7 +72,7 @@ func withClientSet(run func(cmd *cobra.Command, args []string) error) func(cmd *
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		clientSet, err = client.New(currentSrv.Address, client.WithTLSConfigFromCfg(&cfg))
+		clientSet, err = client.New(currentSrv.Address, client.WithTLSConfigFromCfg(&cfg), client.WithCredentialSet(currentSrv.Session.AccessToken, currentSrv.Session.RefreshToken))
 		if err != nil {
 			logrus.Fatalf("error setting up client: %v", err)
 			return err

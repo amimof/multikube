@@ -122,6 +122,13 @@ func WithConfig(cfg *Config) NewClientOption {
 	}
 }
 
+func WithCredentialSet(accessToken, refreshToken string) NewClientOption {
+	return func(c *ClientSet) error {
+		c.tokenSource = NewRefreshTokenSource(c.authV1Client, accessToken, refreshToken, time.Now().Add(15*time.Minute))
+		return nil
+	}
+}
+
 func WithTLSConfigFromFlags(f *pflag.FlagSet) NewClientOption {
 	insecure, _ := f.GetBool("insecure")
 	tlsCertificate, _ := f.GetString("tls-certificate")
@@ -211,6 +218,7 @@ type ClientSet struct {
 	logger              logger.Logger
 	id                  *identity.AtomicIdentity
 	cfg                 *Config
+	tokenSource         *RefreshTokenSource
 }
 
 func (c *ClientSet) AuthV1() authv1.ClientV1 {
@@ -324,18 +332,30 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	c.grpcOpts = append(c.grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(c.tlsConfig)))
 
 	// Add interceptors
-	tokenProvider := ConfigAccessTokenProvider{Config: c.cfg}
+	// tokenProvider := ConfigAccessTokenProvider{Config: c.cfg}
 	c.grpcOpts = append(
 		c.grpcOpts,
 		grpc.WithChainUnaryInterceptor(
-			AccessTokenUnaryInterceptor(tokenProvider),
+			// AccessTokenUnaryInterceptor(tokenProvider),
 			identity.IdentityUnaryInterceptor(c.id),
 		),
 		grpc.WithChainStreamInterceptor(
-			AccessTokenStreamInterceptor(tokenProvider),
+			// AccessTokenStreamInterceptor(tokenProvider),
 			identity.IdentityStreamInterceptor(c.id),
 		),
 	)
+
+	if c.tokenSource != nil {
+		c.grpcOpts = append(c.grpcOpts,
+			grpc.WithPerRPCCredentials(&PerRPCTokenCredentials{c.tokenSource}),
+			grpc.WithChainUnaryInterceptor(
+				RefreshUnaryInterceptor(c.tokenSource),
+			),
+			grpc.WithChainStreamInterceptor(
+				RefreshStreamInterceptor(c.tokenSource),
+			),
+		)
+	}
 
 	conn, err := grpc.NewClient(server, c.grpcOpts...)
 	if err != nil {
@@ -345,6 +365,9 @@ func New(server string, opts ...NewClientOption) (*ClientSet, error) {
 	c.conn = conn
 	if c.authV1Client == nil {
 		c.authV1Client = authv1.NewClientV1WithConn(conn)
+		if c.tokenSource != nil {
+			c.tokenSource.AuthClient = c.authV1Client
+		}
 	}
 	if c.backendV1Client == nil {
 		c.backendV1Client = backendv1.NewClientV1WithConn(conn)

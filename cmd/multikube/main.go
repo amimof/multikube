@@ -539,6 +539,7 @@ func main() {
 		client.WithConfig(clientCfg),
 		client.WithLogger(log),
 		client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}),
+		client.WithCredentialSet(token.AccessToken, token.RefreshToken),
 		client.WithGrpcDialOption(
 			grpc.WithAuthority("localhost"),
 		),
