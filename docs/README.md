@@ -13,6 +13,7 @@ Home of the documentation. Here you will hopefully find everything you need to k
   - [TLS](/docs/configuration/tls.md)
   - Metrics
 - Usage
+  - [Authentication](/docs/usage/authentication.md)
   - [Backends](/docs/usage/backends.md)
   - [Routes](/docs/usage/routes.md)
   - [Credentials](/docs/usage/credentials.md)
