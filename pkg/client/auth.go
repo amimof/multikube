@@ -40,36 +40,66 @@ type RefreshTokenSource struct {
 	expiresAt    time.Time
 
 	refreshBefore time.Duration
+
+	callback RefreshTokenCallback
+	pending  bool
 }
 
-func NewRefreshTokenSource(authClient authclientv1.ClientV1, accessToken string, refreshToken string, expiresAt time.Time) *RefreshTokenSource {
+type RefreshTokenCallback func(*Token) error
+
+func NewRefreshTokenSource(authClient authclientv1.ClientV1, accessToken string, refreshToken string, expiresAt time.Time, cb RefreshTokenCallback) *RefreshTokenSource {
 	return &RefreshTokenSource{
 		AuthClient:    authClient,
 		AccessToken:   accessToken,
 		RefreshToken:  refreshToken,
 		expiresAt:     expiresAt,
 		refreshBefore: time.Minute,
+		callback:      cb,
 	}
 }
 
 func (s *RefreshTokenSource) Token(ctx context.Context) (*Token, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.AccessToken != "" && time.Until(s.expiresAt) > s.refreshBefore {
-		return &Token{
+		tok := &Token{
 			AccessToken:  s.AccessToken,
 			RefreshToken: s.RefreshToken,
 			ExpiresAt:    s.expiresAt,
-		}, nil
+		}
+		if !s.pending {
+			s.mu.Unlock()
+			return tok, nil
+		}
+
+		err := s.persistToken(tok)
+		s.mu.Unlock()
+		if err != nil {
+			return nil, err
+		}
+
+		return tok, nil
 	}
 	if s.AccessToken != "" && s.expiresAt.IsZero() {
-		return &Token{
+		tok := &Token{
 			AccessToken:  s.AccessToken,
 			RefreshToken: s.RefreshToken,
 			ExpiresAt:    s.expiresAt,
-		}, nil
+		}
+		if !s.pending {
+			s.mu.Unlock()
+			return tok, nil
+		}
+
+		err := s.persistToken(tok)
+		s.mu.Unlock()
+		if err != nil {
+			return nil, err
+		}
+
+		return tok, nil
 	}
+	s.mu.Unlock()
 
 	resp, err := s.AuthClient.Refresh(ctx, &authv1.RefreshRequest{
 		RefreshToken: s.RefreshToken,
@@ -78,6 +108,7 @@ func (s *RefreshTokenSource) Token(ctx context.Context) (*Token, error) {
 		return nil, err
 	}
 
+	s.mu.Lock()
 	s.AccessToken = resp.AccessToken
 	s.RefreshToken = resp.RefreshToken
 	if resp.ExpiresAt != nil {
@@ -85,20 +116,48 @@ func (s *RefreshTokenSource) Token(ctx context.Context) (*Token, error) {
 	} else {
 		s.expiresAt = time.Time{}
 	}
-
-	return &Token{
+	s.pending = true
+	tok := &Token{
 		AccessToken:  s.AccessToken,
 		RefreshToken: s.RefreshToken,
 		ExpiresAt:    s.expiresAt,
-	}, nil
+	}
+	err = s.persistToken(tok)
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return tok, nil
 }
 
 func (s *RefreshTokenSource) GetAccessToken(_ context.Context) (string, bool) {
-	if s == nil || s.AccessToken == "" {
+	if s == nil {
+		return "", false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.pending || s.AccessToken == "" {
 		return "", false
 	}
 
 	return s.AccessToken, true
+}
+
+func (s *RefreshTokenSource) persistToken(tok *Token) error {
+	if s.callback == nil {
+		s.pending = false
+		return nil
+	}
+
+	if err := s.callback(tok); err != nil {
+		return err
+	}
+
+	s.pending = false
+	return nil
 }
 
 type AccessTokenProvider interface {

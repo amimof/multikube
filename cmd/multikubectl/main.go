@@ -72,7 +72,12 @@ func withClientSet(run func(cmd *cobra.Command, args []string) error) func(cmd *
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		clientSet, err = client.New(currentSrv.Address, client.WithTLSConfigFromCfg(&cfg), client.WithCredentialSet(currentSrv.Session.AccessToken, currentSrv.Session.RefreshToken))
+		clientSet, err = client.New(
+			currentSrv.Address,
+			client.WithTLSConfigFromCfg(&cfg),
+			client.WithCredentialSet(currentSrv.Session.AccessToken, currentSrv.Session.RefreshToken),
+			client.WithTokenRefreshCallback(persistCurrentSessionToken),
+		)
 		if err != nil {
 			logrus.Fatalf("error setting up client: %v", err)
 			return err
@@ -84,6 +89,25 @@ func withClientSet(run func(cmd *cobra.Command, args []string) error) func(cmd *
 		}()
 		return run(cmd, args)
 	})
+}
+
+func persistCurrentSessionToken(token *client.Token) error {
+	if token == nil {
+		return fmt.Errorf("token is nil")
+	}
+
+	currentSrv, err := cfg.CurrentServer()
+	if err != nil {
+		return err
+	}
+	if currentSrv.Session == nil {
+		currentSrv.Session = &client.Session{}
+	}
+
+	currentSrv.Session.AccessToken = token.AccessToken
+	currentSrv.Session.RefreshToken = token.RefreshToken
+
+	return writeConfig()
 }
 
 func loadConfig(validate bool) error {

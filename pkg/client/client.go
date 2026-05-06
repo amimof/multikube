@@ -124,7 +124,19 @@ func WithConfig(cfg *Config) NewClientOption {
 
 func WithCredentialSet(accessToken, refreshToken string) NewClientOption {
 	return func(c *ClientSet) error {
-		c.tokenSource = NewRefreshTokenSource(c.authV1Client, accessToken, refreshToken, time.Now().Add(1*time.Minute))
+		c.tokenSource = NewRefreshTokenSource(c.authV1Client, accessToken, refreshToken, time.Now().Add(15*time.Minute), c.tokenRefreshCallback)
+		return nil
+	}
+}
+
+// WithTokenRefreshCallback assigns a callback function that is called when tokens are refreshed. Useful when updating client configuration
+// with new credentials on refreshes.
+func WithTokenRefreshCallback(cb RefreshTokenCallback) NewClientOption {
+	return func(c *ClientSet) error {
+		c.tokenRefreshCallback = cb
+		if c.tokenSource != nil {
+			c.tokenSource.callback = cb
+		}
 		return nil
 	}
 }
@@ -201,24 +213,25 @@ func getTLSConfig(cert, key, ca string, insecure bool) (*tls.Config, error) {
 }
 
 type ClientSet struct {
-	conn                *grpc.ClientConn
-	authV1Client        authv1.ClientV1
-	healthV1Client      *healthv1.ClientV1
-	backendV1Client     backendv1.ClientV1
-	caV1Client          cav1.ClientV1
-	certificateV1Client certificatev1.ClientV1
-	credentialV1Client  credentialv1.ClientV1
-	routeV1Client       routev1.ClientV1
-	policyV1Client      policyv1.ClientV1
-	tokenV1Client       tokenv1.ClientV1
-	userV1Client        userv1.ClientV1
-	mu                  sync.Mutex
-	grpcOpts            []grpc.DialOption
-	tlsConfig           *tls.Config
-	logger              logger.Logger
-	id                  *identity.AtomicIdentity
-	cfg                 *Config
-	tokenSource         *RefreshTokenSource
+	conn                 *grpc.ClientConn
+	authV1Client         authv1.ClientV1
+	healthV1Client       *healthv1.ClientV1
+	backendV1Client      backendv1.ClientV1
+	caV1Client           cav1.ClientV1
+	certificateV1Client  certificatev1.ClientV1
+	credentialV1Client   credentialv1.ClientV1
+	routeV1Client        routev1.ClientV1
+	policyV1Client       policyv1.ClientV1
+	tokenV1Client        tokenv1.ClientV1
+	userV1Client         userv1.ClientV1
+	mu                   sync.Mutex
+	grpcOpts             []grpc.DialOption
+	tlsConfig            *tls.Config
+	logger               logger.Logger
+	id                   *identity.AtomicIdentity
+	cfg                  *Config
+	tokenSource          *RefreshTokenSource
+	tokenRefreshCallback RefreshTokenCallback
 }
 
 func (c *ClientSet) AuthV1() authv1.ClientV1 {
