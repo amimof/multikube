@@ -7,12 +7,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/amimof/multikube/pkg/errs"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/keys"
 	"github.com/amimof/multikube/pkg/logger"
 	"github.com/amimof/multikube/pkg/protoutils"
 	"github.com/amimof/multikube/pkg/repository"
 
+	"github.com/amimof/multikube/api/meta/v1"
 	userv1 "github.com/amimof/multikube/api/user/v1"
 )
 
@@ -21,6 +23,43 @@ type UserService struct {
 	mu       sync.Mutex
 	Exchange *events.Exchange
 	Logger   logger.Logger
+}
+
+func (l *UserService) EnsureDefaultAccounts(ctx context.Context) error {
+	userID, err := keys.ParseStr("admin")
+	if err != nil {
+		return err
+	}
+
+	_, err = l.Repo.Get(ctx, userID)
+	if err != nil {
+		if errs.IsNotFound(err) {
+			adminUser := &userv1.User{
+				Meta: &meta.Meta{
+					Name: "admin",
+					Labels: map[string]string{
+						"multikube.io/builtin": "true",
+					},
+				},
+				Config: &userv1.UserConfig{
+					Password: "admin",
+					Email:    "admin@multikube.io",
+					Enabled:  new(true),
+					Roles: []string{
+						"admin",
+					},
+				},
+			}
+			newUser, err := l.Create(ctx, adminUser)
+			if err != nil {
+				return err
+			}
+			l.Logger.Debug("default account created", "userName", newUser.GetMeta().GetName(), "userID", newUser.GetMeta().GetUid())
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (l *UserService) Get(ctx context.Context, id keys.ID) (*userv1.User, error) {

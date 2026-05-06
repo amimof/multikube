@@ -6,6 +6,7 @@ import (
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/keys"
 	"github.com/amimof/multikube/pkg/logger"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	tokenv1 "github.com/amimof/multikube/api/token/v1"
 )
@@ -34,7 +35,10 @@ func (s *TokenService) IssueToken(ctx context.Context, req *tokenv1.Token) (*tok
 	_, span := tracer.Start(ctx, "token.Issue")
 	defer span.End()
 
-	accessToken, _, err := s.Issuer.Issue(ctx, req)
+	// Don't allow potientially issuing tokens with administrative privileged
+	req.GetConfig().Roles = []string{"client"}
+
+	token, err := s.Issuer.Issue(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -46,9 +50,16 @@ func (s *TokenService) IssueToken(ctx context.Context, req *tokenv1.Token) (*tok
 		return nil, err
 	}
 
-	return &tokenv1.IssueResponse{
-		AccessToken: accessToken,
-	}, nil
+	resp := &tokenv1.IssueResponse{
+		AccessToken: token.AccessToken,
+		KeyId:       token.KeyID,
+		TokenType:   token.TokenType,
+	}
+	if !token.ExpiresAt.IsZero() {
+		resp.ExpiresAt = timestamppb.New(token.ExpiresAt)
+	}
+
+	return resp, nil
 }
 
 func (s *TokenService) Verify(ctx context.Context, accessToken string) error {

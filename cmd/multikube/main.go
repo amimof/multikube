@@ -30,7 +30,6 @@ import (
 	"github.com/amimof/multikube/pkg/client"
 	"github.com/amimof/multikube/pkg/compile"
 	"github.com/amimof/multikube/pkg/controller"
-	"github.com/amimof/multikube/pkg/errs"
 	"github.com/amimof/multikube/pkg/events"
 	"github.com/amimof/multikube/pkg/instrumentation"
 	proxyv2 "github.com/amimof/multikube/pkg/proxyv2"
@@ -38,6 +37,7 @@ import (
 	"github.com/amimof/multikube/pkg/server"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/golang-jwt/jwt"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	protovalidate_middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	"github.com/nakabonne/tstorage"
 	"github.com/opentracing/opentracing-go"
@@ -55,8 +55,7 @@ import (
 	transport "github.com/amimof/multikube/internal/transport/grpc"
 	badgerrepo "github.com/amimof/multikube/pkg/repository/badger"
 
-	"github.com/amimof/multikube/api/meta/v1"
-	userv1 "github.com/amimof/multikube/api/user/v1"
+	"github.com/amimof/multikube/api/token/v1"
 )
 
 var (
@@ -309,7 +308,7 @@ func main() {
 	authService := transport.NewAuthService(&app.AuthService{
 		Exchange: exchange,
 		Logger:   log,
-		Issuser:  tokenManager,
+		Issuer:   tokenManager,
 		Users:    userApp,
 	})
 
@@ -435,12 +434,28 @@ func main() {
 
 	serverOpts = append(serverOpts,
 		transport.WithGrpcOption(metricsOpts),
-		transport.WithGrpcOption(grpc.UnaryInterceptor(protovalidate_middleware.UnaryServerInterceptor(validator))),
+		transport.WithGrpcOption(
+			grpc.UnaryInterceptor(
+				grpc_middleware.ChainUnaryServer(
+					protovalidate_middleware.UnaryServerInterceptor(validator),
+					tokenManager.Unary(),
+				),
+			),
+			grpc.StreamInterceptor(
+				tokenManager.Stream(),
+			),
+		),
 		transport.WithExchange(exchange),
 		transport.WithLogger(log),
 		transport.WithDB(repo),
 	)
 	errChan := make(chan error)
+
+	token, err := tokenManager.Issue(ctx, &token.Token{Config: &token.TokenConfig{Ttl: new(uint64(0)), Username: "system", Subject: "system", Roles: []string{"admin"}}})
+	if err != nil {
+		log.Error("error issuing access token for clientset", "error", err)
+		os.Exit(1)
+	}
 
 	// Setup server
 	srv, err := transport.NewServer(serverOpts...)
@@ -509,7 +524,26 @@ func main() {
 	go serveUnix(srv, errChan)
 
 	// Setup a clientset for the controllers
-	cs, err := connectToServer(ctx, socketAddr, client.WithLogger(log), client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}), client.WithGrpcDialOption(grpc.WithAuthority("localhost")))
+	clientCfg := &client.Config{
+		Current: "prod",
+		Servers: []*client.Server{{
+			Name:    "prod",
+			Address: "example.com:443",
+			Session: &client.Session{AccessToken: token.AccessToken, RefreshToken: token.RefreshToken},
+		}},
+	}
+
+	cs, err := connectToServer(
+		ctx,
+		socketAddr,
+		client.WithConfig(clientCfg),
+		client.WithLogger(log),
+		client.WithTLSConfig(&tls.Config{InsecureSkipVerify: true}),
+		client.WithCredentialSet(token.AccessToken, token.RefreshToken),
+		client.WithGrpcDialOption(
+			grpc.WithAuthority("localhost"),
+		),
+	)
 	if err != nil {
 		log.Error("error connecting to server", "error", err)
 		os.Exit(1)
@@ -522,7 +556,7 @@ func main() {
 	}()
 
 	// Create initial admin user
-	err = createAdminUser(ctx, cs)
+	err = userApp.EnsureDefaultAccounts(ctx)
 	if err != nil {
 		log.Error("error creating admin user", "error", err)
 		os.Exit(1)
@@ -597,7 +631,7 @@ func main() {
 	}()
 
 	// Setup opentracing
-	cfg := config.Configuration{
+	tracingCfg := config.Configuration{
 		ServiceName: "multikube",
 		Sampler: &config.SamplerConfig{
 			Type:  "const",
@@ -610,7 +644,7 @@ func main() {
 	}
 
 	//nolint:all
-	tracer, closer, err := cfg.New("multikube", config.Logger(jaeger.StdLogger))
+	tracer, closer, err := tracingCfg.New("multikube", config.Logger(jaeger.StdLogger))
 	if err != nil {
 		log.Warn("error setting up tracer", "error", err)
 	}
@@ -904,31 +938,4 @@ func connectToServer(ctx context.Context, addr string, opts ...client.NewClientO
 		case <-ticker.C:
 		}
 	}
-}
-
-func createAdminUser(ctx context.Context, cs *client.ClientSet) error {
-	_, err := cs.UserV1().Get(ctx, "admin")
-	if err != nil {
-		if errs.IsNotFound(err) {
-			adminUser := &userv1.User{
-				Meta: &meta.Meta{
-					Name: "admin",
-					Labels: map[string]string{
-						"multikube.io/builtin": "true",
-					},
-				},
-				Config: &userv1.UserConfig{
-					Password: "admin",
-					Email:    "admin@multikube.io",
-					Enabled:  new(true),
-				},
-			}
-			if err := cs.UserV1().Create(ctx, adminUser); err != nil {
-				return err
-			}
-			return nil
-		}
-		return err
-	}
-	return nil
 }

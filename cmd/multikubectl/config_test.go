@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	clientpkg "github.com/amimof/multikube/pkg/client"
@@ -49,5 +50,55 @@ func TestWriteConfigCreatesParentDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Dir(configPath)); err != nil {
 		t.Fatalf("parent dir Stat returned error: %v", err)
+	}
+}
+
+func TestPersistCurrentSessionTokenUpdatesConfigAndWritesFile(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "multikubectl.yaml")
+	viper.SetConfigFile(configPath)
+	cfg = clientpkg.Config{
+		Version: "config/v1",
+		Current: "prod",
+		Servers: []*clientpkg.Server{{
+			Name:    "prod",
+			Address: "example.com:443",
+			TLSConfig: &clientpkg.TLSConfig{
+				Insecure: true,
+			},
+		}},
+	}
+
+	err := persistCurrentSessionToken(&clientpkg.Token{
+		AccessToken:  "new-access-token",
+		RefreshToken: "new-refresh-token",
+	})
+	if err != nil {
+		t.Fatalf("persistCurrentSessionToken returned error: %v", err)
+	}
+
+	server, err := cfg.CurrentServer()
+	if err != nil {
+		t.Fatalf("CurrentServer returned error: %v", err)
+	}
+	if server.Session == nil {
+		t.Fatal("expected session to be set")
+	}
+	if server.Session.AccessToken != "new-access-token" {
+		t.Fatalf("access token = %q, want %q", server.Session.AccessToken, "new-access-token")
+	}
+	if server.Session.RefreshToken != "new-refresh-token" {
+		t.Fatalf("refresh token = %q, want %q", server.Session.RefreshToken, "new-refresh-token")
+	}
+
+	b, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile returned error: %v", err)
+	}
+	contents := string(b)
+	if !strings.Contains(contents, "access_token: new-access-token") {
+		t.Fatalf("config missing access token: %s", contents)
+	}
+	if !strings.Contains(contents, "refresh_token: new-refresh-token") {
+		t.Fatalf("config missing refresh token: %s", contents)
 	}
 }

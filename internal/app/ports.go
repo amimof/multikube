@@ -5,16 +5,17 @@ import (
 
 	tokenv1 "github.com/amimof/multikube/api/token/v1"
 	userv1 "github.com/amimof/multikube/api/user/v1"
+	"github.com/amimof/multikube/internal/infra"
 	"github.com/amimof/multikube/pkg/keys"
 	proxy "github.com/amimof/multikube/pkg/proxyv2"
 	"github.com/golang-jwt/jwt"
 )
 
 type TokenManager interface {
-	Issue(ctx context.Context, token *tokenv1.Token) (string, string, error)
+	Issue(ctx context.Context, token *tokenv1.Token) (infra.IssueResponse, error)
 	Revoke(ctx context.Context, token *tokenv1.Token) error
-	VerifyAccessToken(ctx context.Context, accessToken string) (string, error)
-	VerifyRefreshToken(ctx context.Context, refreshToken string) (string, error)
+	VerifyAccessToken(ctx context.Context, accessToken string) (jwt.MapClaims, error)
+	VerifyRefreshToken(ctx context.Context, refreshToken string) (jwt.MapClaims, error)
 }
 
 type TokenValidator interface {

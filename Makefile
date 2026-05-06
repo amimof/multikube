@@ -58,14 +58,14 @@ run: ; $(info $(M) run dev server) @ ## Run server locally with go run
 MOCKGEN ?= mockgen
 .PHONY: mockgen
 mockgen: ; $(info $(M) generating mock clients) @ ## Generate Go mock clients for backend
-	$Q $(MOCKGEN) -package v1 api/backend/v1 BackendServiceClient > pkg/client/backend/v1/mock.go
-	$Q $(MOCKGEN) -package v1 api/ca/v1 CertificateAuthorityServiceClient > pkg/client/ca/v1/mock.go
-	$Q $(MOCKGEN) -package v1 api/certificate/v1 CertificateServiceClient > pkg/client/certificate/v1/mock.go
-	$Q $(MOCKGEN) -package v1 api/credential/v1 CredentialServiceClient > pkg/client/credential/v1/mock.go
-	$Q $(MOCKGEN) -package v1 api/polizy/v1 PolicyServiceClient > pkg/client/policy/v1/mock.go
-	$Q $(MOCKGEN) -package v1 api/route/v1 RouteServiceClient > pkg/client/route/v1/mock.go
-	$Q $(MOCKGEN) -package v1 api/user/v1 UserServiceClient > pkg/client/user/v1/mock.go
-	$Q $(MOCKGEN) -package v1 api/auth/v1 AuthServiceClient > pkg/client/auth/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/backend/v1 BackendServiceClient > pkg/client/backend/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/ca/v1 CertificateAuthorityServiceClient > pkg/client/ca/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/certificate/v1 CertificateServiceClient > pkg/client/certificate/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/credential/v1 CredentialServiceClient > pkg/client/credential/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/policy/v1 PolicyServiceClient > pkg/client/policy/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/route/v1 RouteServiceClient > pkg/client/route/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/user/v1 UserServiceClient > pkg/client/user/v1/mock.go
+	$Q $(MOCKGEN) -package v1 ./api/auth/v1 AuthServiceClient > pkg/client/auth/v1/mock.go
 
 OPENAPI_GENERATOR ?= openapi-generator
 .PHONY: generate-ts-clients

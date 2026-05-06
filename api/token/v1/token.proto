@@ -4,7 +4,6 @@ package token.v1;
 
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
-import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/timestamp.proto";
@@ -34,23 +33,16 @@ message Token {
 message TokenStatus {}
 
 message TokenConfig {
-  // string subject = 1 [(buf.validate.field).string.min_len = 1];
-  // string issuer = 2;
-  // repeated string groups = 3;
-  // repeated string audience = 4;
-  // string tenant = 5;
-  // map<string, string> claims = 6;
-  // google.protobuf.Timestamp auth_time = 7;
-  // google.protobuf.Duration ttl = 8;
   string subject = 1;
   string username = 2;
   repeated string groups = 3;
-  repeated string audience = 4;
-  repeated string scopes = 5;
-  repeated string clusters = 6;
-  repeated string service_accounts = 7;
-  google.protobuf.Duration ttl = 8;
-  map<string, string> extra_claims = 9;
+  repeated string roles = 4;
+  string audience = 5;
+  repeated string scopes = 6;
+  repeated string clusters = 7;
+  repeated string service_accounts = 8;
+  optional uint64 ttl = 9;
+  map<string, string> extra_claims = 10;
 }
 
 message IssueRequest {

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Moon, Sunny, User, Lock } from '@element-plus/icons-vue'
 import { useTheme } from '@/composables/useTheme'
 import { useAuthStore } from '@/stores/auth'
+import { normalizeRedirectPath } from '@/router/redirect'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,7 +18,7 @@ const form = reactive({
 
 const redirectTarget = computed(() => {
 	const redirect = route.query.redirect
-	return typeof redirect === 'string' && redirect.length > 0 ? redirect : '/'
+	return normalizeRedirectPath(typeof redirect === 'string' ? redirect : null)
 })
 
 const canSubmit = computed(() => form.username.trim().length > 0 && form.password.length > 0)

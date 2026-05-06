@@ -195,8 +195,7 @@
       "type": "object",
       "properties": {
         "subject": {
-          "type": "string",
-          "title": "string subject = 1 [(buf.validate.field).string.min_len = 1];\nstring issuer = 2;\nrepeated string groups = 3;\nrepeated string audience = 4;\nstring tenant = 5;\nmap\u003cstring, string\u003e claims = 6;\ngoogle.protobuf.Timestamp auth_time = 7;\ngoogle.protobuf.Duration ttl = 8;"
+          "type": "string"
         },
         "username": {
           "type": "string"
@@ -207,11 +206,14 @@
             "type": "string"
           }
         },
-        "audience": {
+        "roles": {
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "audience": {
+          "type": "string"
         },
         "scopes": {
           "type": "array",
@@ -232,7 +234,8 @@
           }
         },
         "ttl": {
-          "type": "string"
+          "type": "string",
+          "format": "uint64"
         },
         "extraClaims": {
           "type": "object",
