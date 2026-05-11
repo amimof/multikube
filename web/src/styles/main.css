@@ -65,12 +65,17 @@ html.dark {
 	--login-heading: #f8fafc;
 	--login-muted: rgba(226, 232, 240, 0.7);
 	--login-code: rgba(255, 255, 255, 0.84);
-
 }
 
 html.dark .el-card {
   --el-card-border-radius: 8px !important;
 	--el-card-border-color: #2b2c2c !important;
+}
+
+.el-card {
+		border: 1px solid var(--login-card-border);
+	box-shadow: var(--login-card-shadow);
+
 }
 
 body {

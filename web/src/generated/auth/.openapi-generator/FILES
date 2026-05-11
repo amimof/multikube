@@ -1,4 +1,3 @@
-.openapi-generator-ignore
 apis/AuthServiceApi.ts
 apis/index.ts
 docs/AuthServiceApi.md

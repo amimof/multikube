@@ -39,6 +39,7 @@ type Heartbeat struct {
 	stopCh           chan struct{}
 	stopOnce         sync.Once
 	Callbacks        Callbacks
+	UseAuth          bool
 }
 
 type Callbacks struct {
@@ -92,6 +93,7 @@ func (c *Controller) NewHeartbeat(name, kind string, be *backendv1.Probe, target
 		Logger:           c.logger,
 		stopCh:           make(chan struct{}),
 		Callbacks:        *cb,
+		UseAuth:          be.GetUseAuth(),
 	}
 }
 
@@ -188,6 +190,15 @@ func (h *Heartbeat) Next(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	if h.UseAuth {
+		if h.Runtime.AuthInjector != nil {
+			if err := h.Runtime.AuthInjector.Apply(req); err != nil {
+				return err
+			}
+		}
+	}
+
 	resp, err := h.Runtime.Transport.RoundTrip(req)
 	if err != nil {
 		return err

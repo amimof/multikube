@@ -7,6 +7,8 @@
 Name | Type
 ------------ | -------------
 `accessToken` | string
+`refreshToken` | string
+`expiresAt` | Date
 
 ## Example
 
@@ -16,6 +18,8 @@ import type { V1RefreshResponse } from ''
 // TODO: Update the object below with actual values
 const example = {
   "accessToken": null,
+  "refreshToken": null,
+  "expiresAt": null,
 } satisfies V1RefreshResponse
 
 console.log(example)

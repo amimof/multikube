@@ -1,8 +1,52 @@
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: multikube
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multikube-health-reader
+rules:
+  - nonResourceURLs:
+      - /healthz
+      - /readyz
+      - /livez
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multikube-health-reader
+subjects:
+  - kind: ServiceAccount
+    name: multikube
+    namespace: multikube
+roleRef:
+  kind: ClusterRole
+  name: multikube-health-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: multikube
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+- kind: ServiceAccount
+  name: multikube
+  namespace: multikube
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: multikube
+  namespace: multikube
   labels:
     app: multikube
 ---
@@ -10,6 +54,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: multikube
+  namespace: multikube
   labels:
     app: multikube
 spec:
@@ -18,6 +63,10 @@ spec:
       port: 5743
       protocol: TCP
       targetPort: grpc
+    - name: gateway-6443
+      port: 6443
+      protocol: TCP
+      targetPort: gateway
     - name: https-8443
       port: 8443
       protocol: TCP
@@ -34,6 +83,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: multikube
+  namespace: multikube
   labels:
     app: multikube
 spec:
@@ -60,6 +110,9 @@ spec:
             - name: grpc
               containerPort: 5743
               protocol: TCP
+            - name: gateway
+              containerPort: 6443
+              protocol: TCP
             - name: https
               containerPort: 8443
               protocol: TCP
@@ -77,5 +130,15 @@ spec:
           volumeMounts:
             - name: multikube-data
               mountPath: "/.local/state/multikube"
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
       serviceAccount: multikube
       serviceAccountName: multikube

@@ -55,6 +55,12 @@ export interface V1Probe {
      * @memberof V1Probe
      */
     initialDelaySeconds?: string;
+    /**
+     * 
+     * @type {boolean}
+     * @memberof V1Probe
+     */
+    useAuth?: boolean;
 }
 
 /**
@@ -80,6 +86,7 @@ export function V1ProbeFromJSONTyped(json: any, ignoreDiscriminator: boolean): V
         'failureThreshold': json['failureThreshold'] == null ? undefined : json['failureThreshold'],
         'successThreshold': json['successThreshold'] == null ? undefined : json['successThreshold'],
         'initialDelaySeconds': json['initialDelaySeconds'] == null ? undefined : json['initialDelaySeconds'],
+        'useAuth': json['useAuth'] == null ? undefined : json['useAuth'],
     };
 }
 
@@ -100,6 +107,7 @@ export function V1ProbeToJSONTyped(value?: V1Probe | null, ignoreDiscriminator: 
         'failureThreshold': value['failureThreshold'],
         'successThreshold': value['successThreshold'],
         'initialDelaySeconds': value['initialDelaySeconds'],
+        'useAuth': value['useAuth'],
     };
 }
 

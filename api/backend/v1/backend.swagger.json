@@ -757,6 +757,9 @@
           "type": "string",
           "format": "uint64",
           "description": "useful if the app needs a little time before the first readiness check, though for real slow starts, startupProbe is usually better."
+        },
+        "useAuth": {
+          "type": "boolean"
         }
       }
     },

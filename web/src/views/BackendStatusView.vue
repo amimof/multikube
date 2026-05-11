@@ -443,14 +443,14 @@ onUnmounted(() => {
 		<!-- Content -->
 		<template v-else>
 			<!-- Network Topology Map -->
-			<el-card shadow="never" style="margin-bottom: 16px; background: #141414">
+			<el-card shadow="never" style="margin-bottom: 24px; background: #141414">
 				<div class="topology-container">
 					<NetworkTopology :backendName="backend.meta?.name ?? '-'" :lbType="lbLabel(backend.config?.type as string)"
 						:servers="normalizedServers" @select="openTopologySelection" />
 				</div>
 			</el-card>
 
-			<el-card shadow="never" style="margin-bottom: 16px">
+			<el-card shadow="never" style="margin-bottom: 24px">
 				<el-alert v-if="metricsStore.error" :title="metricsStore.error" type="warning" :closable="false"
 					style="margin-bottom: 16px" />
 
@@ -573,7 +573,7 @@ onUnmounted(() => {
 			</el-drawer>
 
 			<!-- Two-column layout: Configuration + Target Health -->
-			<el-row :gutter="16" style="margin-bottom: 16px">
+			<el-row :gutter="24" style="margin-bottom: 16px">
 
 
 				<!-- Target Health (left) -->
@@ -766,6 +766,12 @@ onUnmounted(() => {
 										<el-input v-model="form.config!.probes!.healthiness!.initialDelaySeconds" placeholder="1" />
 									</el-form-item>
 
+									<el-form-item label="Use Auth">
+										<el-checkbox v-model="form.config!.probes!.healthiness!.useAuth">
+											Use backend auth_ref
+										</el-checkbox>
+									</el-form-item>
+
 									<el-divider content-position="left">Readiness Probe</el-divider>
 
 									<el-form-item label="Path">
@@ -790,6 +796,12 @@ onUnmounted(() => {
 
 									<el-form-item label="Initial Delay Seconds">
 										<el-input v-model="form.config!.probes!.readiness!.initialDelaySeconds" placeholder="1" />
+									</el-form-item>
+
+									<el-form-item label="Use Auth">
+										<el-checkbox v-model="form.config!.probes!.readiness!.useAuth">
+											Use backend auth_ref
+										</el-checkbox>
 									</el-form-item>
 								</el-collapse-item>
 							</el-collapse>

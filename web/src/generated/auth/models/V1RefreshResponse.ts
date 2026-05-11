@@ -25,6 +25,18 @@ export interface V1RefreshResponse {
      * @memberof V1RefreshResponse
      */
     accessToken?: string;
+    /**
+     * 
+     * @type {string}
+     * @memberof V1RefreshResponse
+     */
+    refreshToken?: string;
+    /**
+     * 
+     * @type {Date}
+     * @memberof V1RefreshResponse
+     */
+    expiresAt?: Date;
 }
 
 /**
@@ -45,6 +57,8 @@ export function V1RefreshResponseFromJSONTyped(json: any, ignoreDiscriminator: b
     return {
         
         'accessToken': json['accessToken'] == null ? undefined : json['accessToken'],
+        'refreshToken': json['refreshToken'] == null ? undefined : json['refreshToken'],
+        'expiresAt': json['expiresAt'] == null ? undefined : (new Date(json['expiresAt'])),
     };
 }
 
@@ -60,6 +74,8 @@ export function V1RefreshResponseToJSONTyped(value?: V1RefreshResponse | null, i
     return {
         
         'accessToken': value['accessToken'],
+        'refreshToken': value['refreshToken'],
+        'expiresAt': value['expiresAt'] == null ? value['expiresAt'] : value['expiresAt'].toISOString(),
     };
 }
 

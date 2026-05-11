@@ -614,6 +614,7 @@ func main() {
 		TLSWriteTimeout:  tlsWriteTimeout,
 		Logger:           log,
 		Handler:          handler,
+		Name:             "proxy",
 	}
 
 	// Listen and serve!
@@ -757,6 +758,7 @@ func serveMux(addr string, tlsConfig *tls.Config, mux *http.ServeMux, errChan ch
 		TLSWriteTimeout:  tlsWriteTimeout,
 		Logger:           log,
 		Handler:          mux,
+		Name:             "gateway",
 	}
 	log.Info("gateway and console listening", "address", addr)
 	if err := s.Serve(); err != nil {

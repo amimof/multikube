@@ -12,6 +12,7 @@ Name | Type
 `failureThreshold` | string
 `successThreshold` | string
 `initialDelaySeconds` | string
+`useAuth` | boolean
 
 ## Example
 
@@ -26,6 +27,7 @@ const example = {
   "failureThreshold": null,
   "successThreshold": null,
   "initialDelaySeconds": null,
+  "useAuth": null,
 } satisfies V1Probe
 
 console.log(example)

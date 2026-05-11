@@ -8,6 +8,7 @@ export function defaultHealthProbe(): V1Probe {
     failureThreshold: '3',
     successThreshold: '3',
     initialDelaySeconds: '1',
+    useAuth: false,
   }
 }
 
@@ -19,6 +20,7 @@ export function defaultReadyProbe(): V1Probe {
     failureThreshold: '3',
     successThreshold: '3',
     initialDelaySeconds: '1',
+    useAuth: false,
   }
 }
 

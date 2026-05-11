@@ -34,6 +34,7 @@ var defaultHealthProbe = &backendv1.Probe{
 	FailureThreshold:    3,
 	SuccessThreshold:    3,
 	InitialDelaySeconds: 1,
+	UseAuth:             new(false),
 }
 
 var defaultReadyProbe = &backendv1.Probe{
@@ -43,6 +44,7 @@ var defaultReadyProbe = &backendv1.Probe{
 	FailureThreshold:    3,
 	SuccessThreshold:    3,
 	InitialDelaySeconds: 1,
+	UseAuth:             new(false),
 }
 
 type BackendService struct {

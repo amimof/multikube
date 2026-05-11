@@ -124,6 +124,8 @@ message Probe {
 
   // useful if the app needs a little time before the first readiness check, though for real slow starts, startupProbe is usually better.
   uint64 initial_delay_seconds = 6;
+
+  optional bool use_auth = 7;
 }
 
 message BackendStatus {

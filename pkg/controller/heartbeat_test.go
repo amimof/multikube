@@ -25,6 +25,16 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+type stubAuthInjector struct {
+	called bool
+}
+
+func (s *stubAuthInjector) Apply(req *http.Request) error {
+	s.called = true
+	req.Header.Set("Authorization", "Bearer test-token")
+	return nil
+}
+
 func TestHeartbeatNext_ReturnsErrorOnNonOK(t *testing.T) {
 	targetURL, err := url.Parse("http://example.com")
 	if err != nil {
@@ -50,6 +60,64 @@ func TestHeartbeatNext_ReturnsErrorOnNonOK(t *testing.T) {
 	err = hb.Next(context.Background())
 	if err == nil {
 		t.Fatal("expected non-200 heartbeat to return error")
+	}
+}
+
+func TestHeartbeatNext_UseAuthControlsAuthInjection(t *testing.T) {
+	tests := []struct {
+		name           string
+		useAuth        bool
+		wantAuthHeader string
+		wantCalled     bool
+	}{
+		{
+			name:       "skips auth injector when disabled",
+			useAuth:    false,
+			wantCalled: false,
+		},
+		{
+			name:           "applies auth injector when enabled",
+			useAuth:        true,
+			wantAuthHeader: "Bearer test-token",
+			wantCalled:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			targetURL := mustParseURL(t, "http://example.com")
+			injector := &stubAuthInjector{}
+
+			var gotAuthHeader string
+			hb := &Heartbeat{
+				Runtime: &proxyv2.BackendRuntime{
+					URL:          targetURL,
+					AuthInjector: injector,
+					Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+						gotAuthHeader = req.Header.Get("Authorization")
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Status:     "200 OK",
+							Body:       io.NopCloser(http.NoBody),
+						}, nil
+					}),
+				},
+				Path:    "/healthz",
+				Timeout: time.Second,
+				Logger:  logger.NilLogger{},
+				UseAuth: tt.useAuth,
+			}
+
+			if err := hb.Next(context.Background()); err != nil {
+				t.Fatalf("heartbeat next: %v", err)
+			}
+			if gotAuthHeader != tt.wantAuthHeader {
+				t.Fatalf("expected auth header %q, got %q", tt.wantAuthHeader, gotAuthHeader)
+			}
+			if injector.called != tt.wantCalled {
+				t.Fatalf("expected injector called=%v, got %v", tt.wantCalled, injector.called)
+			}
+		})
 	}
 }
 

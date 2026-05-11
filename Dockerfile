@@ -12,7 +12,10 @@ COPY --from=build-env-ui /go/src/github.com/amimof/multikube/web/dist /go/src/gi
 WORKDIR /go/src/github.com/amimof/multikube
 RUN make
 
-FROM scratch
+FROM alpine:3.23
 COPY --from=build-env /go/src/github.com/amimof/multikube/bin/multikube /go/bin/multikube
-COPY --from=build-env /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-ENTRYPOINT ["/go/bin/multikube"]
+RUN apk add --no-cache ca-certificates su-exec \ 
+&&  mkdir -p /.local/state/multikube /.cache \
+&&  chown 1001:1001 /.local/state/multikube /.cache
+USER 1001
+CMD ["/go/bin/multikube"]

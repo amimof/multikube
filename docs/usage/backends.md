@@ -123,6 +123,7 @@ Each probe supports:
 - `failure_threshold`: consecutive failures before the target is marked unhealthy or not ready
 - `success_threshold`: consecutive successes before the target is marked healthy or ready again
 - `initial_delay_seconds`: delay before the first probe runs
+- `use_auth`: use credentials in `auth_ref` for the probe 
 
 Default behavior when `probes` is omitted:
 
@@ -152,6 +153,7 @@ config:
       failure_threshold: 3
       success_threshold: 3
       initial_delay_seconds: 1
+      use_auth: false
     readiness:
       path: /readyz
       timeout_seconds: 1
@@ -159,9 +161,14 @@ config:
       failure_threshold: 2
       success_threshold: 2
       initial_delay_seconds: 2
+      use_auth: false
 ```
 
 > Notes: probe failures include transport errors, timeouts, and any response other than `200 OK`. A target is excluded only when a configured probe has produced a known failing state. If probe state is still unknown, the target remains eligible for routing
+
+### Probes with authentication
+
+Some Kubernetes distributions, such as Talos, requires authentication in order to access `/healthz`, `/readyz` and `/livez` endpoints. By default, both readiness and healthiness probes don't send authentication metadata. However this can be enabled by setting `use_auth: true` on any given probe. Setting this field to `true`, the credentials set by `auth_ref` will be used to authenticate with the target.
 
 ## Example scenarios
 
